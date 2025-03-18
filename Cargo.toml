@@ -1,0 +1,30 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.dependencies]
+metis-vm = { path = "crates/vm" }
+metis-primitives = { path = "crates/primitives" }
+
+alloy-primitives = "0.8.23"
+alloy-sol-types = { version = "0.8.23", default-features = false, features = [
+    "std",
+] }
+anyhow = "1.0.97"
+rustc-hash = { version = "2.1.1"}
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+exclude = [".github/"]
+license = "Apache-2.0"
+readme = "README.md"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
+codegen-units = 1
+rpath = true
+panic = "unwind"

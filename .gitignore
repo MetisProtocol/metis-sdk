@@ -1,0 +1,16 @@
+/target
+/dist
+.DS_store
+.vscode
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# DEV
+scripts/dev_*

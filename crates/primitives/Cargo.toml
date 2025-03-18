@@ -1,0 +1,9 @@
+[package]
+name = "metis-primitives"
+version.workspace = true
+edition.workspace = true
+
+[features]
+
+[dependencies]
+revm = { version = "19.6.0", features = ["std", "serde-json"] }

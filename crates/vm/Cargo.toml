@@ -1,0 +1,28 @@
+[package]
+name = "metis-vm"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+metis-primitives.workspace = true
+alloy-sol-types.workspace = true
+anyhow.workspace = true
+rustc-hash.workspace = true
+
+revm = { version = "19.6.0", features = ["std", "serde-json"] }
+revmc = { git = "https://github.com/paradigmxyz/revmc", features = ["llvm-prefer-dynamic"], optional = true }
+smallvec = "1.14.0"
+
+[build-dependencies]
+revmc-build = { git = "https://github.com/paradigmxyz/revmc"}
+
+[features]
+compiler = ["revmc"]
+inference = []
+
+[[example]]
+name = "interpretor"
+
+[[example]]
+name = "compiler"
+required-features = ["compiler"]
