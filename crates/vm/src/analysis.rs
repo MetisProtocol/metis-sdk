@@ -51,7 +51,7 @@ pub enum Location {
 /// Read or write value kinds in the transaction.
 #[derive(Debug, Clone)]
 pub enum Value {
-    /// Read or write account values including nonce and balance. 
+    /// Read or write account values including nonce and balance.
     Account(AccountValue),
     /// Read the code hash in the contract bytecode.
     CodeHash(B256),
