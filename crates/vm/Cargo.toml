@@ -21,7 +21,7 @@ compiler = ["revmc"]
 inference = []
 
 [[example]]
-name = "interpretor"
+name = "interpreter"
 
 [[example]]
 name = "compiler"
