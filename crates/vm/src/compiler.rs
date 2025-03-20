@@ -138,6 +138,7 @@ impl CompileCache {
         matches!(self, CompileCache::AOT(..))
     }
 
+    #[inline]
     pub fn get(&mut self, code_hash: &B256) -> Option<&EvmCompilerFn> {
         match self {
             CompileCache::JIT(jit_cache) => jit_cache.get(code_hash),
