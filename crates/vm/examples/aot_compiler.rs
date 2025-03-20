@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 pub use alloy_sol_types::{SolCall, sol};
 pub use metis_primitives::hex;
 use metis_primitives::{EVMBytecode, KECCAK_EMPTY, SpecId, TxKind, U256, address, keccak256};
-use metis_vm::{CompilerContext, ExternalContext, register_compile_handler};
+use metis_vm::{CompilerContext, Error, ExtCompileWorker, register_compile_handler};
 use revm::{CacheState, Evm, primitives::AccountInfo};
 
 sol! {
@@ -15,7 +17,7 @@ const COUNTER_BYTECODE: &[u8] = &hex!(
     "6080604052348015600e575f5ffd5b5060043610603a575f3560e01c80633fb5c1cb14603e5780638381f58a14604f578063d09de08a146068575b5f5ffd5b604d6049366004607d565b5f55565b005b60565f5481565b60405190815260200160405180910390f35b604d5f805490806076836093565b9190505550565b5f60208284031215608c575f5ffd5b5035919050565b5f6001820160af57634e487b7160e01b5f52601160045260245ffd5b506001019056fea2646970667358221220d02f44f09141ec64d16ec6c961c0852fa31422a8bc49e35d81afecaf8798d89364736f6c634300081c0033"
 );
 
-fn main() {
+fn main() -> Result<(), Error> {
     // Prepare account and state
     let mut cache = CacheState::new(true);
     let caller = address!("1000000000000000000000000000000000000001");
@@ -45,12 +47,13 @@ fn main() {
         .with_cached_prestate(cache)
         .with_bundle_update()
         .build();
+    // Note: we need to keep alive the context as long as the evm and compiler.
     let context = CompilerContext::create();
     // New a VM and run the tx.
-    let evm = Evm::builder()
+    let mut evm = Evm::builder()
         .with_db(state)
-        // Note we register the external compiler handler here.
-        .with_external_context(ExternalContext::new(&context))
+        // Note we register the external AOT compiler handler here.
+        .with_external_context(Arc::new(ExtCompileWorker::new_aot(&context)?))
         .append_handler_register(register_compile_handler)
         .with_spec_id(SpecId::CANCUN)
         .modify_cfg_env(|cfg| {
@@ -68,10 +71,17 @@ fn main() {
             tx.caller = caller;
             tx.transact_to = TxKind::Call(to);
             tx.nonce = Some(0);
-        });
-    let result = evm.build().transact().unwrap();
+        })
+        .build();
+    // First call - compiles ExternalFn
+    let result = evm.transact().unwrap();
     // Contract output, logs and state diff.
     // There are at least three locations most of the time: the sender,
     // the recipient, and the beneficiary accounts.
     println!("{result:?}");
+    // Second call - uses cached ExternalFn
+    std::thread::sleep(std::time::Duration::from_secs(1));
+    let result = evm.transact().unwrap();
+    println!("{result:?}");
+    Ok(())
 }
