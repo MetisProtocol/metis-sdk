@@ -6,6 +6,7 @@ static RUNTIME_INIT: Once = Once::new();
 
 /// Makes sure only a single runtime thread is alive throughout the program lifetime.
 #[allow(static_mut_refs)]
+#[allow(unused)]
 pub(crate) fn get_runtime() -> &'static Runtime {
     unsafe {
         RUNTIME_INIT.call_once(|| {

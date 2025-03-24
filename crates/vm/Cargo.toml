@@ -17,13 +17,14 @@ smallvec = "1.14.0"
 libloading = "0.8.6"
 lru = "0.13.0"
 rocksdb = { version = "0.23.0", features = ["multi-threaded-cf"] }
+alith = { git = "https://github.com/0xLazAI/alith", version = "0.4.5", rev = "a67e056", features = ["llamacpp"], optional = true }
 
 [build-dependencies]
 revmc-build = { git = "https://github.com/paradigmxyz/revmc"}
 
 [features]
-compiler = ["revmc"]
-inference = []
+compiler = ["dep:revmc"]
+inference = ["dep:alith"]
 
 [[example]]
 name = "interpreter"
@@ -35,3 +36,7 @@ required-features = ["compiler"]
 [[example]]
 name = "jit_compiler"
 required-features = ["compiler"]
+
+[[example]]
+name = "inference"
+required-features = ["inference"]
