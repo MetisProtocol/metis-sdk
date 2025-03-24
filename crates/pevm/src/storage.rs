@@ -147,9 +147,9 @@ impl From<Bytecode> for EvmCode {
             // This arm will recursively fallback to LegacyAnalyzed.
             Bytecode::LegacyRaw(_) => to_analysed(code).into(),
             Bytecode::LegacyAnalyzed(code) => Self::Legacy(LegacyCode {
-                bytecode: code.bytecode,
-                original_len: code.original_len,
-                jump_table: code.jump_table.0,
+                bytecode: code.bytecode().clone(),
+                original_len: code.original_len(),
+                jump_table: code.jump_table().clone().0,
             }),
             Bytecode::Eip7702(code) => Self::Eip7702(Eip7702Code {
                 delegated_address: code.delegated_address,

@@ -143,9 +143,9 @@ impl PevmChain for PevmEthereum {
     fn get_handler<'a, EXT, DB: revm::Database>(
         &self,
         spec_id: SpecId,
-        with_reward_beneficiary: bool,
+        _with_reward_beneficiary: bool,
     ) -> Handler<'a, revm::Context<EXT, DB>, EXT, DB> {
-        Handler::mainnet_with_spec(spec_id, with_reward_beneficiary)
+        Handler::mainnet_with_spec(spec_id)
     }
 
     fn get_reward_policy(&self) -> RewardPolicy {

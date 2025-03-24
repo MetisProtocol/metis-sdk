@@ -807,23 +807,23 @@ impl<'a, S: Storage, C: PevmChain> Vm<'a, S, C> {
     }
 }
 
-pub(crate) fn build_evm<'a, DB: Database, C: PevmChain>(
+pub(crate) fn build_evm<'a, DB: Database + 'static, C: PevmChain>(
     db: DB,
     chain: &C,
     spec_id: SpecId,
     block_env: BlockEnv,
     tx_env: Option<TxEnv>,
     with_reward_beneficiary: bool,
-) -> Evm<'a, (), DB> {
+) -> Evm<'a, Arc<ExtCompileWorker>, DB> {
     let handler = chain.get_handler(spec_id, with_reward_beneficiary);
 
     // Note: we need to keep alive the context as long as the evm and compiler.
     let context = CompilerContext::create();
     // New a VM and run the tx.
-    let mut evm = Evm::builder()
+    let evm = Evm::builder()
         .with_db(db)
         // Note we register the external AOT compiler handler here.
-        .with_external_context(Arc::new(ExtCompileWorker::new_aot(&context)?))
+        .with_external_context(Arc::new(ExtCompileWorker::new_aot(&context).unwrap()))
         .append_handler_register(register_compile_handler)
         .with_spec_id(spec_id)
         .modify_cfg_env(|cfg| {
