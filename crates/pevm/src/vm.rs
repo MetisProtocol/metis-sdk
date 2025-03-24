@@ -807,7 +807,7 @@ impl<'a, S: Storage, C: PevmChain> Vm<'a, S, C> {
     }
 }
 
-pub(crate) fn build_evm<'a, DB: Database + 'static, C: PevmChain>(
+pub(crate) fn build_evm<'a, DB: Database, C: PevmChain>(
     db: DB,
     chain: &C,
     spec_id: SpecId,
