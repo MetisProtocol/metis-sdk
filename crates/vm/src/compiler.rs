@@ -266,7 +266,7 @@ impl Default for ExtCompileOptions {
 }
 
 /// Register handler for external context to support background compile worker in node runtime
-pub fn register_compile_handler<DB: Database + 'static>(
+pub fn register_compile_handler<DB: Database>(
     handler: &mut EvmHandler<'_, Arc<ExtCompileWorker>, DB>,
 ) {
     let prev = handler.execution.execute_frame.clone();

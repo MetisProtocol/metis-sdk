@@ -49,7 +49,7 @@ impl<M: Completion + Send + Sync, DB: Database> ContextStatefulPrecompile<DB>
 }
 
 /// Register handler for external context to support the AI inference precompile function.
-pub fn register_inference_handler<EXT, DB: Database + 'static>(
+pub fn register_inference_handler<EXT, DB: Database>(
     handler: &mut EvmHandler<'_, EXT, DB>,
 ) {
     let precompiles = handler.pre_execution.load_precompiles();
