@@ -20,10 +20,10 @@ rocksdb = { version = "0.23.0", features = ["multi-threaded-cf"] }
 alith = { git = "https://github.com/0xLazAI/alith", version = "0.4.5", rev = "a67e056", features = ["llamacpp"], optional = true }
 
 [build-dependencies]
-revmc-build = { git = "https://github.com/paradigmxyz/revmc"}
+revmc-build = { git = "https://github.com/paradigmxyz/revmc", optional = true}
 
 [features]
-compiler = ["dep:revmc"]
+compiler = ["dep:revmc", "dep:revmc-build"]
 inference = ["dep:alith"]
 
 [[example]]
