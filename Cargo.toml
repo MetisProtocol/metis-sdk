@@ -7,7 +7,7 @@ metis-vm = { path = "crates/vm" }
 metis-primitives = { path = "crates/primitives" }
 
 alloy-primitives = "0.8.23"
-alloy-sol-types = { version = "0.8.23", default-features = false, features = [
+alloy-sol-types = { version = "0.8.24", default-features = false, features = [
     "std",
 ] }
 anyhow = "1.0.97"
