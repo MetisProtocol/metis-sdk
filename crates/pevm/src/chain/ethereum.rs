@@ -149,10 +149,9 @@ impl PevmChain for PevmEthereum {
     ) -> Handler<'a, revm::Context<EXT, DB>, EXT, DB> {
         let mut hander = Handler::mainnet_with_spec(spec_id);
         if !with_reward_beneficiary {
-            hander.post_execution.reward_beneficiary = Arc::new(|_,__| Ok(()));
+            hander.post_execution.reward_beneficiary = Arc::new(|_, __| Ok(()));
         }
         hander
-         
     }
 
     fn get_reward_policy(&self) -> RewardPolicy {

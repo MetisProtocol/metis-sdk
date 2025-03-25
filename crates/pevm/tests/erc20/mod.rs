@@ -5,8 +5,8 @@ pub mod contract;
 
 use contract::ERC20Token;
 use pevm::{Bytecodes, ChainState, EvmAccount};
-use revm::primitives::{Address, TransactTo, TxEnv, U256, uint};
 use rand::Rng;
+use revm::primitives::{Address, TransactTo, TxEnv, U256, uint};
 
 /// The maximum amount of gas that can be used for a transaction in this configuration.
 pub const GAS_LIMIT: u64 = 35_000;
