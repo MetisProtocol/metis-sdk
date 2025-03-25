@@ -1,26 +1,23 @@
-use std::sync::Arc;
 use alloy_primitives::TxKind;
 use alloy_rpc_types_eth::Receipt;
 use hashbrown::HashMap;
 use revm::{
-    primitives::{
-        AccountInfo, Address, BlockEnv, Bytecode, EVMError, InvalidTransaction,
-        ResultAndState, SpecId, TxEnv, B256, KECCAK_EMPTY, U256,
-    },
     Database, Evm,
+    primitives::{
+        AccountInfo, Address, B256, BlockEnv, Bytecode, EVMError, InvalidTransaction, KECCAK_EMPTY,
+        ResultAndState, SpecId, TxEnv, U256,
+    },
 };
-use smallvec::{smallvec, SmallVec};
-
-use metis_vm::{CompilerContext, ExtCompileWorker, register_compile_handler};
+use smallvec::{SmallVec, smallvec};
 
 use crate::{
+    AccountBasic, BuildIdentityHasher, BuildSuffixHasher, EvmAccount, FinishExecFlags, MemoryEntry,
+    MemoryLocation, MemoryLocationHash, MemoryValue, ReadOrigin, ReadOrigins, ReadSet, Storage,
+    TxIdx, TxVersion, WriteSet,
     chain::{PevmChain, RewardPolicy},
     hash_deterministic,
     mv_memory::MvMemory,
     storage::BytecodeConversionError,
-    AccountBasic, BuildIdentityHasher, BuildSuffixHasher, EvmAccount, FinishExecFlags, MemoryEntry,
-    MemoryLocation, MemoryLocationHash, MemoryValue, ReadOrigin, ReadOrigins, ReadSet, Storage,
-    TxIdx, TxVersion, WriteSet,
 };
 
 /// The execution error from the underlying EVM executor.
@@ -290,7 +287,7 @@ impl<S: Storage, C: PevmChain> Database for VmDb<'_, S, C> {
                 loop {
                     match iter.next_back() {
                         Some((blocking_idx, MemoryEntry::Estimate)) => {
-                            return Err(ReadError::Blocking(*blocking_idx))
+                            return Err(ReadError::Blocking(*blocking_idx));
                         }
                         Some((closest_idx, MemoryEntry::Data(tx_incarnation, value))) => {
                             // About to push a new origin
@@ -444,13 +441,6 @@ impl<S: Storage, C: PevmChain> Database for VmDb<'_, S, C> {
         }
     }
 
-    // fn has_storage(&mut self, address: Address) -> Result<bool, Self::Error> {
-    //     self.vm
-    //         .storage
-    //         .has_storage(&address)
-    //         .map_err(|err| ReadError::StorageError(err.to_string()))
-    // }
-
     fn storage(&mut self, address: Address, index: U256) -> Result<U256, Self::Error> {
         let location_hash = hash_deterministic(MemoryLocation::Storage(address, index));
 
@@ -595,7 +585,7 @@ impl<'a, S: Storage, C: PevmChain> Vm<'a, S, C> {
 
                         let has_code = !account.info.is_empty_code_hash();
                         let is_new_code = has_code
-                            && read_account.map_or(true, |(_, code_hash)| code_hash.is_none());
+                            && read_account.is_none_or(|(_, code_hash)| code_hash.is_none());
 
                         // Write new account changes
                         if is_new_code
