@@ -6,6 +6,7 @@ pub mod contract;
 use contract::ERC20Token;
 use pevm::{Bytecodes, ChainState, EvmAccount};
 use revm::primitives::{Address, TransactTo, TxEnv, U256, uint};
+use rand::Rng;
 
 /// The maximum amount of gas that can be used for a transaction in this configuration.
 pub const GAS_LIMIT: u64 = 35_000;
@@ -55,7 +56,8 @@ pub fn generate_cluster(
     for nonce in 0..num_transfers_per_person {
         for family in &families {
             for person in family {
-                let recipient = family[(rand::random::<usize>()) % (family.len())];
+                let mut rng = rand::rng();
+                let recipient = family[rng.random_range(0..family.len())];
                 let calldata = ERC20Token::transfer(recipient, U256::from(rand::random::<u8>()));
 
                 txs.push(TxEnv {
