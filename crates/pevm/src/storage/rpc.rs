@@ -6,7 +6,7 @@ use std::{
 };
 
 use alloy_primitives::{Address, B256, U256};
-use alloy_provider::{network::BlockResponse, Network, Provider, RootProvider};
+use alloy_provider::{Network, Provider, RootProvider, network::BlockResponse};
 use alloy_rpc_types_eth::{BlockId, BlockNumberOrTag, BlockTransactionsKind};
 use alloy_transport::TransportError;
 use alloy_transport_http::Http;
@@ -193,17 +193,6 @@ impl<N: Network> Storage for RpcStorage<N> {
     fn code_by_hash(&self, code_hash: &B256) -> Result<Option<EvmCode>, Self::Error> {
         Ok(self.cache_bytecodes.lock().unwrap().get(code_hash).cloned())
     }
-
-    // fn has_storage(&self, address: &Address) -> Result<bool, Self::Error> {
-    //     let proof = self.block_on(self.fetch(|| {
-    //         self.provider
-    //             // [get_account] is simpler but it yields deserialization
-    //             // error on an empty account.
-    //             .get_proof(*address, Vec::new())
-    //             .block_id(self.block_id)
-    //     }))?;
-    //     Ok(proof.storage_hash != alloy_consensus::EMPTY_ROOT_HASH)
-    // }
 
     fn storage(&self, address: &Address, index: &U256) -> Result<U256, Self::Error> {
         if let Some(account) = self.cache_accounts.lock().unwrap().get(address) {

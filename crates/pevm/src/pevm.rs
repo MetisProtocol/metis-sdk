@@ -1,7 +1,7 @@
 use std::{
     fmt::Debug,
     num::NonZeroUsize,
-    sync::{mpsc, Mutex, OnceLock},
+    sync::{Mutex, OnceLock, mpsc},
     thread,
 };
 
@@ -9,12 +9,13 @@ use alloy_primitives::{TxNonce, U256};
 use alloy_rpc_types_eth::{Block, BlockTransactions};
 use hashbrown::HashMap;
 use revm::{
+    DatabaseCommit,
     db::CacheDB,
     primitives::{BlockEnv, InvalidTransaction, SpecId, TxEnv},
-    DatabaseCommit,
 };
 
 use crate::{
+    EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, Storage, Task, TxIdx, TxVersion,
     chain::PevmChain,
     compat::get_block_env,
     hash_deterministic,
@@ -22,9 +23,8 @@ use crate::{
     scheduler::Scheduler,
     storage::StorageWrapper,
     vm::{
-        build_evm, ExecutionError, PevmTxExecutionResult, Vm, VmExecutionError, VmExecutionResult,
+        ExecutionError, PevmTxExecutionResult, Vm, VmExecutionError, VmExecutionResult, build_evm,
     },
-    EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, Storage, Task, TxIdx, TxVersion,
 };
 
 /// Errors when executing a block with pevm.
@@ -63,7 +63,9 @@ pub enum PevmError<C: PevmChain> {
     ),
     /// Impractical errors that should be unreachable.
     /// The library has bugs if this is yielded.
-    #[error("PEVM encountered a bug. Please open an issue in https://github.com/risechain/pevm/issues/new")]
+    #[error(
+        "PEVM encountered a bug. Please open an issue in https://github.com/risechain/pevm/issues/new"
+    )]
     UnreachableError,
 }
 

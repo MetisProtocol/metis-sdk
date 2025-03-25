@@ -5,10 +5,10 @@
 use std::{num::NonZeroUsize, sync::Arc, thread};
 
 use alloy_primitives::{Address, U160, U256};
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use pevm::{
-    chain::PevmEthereum, execute_revm_sequential, Bytecodes, ChainState, EvmAccount,
-    InMemoryStorage, Pevm,
+    Bytecodes, ChainState, EvmAccount, InMemoryStorage, Pevm, chain::PevmEthereum,
+    execute_revm_sequential,
 };
 use revm::primitives::{BlockEnv, SpecId, TransactTo, TxEnv};
 
@@ -146,7 +146,7 @@ pub fn benchmark_gigagas(c: &mut Criterion) {
 mod benches {
     use super::*;
     // criterion_group!(benches, benchmark_gigagas);
-    criterion_group!{
+    criterion_group! {
         name = benches;
         config = Criterion::default().measurement_time(std::time::Duration::from_secs(60));
         targets = benchmark_gigagas
