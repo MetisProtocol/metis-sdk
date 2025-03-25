@@ -163,9 +163,13 @@ impl PevmChain for PevmOptimism {
     fn get_handler<'a, EXT, DB: revm::Database>(
         &self,
         spec_id: SpecId,
-        with_reward_beneficiary: bool,
+        _with_reward_beneficiary: bool,
     ) -> Handler<'a, revm::Context<EXT, DB>, EXT, DB> {
-        Handler::optimism_with_spec(spec_id, with_reward_beneficiary)
+        let mut hander = Handler::optimism_with_spec(spec_id);
+        if !with_reward_beneficiary {
+            hander.post_execution.reward_beneficiary = Arc::new(|_,__| Ok(()));
+        }
+        hander
     }
 
     fn get_reward_policy(&self) -> RewardPolicy {
