@@ -274,9 +274,9 @@ mod tests {
     fn eq_bytecodes(revm_code: &Bytecode, pevm_code: &EvmCode) -> bool {
         match (revm_code, pevm_code) {
             (Bytecode::LegacyAnalyzed(revm), EvmCode::Legacy(pevm)) => {
-                revm.bytecode == pevm.bytecode
-                    && revm.original_len == pevm.original_len
-                    && revm.jump_table.0 == pevm.jump_table
+                revm.bytecode().clone() == pevm.bytecode().clone()
+                    && revm.original_len() == pevm.original_len()
+                    && revm.jump_table().clone().0 == pevm.jump_table().clone().0
             }
             (Bytecode::Eip7702(revm), EvmCode::Eip7702(pevm)) => {
                 revm.delegated_address == pevm.delegated_address && revm.version == pevm.version
