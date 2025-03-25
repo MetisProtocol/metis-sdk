@@ -1,5 +1,6 @@
 use rocksdb::Error as DbError;
 use thiserror::Error;
+use tokio::task::JoinError;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -21,6 +22,8 @@ pub enum Error {
     GetSymbol(String),
     #[error("Lock poison error: {0}")]
     LockPoison(String),
+    #[error("Handle join error: {0}")]
+    Join(#[from] JoinError),
     #[error("Internal error: {0}")]
     Internal(String),
     #[error("Disable compiler")]

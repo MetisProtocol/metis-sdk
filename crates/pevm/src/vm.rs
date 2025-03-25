@@ -722,7 +722,7 @@ impl<'a, S: Storage, C: PevmChain> Vm<'a, S, C> {
         write_set: &mut WriteSet,
         tx: &TxEnv,
         gas_used: U256,
-        #[cfg(feature = "optimism")] evm_context: &mut EvmContext<DB>,
+        #[cfg(feature = "optimism")] evm_context: &mut revm::EvmContext<DB>,
     ) -> Result<(), VmExecutionError> {
         let mut gas_price = if let Some(priority_fee) = tx.gas_priority_fee {
             std::cmp::min(

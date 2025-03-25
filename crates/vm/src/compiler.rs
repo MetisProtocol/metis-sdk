@@ -257,12 +257,28 @@ impl ExtCompileWorker {
         Ok(FetchedFnResult::NotFound)
     }
 
-    /// Spwan compile the byecode referred by code_hash
-    pub fn spwan(&self, spec_id: SpecId, code_hash: B256, bytecode: Bytes) -> Result<(), Error> {
+    /// Spawn compile the byecode referred by code_hash
+    pub fn spawn(&self, spec_id: SpecId, code_hash: B256, bytecode: Bytes) -> Result<(), Error> {
         if let Some(pool) = &self.pool {
-            pool.spwan(spec_id, code_hash, bytecode)?;
+            pool.spawn(spec_id, code_hash, bytecode)?;
         }
         Ok(())
+    }
+
+    /// Block compile the byecode referred by code_hash
+    pub async fn block(
+        &self,
+        spec_id: SpecId,
+        code_hash: B256,
+        bytecode: Bytes,
+    ) -> Result<FetchedFnResult, Error> {
+        if let Some(pool) = &self.pool {
+            let handle = pool.spawn(spec_id, code_hash, bytecode)?;
+            let _result = handle.await?;
+            self.get_function(&code_hash)
+        } else {
+            Err(Error::DisableCompiler)
+        }
     }
 }
 
@@ -295,7 +311,6 @@ pub fn register_compile_handler<DB: Database>(
     handler.execution.execute_frame = Arc::new(move |frame, memory, tables, context| {
         let interpreter = frame.interpreter_mut();
         let code_hash = interpreter.contract.hash.unwrap_or_default();
-
         match context.external.get_function(&code_hash) {
             Ok(FetchedFnResult::NotFound) => {
                 // Compile the code
@@ -303,7 +318,7 @@ pub fn register_compile_handler<DB: Database>(
                 let bytecode = context.evm.db.code_by_hash(code_hash).unwrap_or_default();
                 let _res = context
                     .external
-                    .spwan(spec_id, code_hash, bytecode.original_bytes());
+                    .spawn(spec_id, code_hash, bytecode.original_bytes());
                 prev(frame, memory, tables, context)
             }
             Ok(FetchedFnResult::Found(f)) => {

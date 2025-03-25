@@ -8,17 +8,16 @@ use super::{
     hotcode::HotCodeCounter,
     runtime::get_runtime,
 };
-
-use revmc::{
-    EvmCompilerFn,
-    primitives::{Bytes, SpecId},
-};
+use metis_primitives::{Bytes, SpecId};
 use std::{
     num::NonZeroUsize,
     ops::DerefMut,
     sync::{Arc, RwLock},
 };
-use tokio::sync::{Mutex, Semaphore};
+use tokio::{
+    sync::{Mutex, Semaphore},
+    task::JoinHandle,
+};
 
 /// A compile pool for compiling bytecode to the native code with the JIT or AOT
 /// compile cache.
@@ -45,6 +44,7 @@ impl CompilePool {
     /// * `hot_code_counter` - A reference-counted, thread-safe handle to count call of contract
     /// * `max_concurrent_tasks` - The maximum number of concurrent aot compiling tasks allowed.
     /// * `cache_size` - RLU cache size.
+    #[inline]
     pub(crate) fn new(
         context: &'static CompilerContext,
         is_aot: bool,
@@ -105,21 +105,21 @@ impl CompilePool {
     ///
     /// A `JoinHandle` to the spawned task, which resolves to a `Result` indicating success or
     /// failure.
-    pub(crate) fn spwan(
+    pub(crate) fn spawn(
         &self,
         spec_id: SpecId,
         code_hash: B256,
         bytecode: Bytes,
-    ) -> Result<Option<EvmCompilerFn>, Error> {
+    ) -> Result<JoinHandle<Result<(), Error>>, Error> {
         let threshold = self.threshold;
         let semaphore = self.semaphore.clone();
         let inner = self.inner.clone();
         let cache = self.cache.clone();
-        if !inner.hot_code_counter.primary {
-            return Ok(None);
-        }
         let runtime = get_runtime();
-        runtime.spawn(async move {
+        let handle = runtime.spawn(async move {
+            if !inner.hot_code_counter.primary {
+                return Ok(());
+            }
             let _permit = semaphore.acquire().await.unwrap();
             // Check if the bytecode is all zeros
             if code_hash.is_zero() {
@@ -146,7 +146,6 @@ impl CompilePool {
             // Only write the new count to the database after compiling successfully
             counter.write_hot_call_count(code_hash, new_count)
         });
-
-        Ok(None)
+        Ok(handle)
     }
 }

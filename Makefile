@@ -5,6 +5,9 @@ check:
 	cargo check -r --all
 
 test:
+	cargo test -r --workspace
+
+test-all:
 	cargo test -r --workspace --all-features
 
 accept:

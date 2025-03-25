@@ -20,3 +20,6 @@ pub mod hotcode;
 mod runtime;
 
 pub use error::Error;
+
+#[cfg(test)]
+mod tests;
