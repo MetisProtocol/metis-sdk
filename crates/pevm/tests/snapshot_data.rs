@@ -1,13 +1,14 @@
 //! Test if snapshotted mainnet data is correct
 
-use alloy_primitives::B256;
-use alloy_provider::{Provider, ProviderBuilder};
-use alloy_rpc_types_eth::{BlockNumberOrTag, BlockTransactionsKind};
-use std::collections::BTreeMap;
-use std::fs::File;
-
+#[cfg(feature = "rpc-storage")]
 #[tokio::test]
 async fn snapshotted_mainnet_block_hashes() {
+    use alloy_primitives::B256;
+    use alloy_provider::{Provider, ProviderBuilder};
+    use alloy_rpc_types_eth::{BlockNumberOrTag, BlockTransactionsKind};
+    use std::collections::BTreeMap;
+    use std::fs::File;
+
     let file = File::open("../../data/block_hashes.bincode").unwrap();
     let block_hashes = bincode::deserialize_from::<_, BTreeMap<u64, B256>>(file).unwrap();
 
