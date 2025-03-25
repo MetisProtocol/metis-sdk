@@ -4,14 +4,13 @@ use metis_primitives::B256;
 use rustc_hash::FxBuildHasher;
 
 use super::{
-    compiler::{CompileOptions, Compiler},
+    compiler::{CompileOptions, Compiler, CompilerContext},
     hotcode::HotCodeCounter,
     runtime::get_runtime,
 };
 
 use revmc::{
     EvmCompilerFn,
-    llvm::Context,
     primitives::{Bytes, SpecId},
 };
 use std::{
@@ -47,7 +46,7 @@ impl CompilePool {
     /// * `max_concurrent_tasks` - The maximum number of concurrent aot compiling tasks allowed.
     /// * `cache_size` - RLU cache size.
     pub(crate) fn new(
-        context: &'static Context,
+        context: &'static CompilerContext,
         is_aot: bool,
         threshold: u64,
         hot_code_counter: HotCodeCounter,
@@ -68,7 +67,7 @@ impl CompilePool {
     }
 
     pub(crate) fn new_with_config(
-        context: &'static Context,
+        context: &'static CompilerContext,
         threshold: u64,
         hot_code_counter: HotCodeCounter,
         max_concurrent_tasks: usize,

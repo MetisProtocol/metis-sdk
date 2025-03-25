@@ -1,6 +1,7 @@
 use alloy_primitives::TxKind;
 use alloy_rpc_types_eth::Receipt;
 use hashbrown::HashMap;
+use metis_vm::ExtCompileWorker;
 use revm::{
     Database, Evm,
     primitives::{
@@ -9,6 +10,7 @@ use revm::{
     },
 };
 use smallvec::{SmallVec, smallvec};
+use std::sync::Arc;
 
 use crate::{
     AccountBasic, BuildIdentityHasher, BuildSuffixHasher, EvmAccount, FinishExecFlags, MemoryEntry,
@@ -495,6 +497,7 @@ pub(crate) struct Vm<'a, S: Storage, C: PevmChain> {
     spec_id: SpecId,
     beneficiary_location_hash: MemoryLocationHash,
     reward_policy: RewardPolicy,
+    worker: Arc<ExtCompileWorker>,
 }
 
 impl<'a, S: Storage, C: PevmChain> Vm<'a, S, C> {
@@ -505,6 +508,7 @@ impl<'a, S: Storage, C: PevmChain> Vm<'a, S, C> {
         block_env: &'a BlockEnv,
         txs: &'a [TxEnv],
         spec_id: SpecId,
+        worker: Arc<ExtCompileWorker>,
     ) -> Self {
         Self {
             storage,
@@ -517,6 +521,7 @@ impl<'a, S: Storage, C: PevmChain> Vm<'a, S, C> {
                 block_env.coinbase,
             )),
             reward_policy: chain.get_reward_policy(),
+            worker,
         }
     }
 
@@ -560,6 +565,7 @@ impl<'a, S: Storage, C: PevmChain> Vm<'a, S, C> {
             self.block_env.clone(),
             Some(tx.clone()),
             false,
+            self.worker.clone(),
         );
         match evm.transact() {
             Ok(result_and_state) => {
@@ -797,6 +803,7 @@ impl<'a, S: Storage, C: PevmChain> Vm<'a, S, C> {
     }
 }
 
+#[inline]
 pub(crate) fn build_evm<'a, DB: Database, C: PevmChain>(
     db: DB,
     chain: &C,
@@ -804,17 +811,15 @@ pub(crate) fn build_evm<'a, DB: Database, C: PevmChain>(
     block_env: BlockEnv,
     tx_env: Option<TxEnv>,
     with_reward_beneficiary: bool,
-) -> Evm<'a, (), DB> {
+    worker: Arc<ExtCompileWorker>,
+) -> Evm<'a, Arc<metis_vm::ExtCompileWorker>, DB> {
     let handler = chain.get_handler(spec_id, with_reward_beneficiary);
-
-    // Note: we need to keep alive the context as long as the evm and compiler.
-    // let context = CompilerContext::create();
     // New a VM and run the tx.
     let evm = Evm::builder()
         .with_db(db)
         // Note we register the external AOT compiler handler here.
-        // .with_external_context(Arc::new(ExtCompileWorker::new_aot(&context).unwrap()))
-        // .append_handler_register(register_compile_handler)
+        .with_external_context(worker)
+        .append_handler_register(metis_vm::register_compile_handler)
         .with_spec_id(spec_id)
         .modify_cfg_env(|cfg| {
             cfg.chain_id = chain.id();

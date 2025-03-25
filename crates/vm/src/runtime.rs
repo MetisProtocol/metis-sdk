@@ -1,6 +1,8 @@
 use std::sync::Once;
 use tokio::runtime::Runtime;
 
+use crate::CompilerContext;
+
 static mut RUNTIME: Option<Runtime> = None;
 static RUNTIME_INIT: Once = Once::new();
 
@@ -13,5 +15,22 @@ pub(crate) fn get_runtime() -> &'static Runtime {
             RUNTIME = Some(Runtime::new().unwrap());
         });
         RUNTIME.as_ref().unwrap()
+    }
+}
+
+#[cfg(feature = "compiler")]
+static mut CONTEXT: Option<crate::CompilerContext> = None;
+#[cfg(feature = "compiler")]
+static CONTEXT_INIT: Once = Once::new();
+
+#[allow(static_mut_refs)]
+#[allow(unused)]
+#[cfg(feature = "compiler")]
+pub(crate) fn get_compiler_context() -> &'static CompilerContext {
+    unsafe {
+        CONTEXT_INIT.call_once(|| {
+            CONTEXT = Some(CompilerContext::create());
+        });
+        CONTEXT.as_ref().unwrap()
     }
 }

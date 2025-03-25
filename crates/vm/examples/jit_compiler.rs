@@ -3,7 +3,7 @@ use std::sync::Arc;
 pub use alloy_sol_types::{SolCall, sol};
 pub use metis_primitives::hex;
 use metis_primitives::{EVMBytecode, KECCAK_EMPTY, SpecId, TxKind, U256, address, keccak256};
-use metis_vm::{CompilerContext, Error, ExtCompileWorker, register_compile_handler};
+use metis_vm::{Error, ExtCompileWorker, register_compile_handler};
 use revm::{CacheState, Evm, primitives::AccountInfo};
 
 sol! {
@@ -47,13 +47,11 @@ fn main() -> Result<(), Error> {
         .with_cached_prestate(cache)
         .with_bundle_update()
         .build();
-    // Note: we need to keep alive the context as long as the evm and compiler.
-    let context = CompilerContext::create();
     // New a VM and run the tx.
     let mut evm = Evm::builder()
         .with_db(state)
         // Note we register the external JIT compiler handler here.
-        .with_external_context(Arc::new(ExtCompileWorker::new_jit(&context)?))
+        .with_external_context(Arc::new(ExtCompileWorker::new_jit()?))
         .append_handler_register(register_compile_handler)
         .with_spec_id(SpecId::CANCUN)
         .modify_cfg_env(|cfg| {
