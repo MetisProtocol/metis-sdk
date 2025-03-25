@@ -1,14 +1,13 @@
 use std::{fmt::Display, sync::Arc};
 
 use alloy_primitives::{Address, B256, Bytes, U256};
-use bitvec::vec::BitVec;
 use hashbrown::HashMap;
 use revm::{
     DatabaseRef,
     interpreter::analysis::to_analysed,
     primitives::{
-        Account, AccountInfo, Bytecode, EIP7702_MAGIC_BYTES, Eip7702Bytecode, Eof, JumpTable,
-        KECCAK_EMPTY,
+        Account, AccountInfo, Bytecode, EIP7702_MAGIC_BYTES, Eip7702Bytecode, Eof, KECCAK_EMPTY,
+        LegacyAnalyzedBytecode,
     },
 };
 use rustc_hash::FxBuildHasher;
@@ -73,18 +72,6 @@ impl Default for AccountBasic {
     }
 }
 
-/// Analyzed legacy code.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct LegacyCode {
-    /// Bytecode with 32 zero bytes padding.
-    // TODO: Store unpadded bytecode and pad on revm conversion
-    bytecode: Bytes,
-    /// Original bytes length.
-    original_len: usize,
-    /// Jump table.
-    jump_table: Arc<BitVec<u8>>,
-}
-
 /// EIP7702 delegated code.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Eip7702Code {
@@ -98,7 +85,7 @@ pub struct Eip7702Code {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EvmCode {
     /// Maps both analyzed and non-analyzed REVM legacy bytecode.
-    Legacy(LegacyCode),
+    Legacy(LegacyAnalyzedBytecode),
     /// Maps delegated EIP7702 bytecode.
     Eip7702(Eip7702Code),
     /// Maps EOF bytecode.
@@ -116,13 +103,7 @@ impl TryFrom<EvmCode> for Bytecode {
     fn try_from(code: EvmCode) -> Result<Self, Self::Error> {
         match code {
             // TODO: Turn this [unsafe] into a proper [Result]
-            EvmCode::Legacy(code) => unsafe {
-                Ok(Self::new_analyzed(
-                    code.bytecode,
-                    code.original_len,
-                    JumpTable(code.jump_table),
-                ))
-            },
+            EvmCode::Legacy(code) => Ok(Self::LegacyAnalyzed(code)),
             EvmCode::Eip7702(code) => {
                 let mut raw = EIP7702_MAGIC_BYTES.to_vec();
                 raw.push(code.version);
@@ -146,11 +127,7 @@ impl From<Bytecode> for EvmCode {
         match code {
             // This arm will recursively fallback to LegacyAnalyzed.
             Bytecode::LegacyRaw(_) => to_analysed(code).into(),
-            Bytecode::LegacyAnalyzed(code) => Self::Legacy(LegacyCode {
-                bytecode: code.bytecode().clone(),
-                original_len: code.original_len(),
-                jump_table: code.jump_table().clone().0,
-            }),
+            Bytecode::LegacyAnalyzed(code) => Self::Legacy(code),
             Bytecode::Eip7702(code) => Self::Eip7702(Eip7702Code {
                 delegated_address: code.delegated_address,
                 version: code.version,
@@ -296,9 +273,7 @@ mod tests {
     fn eq_bytecodes(revm_code: &Bytecode, pevm_code: &EvmCode) -> bool {
         match (revm_code, pevm_code) {
             (Bytecode::LegacyAnalyzed(revm), EvmCode::Legacy(pevm)) => {
-                revm.bytecode == pevm.bytecode
-                    && revm.original_len == pevm.original_len
-                    && revm.jump_table.0 == pevm.jump_table
+                revm == pevm
             }
             (Bytecode::Eip7702(revm), EvmCode::Eip7702(pevm)) => {
                 revm.delegated_address == pevm.delegated_address && revm.version == pevm.version

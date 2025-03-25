@@ -16,6 +16,8 @@ use crate::{
     mv_memory::MvMemory,
 };
 
+use std::sync::Arc;
+
 /// Implementation of [`PevmChain`] for Ethereum
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PevmEthereum {
@@ -143,9 +145,13 @@ impl PevmChain for PevmEthereum {
     fn get_handler<'a, EXT, DB: revm::Database>(
         &self,
         spec_id: SpecId,
-        _with_reward_beneficiary: bool,
+        with_reward_beneficiary: bool,
     ) -> Handler<'a, revm::Context<EXT, DB>, EXT, DB> {
-        Handler::mainnet_with_spec(spec_id)
+        let mut hander = Handler::mainnet_with_spec(spec_id);
+        if !with_reward_beneficiary {
+            hander.post_execution.reward_beneficiary = Arc::new(|_, __| Ok(()));
+        }
+        hander
     }
 
     fn get_reward_policy(&self) -> RewardPolicy {
