@@ -1,13 +1,14 @@
 use std::{
     fmt::Debug,
     num::NonZeroUsize,
-    sync::{Mutex, OnceLock, mpsc},
+    sync::{Arc, Mutex, OnceLock, mpsc},
     thread,
 };
 
 use alloy_primitives::{TxNonce, U256};
 use alloy_rpc_types_eth::{Block, BlockTransactions};
 use hashbrown::HashMap;
+use metis_vm::ExtCompileWorker;
 use revm::{
     DatabaseCommit,
     db::CacheDB,
@@ -103,12 +104,35 @@ impl<T> AsyncDropper<T> {
 }
 
 // TODO: Port more recyclable resources into here.
-#[derive(Debug, Default)]
 /// The main pevm struct that executes blocks.
+#[derive(Debug)]
 pub struct Pevm {
     execution_results: Vec<Mutex<Option<PevmTxExecutionResult>>>,
     abort_reason: OnceLock<AbortReason>,
     dropper: AsyncDropper<(MvMemory, Scheduler, Vec<TxEnv>)>,
+    /// The compile work shared with different vm instance.
+    pub worker: Arc<ExtCompileWorker>,
+}
+
+impl Default for Pevm {
+    fn default() -> Self {
+        Self {
+            execution_results: Default::default(),
+            abort_reason: Default::default(),
+            dropper: Default::default(),
+            worker: Arc::new(ExtCompileWorker::disable()),
+        }
+    }
+}
+
+impl Pevm {
+    /// New a parrallel VM with the compiler feature.
+    pub fn compiler() -> Self {
+        Self {
+            worker: Arc::new(ExtCompileWorker::new_aot().expect("compile worker init failed")),
+            ..Default::default()
+        }
+    }
 }
 
 impl Pevm {
@@ -149,7 +173,14 @@ impl Pevm {
             || tx_envs.len() < concurrency_level.get()
             || block.header.gas_used < 4_000_000
         {
-            execute_revm_sequential(chain, storage, spec_id, block_env, tx_envs)
+            execute_revm_sequential(
+                chain,
+                storage,
+                spec_id,
+                block_env,
+                tx_envs,
+                self.worker.clone(),
+            )
         } else {
             self.execute_revm_parallel(
                 chain,
@@ -186,7 +217,15 @@ impl Pevm {
         let scheduler = Scheduler::new(block_size);
 
         let mv_memory = chain.build_mv_memory(&block_env, &txs);
-        let vm = Vm::new(storage, &mv_memory, chain, &block_env, &txs, spec_id);
+        let vm = Vm::new(
+            storage,
+            &mv_memory,
+            chain,
+            &block_env,
+            &txs,
+            spec_id,
+            self.worker.clone(),
+        );
 
         let additional = block_size.saturating_sub(self.execution_results.len());
         if additional > 0 {
@@ -233,7 +272,14 @@ impl Pevm {
             match abort_reason {
                 AbortReason::FallbackToSequential => {
                     self.dropper.drop((mv_memory, scheduler, Vec::new()));
-                    return execute_revm_sequential(chain, storage, spec_id, block_env, txs);
+                    return execute_revm_sequential(
+                        chain,
+                        storage,
+                        spec_id,
+                        block_env,
+                        txs,
+                        self.worker.clone(),
+                    );
                 }
                 AbortReason::ExecutionError(err) => {
                     self.dropper.drop((mv_memory, scheduler, txs));
@@ -450,9 +496,10 @@ pub fn execute_revm_sequential<S: Storage, C: PevmChain>(
     spec_id: SpecId,
     block_env: BlockEnv,
     txs: Vec<TxEnv>,
+    worker: Arc<ExtCompileWorker>,
 ) -> PevmResult<C> {
     let mut db = CacheDB::new(StorageWrapper(storage));
-    let mut evm = build_evm(&mut db, chain, spec_id, block_env, None, true);
+    let mut evm = build_evm(&mut db, chain, spec_id, block_env, None, true, worker);
     let mut results = Vec::with_capacity(txs.len());
     let mut cumulative_gas_used: u64 = 0;
     for tx in txs {

@@ -12,13 +12,28 @@ use revmc::EvmCompilerFn;
 use revmc::{EvmCompiler, EvmLlvmBackend, OptimizationLevel, llvm::Context};
 use rustc_hash::FxBuildHasher;
 use rustc_hash::FxHashMap as HashMap;
-use std::fs;
+use std::{fmt::Debug, fs};
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     sync::{Arc, TryLockError},
 };
 
-pub use revmc::llvm::Context as CompilerContext;
+pub use revmc::llvm::Context as InnerContext;
+
+/// A Context is not thread safe and cannot be shared across threads.
+/// Multiple Contexts can, however, execute on different threads simultaneously
+/// according to the LLVM docs.
+#[derive(Debug, PartialEq, Eq)]
+pub struct CompilerContext(pub(crate) InnerContext);
+
+unsafe impl Send for CompilerContext {}
+unsafe impl Sync for CompilerContext {}
+
+impl CompilerContext {
+    pub fn create() -> Self {
+        Self(InnerContext::create())
+    }
+}
 
 /// EVM Compile flags.
 #[derive(Debug)]
@@ -49,8 +64,8 @@ unsafe impl Send for Compiler<'_> {}
 unsafe impl Sync for Compiler<'_> {}
 
 impl<'ctx> Compiler<'ctx> {
-    pub(crate) fn new(context: &'ctx Context, opts: CompileOptions) -> Result<Self, Error> {
-        let backend = EvmLlvmBackend::new(context, opts.is_aot, OptimizationLevel::Aggressive)
+    pub(crate) fn new(context: &'ctx CompilerContext, opts: CompileOptions) -> Result<Self, Error> {
+        let backend = EvmLlvmBackend::new(&context.0, opts.is_aot, OptimizationLevel::Aggressive)
             .map_err(|err| Error::BackendInit(err.to_string()))?;
         let mut compiler = EvmCompiler::new(backend);
         compiler.gas_metering(opts.no_gas);
@@ -153,59 +168,64 @@ impl CompileCache {
 /// In many cases, a contract that is called will likely be called again,
 /// so the cache helps reduce the library loading cost if we use the AOT mode.
 pub struct ExtCompileWorker {
-    pool: CompilePool,
+    pool: Option<CompilePool>,
+}
+
+impl Debug for ExtCompileWorker {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExtCompileWorker").finish()
+    }
 }
 
 impl ExtCompileWorker {
     #[inline]
-    pub fn new_aot(context: &CompilerContext) -> Result<Self, Error> {
-        Self::new_with_opts(
-            context,
-            ExtCompileOptions {
-                is_aot: true,
-                ..Default::default()
-            },
-        )
+    pub fn disable() -> Self {
+        Self { pool: None }
     }
 
     #[inline]
-    pub fn new_jit(context: &CompilerContext) -> Result<Self, Error> {
-        Self::new_with_opts(
-            context,
-            ExtCompileOptions {
-                is_aot: false,
-                ..Default::default()
-            },
-        )
+    pub fn new_aot() -> Result<Self, Error> {
+        Self::new_with_opts(ExtCompileOptions {
+            is_aot: true,
+            ..Default::default()
+        })
     }
 
-    pub fn new_with_opts(
-        context: &CompilerContext,
-        opts: ExtCompileOptions,
-    ) -> Result<Self, Error> {
+    #[inline]
+    pub fn new_jit() -> Result<Self, Error> {
+        Self::new_with_opts(ExtCompileOptions {
+            is_aot: false,
+            ..Default::default()
+        })
+    }
+
+    pub fn new_with_opts(opts: ExtCompileOptions) -> Result<Self, Error> {
         let hot_code_counter = HotCodeCounter::new(opts.primary, opts.pool_size)?;
         let pool = CompilePool::new(
             // Note: the `Context` is not thread safe and cannot be shared across threads.
             // Multiple `Context`s can, however, execute on different threads simultaneously
             // according to the LLVM docs, so we can make it static.
-            unsafe { std::mem::transmute::<&CompilerContext, &CompilerContext>(context) },
+            crate::runtime::get_compiler_context(),
             opts.is_aot,
             opts.threshold,
             hot_code_counter,
             opts.pool_size,
             opts.cache_size,
         )?;
-        Ok(Self { pool })
+        Ok(Self { pool: Some(pool) })
     }
 
     /// Fetches the compiled function from disk, if exists
     pub fn get_function(&self, code_hash: &B256) -> Result<FetchedFnResult, Error> {
+        let Some(pool) = &self.pool else {
+            return Err(Error::DisableCompiler);
+        };
         if code_hash.is_zero() {
             return Ok(FetchedFnResult::NotFound);
         }
         // Write locks are required for reading from LRU Cache
         {
-            let mut cache = match self.pool.cache.try_write() {
+            let mut cache = match pool.cache.try_write() {
                 Ok(c) => Some(c),
                 Err(err) => match err {
                     /* in this case, read from file instead of cache */
@@ -239,7 +259,9 @@ impl ExtCompileWorker {
 
     /// Spwan compile the byecode referred by code_hash
     pub fn spwan(&self, spec_id: SpecId, code_hash: B256, bytecode: Bytes) -> Result<(), Error> {
-        self.pool.spwan(spec_id, code_hash, bytecode)?;
+        if let Some(pool) = &self.pool {
+            pool.spwan(spec_id, code_hash, bytecode)?;
+        }
         Ok(())
     }
 }

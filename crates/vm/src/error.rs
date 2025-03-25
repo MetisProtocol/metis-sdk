@@ -23,4 +23,6 @@ pub enum Error {
     LockPoison(String),
     #[error("Internal error: {0}")]
     Internal(String),
+    #[error("Disable compiler")]
+    DisableCompiler,
 }

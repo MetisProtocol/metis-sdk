@@ -29,6 +29,7 @@ where
     S: Storage + Send + Sync,
 {
     let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
+    let mut pevm = Pevm::default();
     assert_eq!(
         pevm::execute_revm_sequential(
             chain,
@@ -36,8 +37,9 @@ where
             SpecId::LATEST,
             BlockEnv::default(),
             txs.clone(),
+            pevm.worker.clone(),
         ),
-        Pevm::default().execute_revm_parallel(
+        pevm.execute_revm_parallel(
             chain,
             &storage,
             SpecId::LATEST,
