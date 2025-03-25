@@ -60,6 +60,10 @@ Pre-configured with over 20 industry-standard model interfaces (such as the Meti
 
 Supports mixed-programming in multiple languages including Solidity, Rust, and Python. It offers a one-click packaging tool process for AI models to smart contracts. Developers can use mainstream machine learning frameworks like Pytorch, Tensorflow, and ONNX to train and utilize models without the need for additional modifications or conversions to the models, greatly simplifying the development process.
 
+## Developing
+
+See the [developing guide](./docs/dev.md) for more information.
+
 ## License
 
 Apache 2.0
