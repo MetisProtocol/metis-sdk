@@ -27,7 +27,7 @@ use_self = "warn"
 metis-vm = { path = "crates/vm", features = ["compiler"]}
 metis-primitives = { path = "crates/primitives" }
 pevm = { path = "crates/pevm", features = ["full"] }
-
+metis-exex = {path = "crates/exex"}
 anyhow = "1.0.97"
 
 # alloy
