@@ -272,9 +272,7 @@ mod tests {
 
     fn eq_bytecodes(revm_code: &Bytecode, pevm_code: &EvmCode) -> bool {
         match (revm_code, pevm_code) {
-            (Bytecode::LegacyAnalyzed(revm), EvmCode::Legacy(pevm)) => {
-                revm == pevm
-            }
+            (Bytecode::LegacyAnalyzed(revm), EvmCode::Legacy(pevm)) => revm == pevm,
             (Bytecode::Eip7702(revm), EvmCode::Eip7702(pevm)) => {
                 revm.delegated_address == pevm.delegated_address && revm.version == pevm.version
             }

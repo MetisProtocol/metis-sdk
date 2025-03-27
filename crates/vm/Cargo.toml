@@ -16,7 +16,6 @@ revmc = { git = "https://github.com/paradigmxyz/revmc", features = ["llvm-prefer
 smallvec = "1.14.0"
 libloading = "0.8.6"
 lru = "0.13.0"
-rocksdb = { version = "0.23.0", features = ["multi-threaded-cf"] }
 alith = { git = "https://github.com/0xLazAI/alith", version = "0.4.5", rev = "a67e056", features = ["llamacpp"], optional = true }
 
 [build-dependencies]

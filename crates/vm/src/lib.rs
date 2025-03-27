@@ -16,7 +16,6 @@ pub use inference::{
 pub mod analysis;
 pub mod env;
 pub mod error;
-pub mod hotcode;
 mod runtime;
 
 pub use error::Error;

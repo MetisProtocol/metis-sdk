@@ -816,10 +816,8 @@ pub(crate) fn build_evm<'a, DB: Database, C: PevmChain>(
     let handler = chain.get_handler(spec_id, with_reward_beneficiary);
     // New a VM and run the tx.
     let evm = Evm::builder()
-        .with_db(db)
-        // Note we register the external AOT compiler handler here.
         .with_external_context(worker)
-        .append_handler_register(metis_vm::register_compile_handler)
+        .with_db(db)
         .with_spec_id(spec_id)
         .modify_cfg_env(|cfg| {
             cfg.chain_id = chain.id();
@@ -827,6 +825,10 @@ pub(crate) fn build_evm<'a, DB: Database, C: PevmChain>(
         .with_block_env(block_env)
         .with_tx_env(tx_env.unwrap_or_default())
         .with_handler(handler)
+        // Note: register the external AOT compiler handler here.
+        // The external must be set after the handler, otherwise the
+        // compile handler will be overwritten the chain handler.
+        .append_handler_register(metis_vm::register_compile_handler)
         .build();
     evm
 }

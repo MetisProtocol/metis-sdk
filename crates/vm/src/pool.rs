@@ -5,7 +5,6 @@ use rustc_hash::FxBuildHasher;
 
 use super::{
     compiler::{CompileOptions, Compiler, CompilerContext},
-    hotcode::HotCodeCounter,
     runtime::get_runtime,
 };
 use metis_primitives::{Bytes, SpecId};
@@ -29,7 +28,6 @@ pub struct CompilePool {
 }
 
 struct PoolInner {
-    hot_code_counter: HotCodeCounter,
     compiler: Mutex<Compiler<'static>>,
 }
 
@@ -41,7 +39,6 @@ impl CompilePool {
     /// * `is_aot` - Use the AOT compiler or the JIT compiler
     /// * `threshold` - The threshold for the number of times a bytecode must be seen before it is
     ///   compiled.
-    /// * `hot_code_counter` - A reference-counted, thread-safe handle to count call of contract
     /// * `max_concurrent_tasks` - The maximum number of concurrent aot compiling tasks allowed.
     /// * `cache_size` - RLU cache size.
     #[inline]
@@ -49,14 +46,12 @@ impl CompilePool {
         context: &'static CompilerContext,
         is_aot: bool,
         threshold: u64,
-        hot_code_counter: HotCodeCounter,
         max_concurrent_tasks: usize,
         cache_size: usize,
     ) -> Result<Self, Error> {
         Self::new_with_config(
             context,
             threshold,
-            hot_code_counter,
             max_concurrent_tasks,
             cache_size,
             CompileOptions {
@@ -69,7 +64,6 @@ impl CompilePool {
     pub(crate) fn new_with_config(
         context: &'static CompilerContext,
         threshold: u64,
-        hot_code_counter: HotCodeCounter,
         max_concurrent_tasks: usize,
         cache_size: usize,
         opts: CompileOptions,
@@ -79,7 +73,6 @@ impl CompilePool {
             threshold,
             semaphore: Arc::new(Semaphore::new(max_concurrent_tasks)),
             inner: Arc::new(PoolInner {
-                hot_code_counter,
                 compiler: Mutex::new(Compiler::new(context, opts)?),
             }),
             cache: Arc::new(RwLock::new(if is_aot {
@@ -111,40 +104,29 @@ impl CompilePool {
         code_hash: B256,
         bytecode: Bytes,
     ) -> Result<JoinHandle<Result<(), Error>>, Error> {
-        let threshold = self.threshold;
         let semaphore = self.semaphore.clone();
         let inner = self.inner.clone();
         let cache = self.cache.clone();
         let runtime = get_runtime();
         let handle = runtime.spawn(async move {
-            if !inner.hot_code_counter.primary {
-                return Ok(());
-            }
             let _permit = semaphore.acquire().await.unwrap();
             // Check if the bytecode is all zeros
             if code_hash.is_zero() {
                 return Ok(());
             }
-            let counter = &inner.hot_code_counter;
-            // Read the current count of the bytecode hash from the embedded database
-            let count = counter.load_hot_call_count(code_hash)?;
-            let new_count = count + 1;
-            if new_count >= threshold {
-                let mut compiler = inner.compiler.lock().await;
-                if compiler.opts.is_aot {
-                    compiler.aot_compile(code_hash, bytecode, spec_id).await?;
-                } else {
-                    let jit = compiler.jit_compile(bytecode, spec_id)?;
-                    let mut cache = cache
-                        .write()
-                        .map_err(|err| Error::LockPoison(err.to_string()))?;
-                    if let CompileCache::JIT(jit_cache) = cache.deref_mut() {
-                        jit_cache.insert(code_hash, jit);
-                    }
+            let mut compiler = inner.compiler.lock().await;
+            if compiler.opts.is_aot {
+                compiler.aot_compile(code_hash, bytecode, spec_id).await?;
+            } else {
+                let jit = compiler.jit_compile(bytecode, spec_id)?;
+                let mut cache = cache
+                    .write()
+                    .map_err(|err| Error::LockPoison(err.to_string()))?;
+                if let CompileCache::JIT(jit_cache) = cache.deref_mut() {
+                    jit_cache.insert(code_hash, jit);
                 }
             }
-            // Only write the new count to the database after compiling successfully
-            counter.write_hot_call_count(code_hash, new_count)
+            Ok(())
         });
         Ok(handle)
     }
