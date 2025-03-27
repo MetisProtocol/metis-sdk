@@ -33,7 +33,7 @@ anyhow = "1.0.97"
 # alloy
 alloy-chains = "0.1.67"
 alloy-consensus = "0.9.2"
-alloy-primitives = { version = "0.8.23", features = [
+alloy-primitives = { version = "0.8.25", features = [
   "asm-keccak",
   "map-fxhash",
 ] }
