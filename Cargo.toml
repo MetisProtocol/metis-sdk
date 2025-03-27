@@ -63,7 +63,7 @@ bincode = "1.3.3"
 # We can roll our own but [revm] depends on this anyway.
 bitflags = "2.7.0"
 bitvec = "1.0.1"
-clap = { version = "4.5.26", features = ["derive"] }
+clap = { version = "4.5.34", features = ["derive"] }
 color-eyre = "0.6.3"
 criterion = "0.5.1"
 dashmap = "6.1.0"
