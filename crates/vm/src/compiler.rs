@@ -1,7 +1,6 @@
 use crate::{
     env::{module_name, store_path},
     error::Error,
-    hotcode::HotCodeCounter,
     pool::CompilePool,
 };
 use libloading::{Library, Symbol};
@@ -12,11 +11,8 @@ use revmc::EvmCompilerFn;
 use revmc::{EvmCompiler, EvmLlvmBackend, OptimizationLevel, llvm::Context};
 use rustc_hash::FxBuildHasher;
 use rustc_hash::FxHashMap as HashMap;
-use std::{fmt::Debug, fs};
-use std::{
-    panic::{AssertUnwindSafe, catch_unwind},
-    sync::{Arc, TryLockError},
-};
+use std::sync::{Arc, TryLockError};
+use std::{fmt::Debug, fs, path::PathBuf};
 
 pub use revmc::llvm::Context as InnerContext;
 
@@ -70,11 +66,10 @@ impl<'ctx> Compiler<'ctx> {
         let mut compiler = EvmCompiler::new(backend);
         compiler.gas_metering(opts.no_gas);
         unsafe {
-            compiler.stack_bound_checks(opts.no_len_checks);
+            compiler.stack_bound_checks(!opts.no_len_checks);
         }
         let name = module_name();
         compiler.set_module_name(&name);
-        compiler.inspect_stack_length(true);
         Ok(Self { opts, compiler })
     }
 
@@ -104,11 +99,10 @@ impl<'ctx> Compiler<'ctx> {
         let mut compiler = EvmCompiler::new(backend);
         compiler.gas_metering(self.opts.no_gas);
         unsafe {
-            compiler.stack_bound_checks(self.opts.no_len_checks);
+            compiler.stack_bound_checks(!self.opts.no_len_checks);
         }
         let name = module_name();
         compiler.set_module_name(&name);
-        compiler.inspect_stack_length(true);
 
         // Compile.
         let _f_id = compiler
@@ -169,6 +163,8 @@ impl CompileCache {
 /// so the cache helps reduce the library loading cost if we use the AOT mode.
 pub struct ExtCompileWorker {
     pool: Option<CompilePool>,
+    module_name: String,
+    store_path: PathBuf,
 }
 
 impl Debug for ExtCompileWorker {
@@ -180,7 +176,11 @@ impl Debug for ExtCompileWorker {
 impl ExtCompileWorker {
     #[inline]
     pub fn disable() -> Self {
-        Self { pool: None }
+        Self {
+            pool: None,
+            module_name: module_name(),
+            store_path: store_path(),
+        }
     }
 
     #[inline]
@@ -200,7 +200,6 @@ impl ExtCompileWorker {
     }
 
     pub fn new_with_opts(opts: ExtCompileOptions) -> Result<Self, Error> {
-        let hot_code_counter = HotCodeCounter::new(opts.primary, opts.pool_size)?;
         let pool = CompilePool::new(
             // Note: the `Context` is not thread safe and cannot be shared across threads.
             // Multiple `Context`s can, however, execute on different threads simultaneously
@@ -208,11 +207,14 @@ impl ExtCompileWorker {
             crate::runtime::get_compiler_context(),
             opts.is_aot,
             opts.threshold,
-            hot_code_counter,
             opts.pool_size,
             opts.cache_size,
         )?;
-        Ok(Self { pool: Some(pool) })
+        Ok(Self {
+            pool: Some(pool),
+            module_name: module_name(),
+            store_path: store_path(),
+        })
     }
 
     /// Fetches the compiled function from disk, if exists
@@ -240,18 +242,20 @@ impl ExtCompileWorker {
                 }
                 // Read lib from the store path if is the AOT mode
                 else if let CompileCache::AOT(aot_cache) = cache {
-                    let name = module_name();
-                    let so = store_path().join(code_hash.to_string()).join("a.so");
+                    let so = self.store_path.join(code_hash.to_string()).join("a.so");
                     if so.try_exists().unwrap_or(false) {
                         {
                             let lib = Arc::new((unsafe { Library::new(so) })?);
                             let f: Symbol<'_, revmc::EvmCompilerFn> =
-                                unsafe { lib.get(name.as_bytes())? };
+                                unsafe { lib.get(self.module_name.as_bytes())? };
                             aot_cache.put(*code_hash, (*f, lib.clone()));
                             return Ok(FetchedFnResult::Found(*f));
                         }
                     }
                 }
+            } else {
+                // Use the intepreter to run the code.
+                return Err(Error::DisableCompiler);
             }
         }
         Ok(FetchedFnResult::NotFound)
@@ -285,7 +289,6 @@ impl ExtCompileWorker {
 #[derive(Debug)]
 pub struct ExtCompileOptions {
     pub is_aot: bool,
-    pub primary: bool,
     pub threshold: u64,
     pub pool_size: usize,
     pub cache_size: usize,
@@ -295,7 +298,6 @@ impl Default for ExtCompileOptions {
     fn default() -> Self {
         Self {
             is_aot: true,
-            primary: true,
             threshold: 1,
             pool_size: 3,
             cache_size: 128,
@@ -322,10 +324,9 @@ pub fn register_compile_handler<DB: Database>(
                 prev(frame, memory, tables, context)
             }
             Ok(FetchedFnResult::Found(f)) => {
-                let res = catch_unwind(AssertUnwindSafe(|| unsafe {
-                    f.call_with_interpreter_and_memory(interpreter, memory, context)
-                }));
-                Ok(res.unwrap())
+                let res =
+                    unsafe { f.call_with_interpreter_and_memory(interpreter, memory, context) };
+                Ok(res)
             }
             Err(_) => {
                 // Fallback to the interpreter

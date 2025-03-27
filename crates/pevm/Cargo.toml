@@ -71,8 +71,8 @@ reqwest.workspace = true
 serde_json.workspace = true
 walkdir.workspace = true
 
-[lints]
-workspace = true
+[build-dependencies]
+revmc-build = { git = "https://github.com/paradigmxyz/revmc" }
 
 [[bench]]
 harness = false

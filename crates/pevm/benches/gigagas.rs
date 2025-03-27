@@ -174,7 +174,7 @@ mod benches {
     // criterion_group!(benches, benchmark_gigagas);
     criterion_group! {
         name = benches;
-        config = Criterion::default().measurement_time(std::time::Duration::from_secs(60));
+        config = Criterion::default().sample_size(10).measurement_time(std::time::Duration::from_secs(6));
         targets = benchmark_gigagas
     }
 }
