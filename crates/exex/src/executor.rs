@@ -4,8 +4,8 @@ use reth_chainspec::{ChainSpec, EthChainSpec, MAINNET};
 use reth_revm::db::{states::bundle_state::BundleRetention, State};
 use reth_primitives::{ Request, BlockWithSenders, EthereumHardfork};
 
-use pevm::{Pevm, chain::{PevmChain, PevmEthereum}, PevmError};
-use pevm::Storage;
+use metis_pe::{, chain::{PevmChain, PevmEthereum}, PevmError};
+use metis_pe::Storage;
 
 use std::{num::NonZeroUsize, sync::Arc, thread};
 use std::fmt::Display;

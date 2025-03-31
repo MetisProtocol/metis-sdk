@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-pevm.workspace = true
+metis-pe.workspace = true
 revm.workspace = true
 alloy-rpc-types-eth.workspace = true
 alloy-primitives.workspace = true
