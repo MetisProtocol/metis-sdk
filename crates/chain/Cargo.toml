@@ -1,0 +1,22 @@
+[package]
+name = "metis-chain"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+metis-primitives.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+rustc-hash.workspace = true
+
+reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.4", version = "1.3.4" }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.4", version = "1.3.4" }
+reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.4", version = "1.3.4" }
+reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.4", version = "1.3.4" }
+reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.4", version = "1.3.4" }
+reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.4", version = "1.3.4" }
+alloy-evm = { version = "0.1.0-alpha.3" }
+eyre = "0.6"
+
+alloy-eips = { version = "0.12.6", default-features = false }
+alloy-consensus = { version = "0.12.6", default-features = false }
