@@ -1,0 +1,19 @@
+[package]
+name = "metis-exex"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pevm.workspace = true
+revm.workspace = true
+alloy-rpc-types-eth.workspace = true
+alloy-primitives.workspace = true
+alloy-consensus.workspace = true
+
+# reth
+reth-evm = { git = "https://github.com/risechain/reth.git", rev = "63af3be" }
+reth-revm = { git = "https://github.com/risechain/reth.git", rev = "63af3be" }
+reth-ethereum-forks = { git = "https://github.com/risechain/reth.git", rev = "63af3be" }
+reth-provider = { git = "https://github.com/risechain/reth.git", rev = "63af3be" }
+reth-primitives = { git = "https://github.com/risechain/reth.git", rev = "63af3be" }
+reth-chainspec = { git = "https://github.com/risechain/reth.git", rev = "63af3be" }

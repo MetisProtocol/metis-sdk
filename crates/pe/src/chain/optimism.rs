@@ -1,6 +1,5 @@
 //! Optimism
 
-use std::sync::Arc;
 use alloy_consensus::Transaction;
 use alloy_primitives::{Address, B256, Bytes, ChainId, U256};
 use alloy_rpc_types_eth::{BlockTransactions, Header};
