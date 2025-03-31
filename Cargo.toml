@@ -24,7 +24,7 @@ unnested_or_patterns = "warn"
 use_self = "warn"
 
 [workspace.dependencies]
-metis-vm = { path = "crates/vm", features = ["compiler"]}
+metis-vm = { path = "crates/vm" }
 metis-primitives = { path = "crates/primitives" }
 pevm = { path = "crates/pevm", features = ["full"] }
 

@@ -6,7 +6,7 @@ version.workspace = true
 [features]
 defaults = []
 
-full = ["optimism", "rpc-storage"]
+full = ["optimism", "rpc-storage", "compiler"]
 
 optimism = [
   "revm/optimism",
@@ -21,6 +21,8 @@ rpc-storage = [
   "dep:reqwest",
   "dep:tokio",
 ]
+
+compiler = ["metis-vm/compiler", "dep:revmc-build"]
 
 global-alloc = ["dep:rpmalloc", "dep:snmalloc-rs", "dep:tikv-jemallocator"]
 
@@ -72,7 +74,7 @@ serde_json.workspace = true
 walkdir.workspace = true
 
 [build-dependencies]
-revmc-build = { git = "https://github.com/paradigmxyz/revmc" }
+revmc-build = { git = "https://github.com/paradigmxyz/revmc", optional = true }
 
 [[bench]]
 harness = false

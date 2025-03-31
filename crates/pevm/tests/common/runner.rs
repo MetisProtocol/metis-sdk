@@ -37,6 +37,7 @@ where
             SpecId::LATEST,
             BlockEnv::default(),
             txs.clone(),
+            #[cfg(feature = "compiler")]
             pevm.worker.clone(),
         ),
         pevm.execute_revm_parallel(

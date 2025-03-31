@@ -1,13 +1,16 @@
+#[cfg(feature = "compiler")]
+use std::sync::Arc;
 use std::{
     fmt::Debug,
     num::NonZeroUsize,
-    sync::{Arc, Mutex, OnceLock, mpsc},
+    sync::{Mutex, OnceLock, mpsc},
     thread,
 };
 
 use alloy_primitives::{TxNonce, U256};
 use alloy_rpc_types_eth::{Block, BlockTransactions};
 use hashbrown::HashMap;
+#[cfg(feature = "compiler")]
 use metis_vm::ExtCompileWorker;
 use revm::{
     DatabaseCommit,
@@ -106,14 +109,17 @@ impl<T> AsyncDropper<T> {
 // TODO: Port more recyclable resources into here.
 /// The main pevm struct that executes blocks.
 #[derive(Debug)]
+#[cfg_attr(not(feature = "compiler"), derive(Default))]
 pub struct Pevm {
     execution_results: Vec<Mutex<Option<PevmTxExecutionResult>>>,
     abort_reason: OnceLock<AbortReason>,
     dropper: AsyncDropper<(MvMemory, Scheduler, Vec<TxEnv>)>,
     /// The compile work shared with different vm instance.
+    #[cfg(feature = "compiler")]
     pub worker: Arc<ExtCompileWorker>,
 }
 
+#[cfg(feature = "compiler")]
 impl Default for Pevm {
     fn default() -> Self {
         Self {
@@ -127,6 +133,7 @@ impl Default for Pevm {
 
 impl Pevm {
     /// New a parrallel VM with the compiler feature.
+    #[cfg(feature = "compiler")]
     pub fn compiler() -> Self {
         Self {
             worker: Arc::new(ExtCompileWorker::new_aot().expect("compile worker init failed")),
@@ -179,6 +186,7 @@ impl Pevm {
                 spec_id,
                 block_env,
                 tx_envs,
+                #[cfg(feature = "compiler")]
                 self.worker.clone(),
             )
         } else {
@@ -224,6 +232,7 @@ impl Pevm {
             &block_env,
             &txs,
             spec_id,
+            #[cfg(feature = "compiler")]
             self.worker.clone(),
         );
 
@@ -278,6 +287,7 @@ impl Pevm {
                         spec_id,
                         block_env,
                         txs,
+                        #[cfg(feature = "compiler")]
                         self.worker.clone(),
                     );
                 }
@@ -496,10 +506,19 @@ pub fn execute_revm_sequential<S: Storage, C: PevmChain>(
     spec_id: SpecId,
     block_env: BlockEnv,
     txs: Vec<TxEnv>,
-    worker: Arc<ExtCompileWorker>,
+    #[cfg(feature = "compiler")] worker: Arc<ExtCompileWorker>,
 ) -> PevmResult<C> {
     let mut db = CacheDB::new(StorageWrapper(storage));
-    let mut evm = build_evm(&mut db, chain, spec_id, block_env, None, true, worker);
+    let mut evm = build_evm(
+        &mut db,
+        chain,
+        spec_id,
+        block_env,
+        None,
+        true,
+        #[cfg(feature = "compiler")]
+        worker,
+    );
     let mut results = Vec::with_capacity(txs.len());
     let mut cumulative_gas_used: u64 = 0;
     for tx in txs {
