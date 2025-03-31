@@ -3,7 +3,7 @@ pub use revm::primitives::{
     BLOCK_HASH_HISTORY, BLOCKHASH_SERVE_WINDOW, BLOCKHASH_STORAGE_ADDRESS, BlobExcessGasAndPrice,
     BlockEnv, Bytecode as EVMBytecode, Bytes, CfgEnv, EOF_MAGIC_BYTES, EOF_MAGIC_HASH, Env,
     EvmStorageSlot, FixedBytes, GAS_PER_BLOB, I256, InvalidHeader, InvalidTransaction,
-    KECCAK_EMPTY, Log, LogData, MAX_CODE_SIZE, MAX_INITCODE_SIZE, RecoveredAuthority,
+    KECCAK_EMPTY, Log, LogData, MAX_CODE_SIZE, MAX_INITCODE_SIZE,
     RecoveredAuthorization, SignedAuthorization, SpecId, TxEnv, TxKind, TxType, U256, address,
     alloy_primitives, b256, calc_blob_gasprice, calc_excess_blob_gas,
     eip7702::{self, PER_AUTH_BASE_COST, PER_EMPTY_ACCOUNT_COST},

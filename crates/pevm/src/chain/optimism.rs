@@ -1,4 +1,6 @@
 //! Optimism
+
+use std::sync::Arc;
 use alloy_consensus::Transaction;
 use alloy_primitives::{Address, B256, Bytes, ChainId, U256};
 use alloy_rpc_types_eth::{BlockTransactions, Header};
@@ -11,7 +13,6 @@ use revm::{
     Handler,
     primitives::{AuthorizationList, BlockEnv, OptimismFields, SpecId, TxEnv},
 };
-
 use crate::{
     BuildIdentityHasher, MemoryLocation, PevmTxExecutionResult, hash_deterministic,
     mv_memory::MvMemory,
@@ -166,7 +167,7 @@ impl PevmChain for PevmOptimism {
         _with_reward_beneficiary: bool,
     ) -> Handler<'a, revm::Context<EXT, DB>, EXT, DB> {
         let mut hander = Handler::optimism_with_spec(spec_id);
-        if !with_reward_beneficiary {
+        if !_with_reward_beneficiary {
             hander.post_execution.reward_beneficiary = Arc::new(|_, __| Ok(()));
         }
         hander

@@ -6,4 +6,4 @@ edition.workspace = true
 [features]
 
 [dependencies]
-revm = { version = "19.7.0", features = ["std", "serde-json"] }
+revm.workspace = true
