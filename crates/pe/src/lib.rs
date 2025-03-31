@@ -66,7 +66,7 @@ impl Hasher for IdentityHasher {
 pub type BuildIdentityHasher = BuildHasherDefault<IdentityHasher>;
 
 // TODO: Ensure it's not easy to hand-craft transactions and storage slots
-// that can cause a lot of collisions that destroys pevm's performance.
+// that can cause a lot of collisions that destroys pe's performance.
 #[inline(always)]
 fn hash_deterministic<T: Hash>(x: T) -> u64 {
     FxBuildHasher.hash_one(x)
@@ -216,9 +216,9 @@ macro_rules! index_mutex {
 
 pub mod chain;
 mod compat;
+mod executor;
 mod mv_memory;
-mod pevm;
-pub use pevm::{Pevm, PevmError, PevmResult, execute_revm_sequential};
+pub use executor::{ParallelExecutor, ParallelExecutorError, PevmResult, execute_revm_sequential};
 mod scheduler;
 mod storage;
 pub use storage::{

@@ -6,8 +6,8 @@ use std::{num::NonZeroUsize, sync::Arc, thread};
 
 use alloy_primitives::{Address, U160, U256};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use pevm::{
-    Bytecodes, ChainState, EvmAccount, InMemoryStorage, Pevm, chain::PevmEthereum,
+use metis_pe::{
+    Bytecodes, ChainState, EvmAccount, InMemoryStorage, ParallelExecutor, chain::PevmEthereum,
     execute_revm_sequential,
 };
 use revm::primitives::{BlockEnv, SpecId, TransactTo, TxEnv};
@@ -39,7 +39,7 @@ pub fn bench(c: &mut Criterion, name: &str, storage: InMemoryStorage, txs: Vec<T
     let chain = PevmEthereum::mainnet();
     let spec_id = SpecId::LATEST;
     let block_env = BlockEnv::default();
-    let mut pevm = Pevm::default();
+    let mut pe = ParallelExecutor::default();
     let mut group = c.benchmark_group(name);
     group.bench_function("Sequential", |b| {
         b.iter(|| {
@@ -49,13 +49,14 @@ pub fn bench(c: &mut Criterion, name: &str, storage: InMemoryStorage, txs: Vec<T
                 black_box(spec_id),
                 black_box(block_env.clone()),
                 black_box(txs.clone()),
-                pevm.worker.clone(),
+                #[cfg(feature = "compiler")]
+                pe.worker.clone(),
             )
         })
     });
     group.bench_function("Parallel", |b| {
         b.iter(|| {
-            pevm.execute_revm_parallel(
+            pe.execute_revm_parallel(
                 black_box(&chain),
                 black_box(&storage),
                 black_box(spec_id),
@@ -65,31 +66,34 @@ pub fn bench(c: &mut Criterion, name: &str, storage: InMemoryStorage, txs: Vec<T
             )
         })
     });
-    let mut pevm = Pevm::compiler();
-    group.bench_function("Sequential-With-Compiler", |b| {
-        b.iter(|| {
-            execute_revm_sequential(
-                black_box(&chain),
-                black_box(&storage),
-                black_box(spec_id),
-                black_box(block_env.clone()),
-                black_box(txs.clone()),
-                pevm.worker.clone(),
-            )
-        })
-    });
-    group.bench_function("Parallel-With-Compiler", |b| {
-        b.iter(|| {
-            pevm.execute_revm_parallel(
-                black_box(&chain),
-                black_box(&storage),
-                black_box(spec_id),
-                black_box(block_env.clone()),
-                black_box(txs.clone()),
-                black_box(concurrency_level),
-            )
-        })
-    });
+    #[cfg(feature = "compiler")]
+    {
+        let mut pe = ParallelExecutor::compiler();
+        group.bench_function("Sequential-With-Compiler", |b| {
+            b.iter(|| {
+                execute_revm_sequential(
+                    black_box(&chain),
+                    black_box(&storage),
+                    black_box(spec_id),
+                    black_box(block_env.clone()),
+                    black_box(txs.clone()),
+                    pe.worker.clone(),
+                )
+            })
+        });
+        group.bench_function("Parallel-With-Compiler", |b| {
+            b.iter(|| {
+                pe.execute_revm_parallel(
+                    black_box(&chain),
+                    black_box(&storage),
+                    black_box(spec_id),
+                    black_box(block_env.clone()),
+                    black_box(txs.clone()),
+                    black_box(concurrency_level),
+                )
+            })
+        });
+    }
     group.finish();
 }
 

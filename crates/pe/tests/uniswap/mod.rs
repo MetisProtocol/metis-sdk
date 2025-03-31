@@ -5,7 +5,7 @@ pub mod contract;
 
 use crate::erc20::contract::ERC20Token;
 use contract::{SingleSwap, SwapRouter, UniswapV3Factory, UniswapV3Pool, WETH9};
-use pevm::{Bytecodes, ChainState, EvmAccount};
+use metis_pe::{Bytecodes, ChainState, EvmAccount};
 use revm::primitives::{Address, B256, Bytes, TransactTo, TxEnv, U256, fixed_bytes, uint};
 
 /// The maximum amount of gas that can be used for a transaction in this configuration.

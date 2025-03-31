@@ -1,6 +1,7 @@
 use alloy_primitives::TxKind;
 use alloy_rpc_types_eth::Receipt;
 use hashbrown::HashMap;
+#[cfg(feature = "compiler")]
 use metis_vm::ExtCompileWorker;
 use revm::{
     Database, Evm,
@@ -10,6 +11,7 @@ use revm::{
     },
 };
 use smallvec::{SmallVec, smallvec};
+#[cfg(feature = "compiler")]
 use std::sync::Arc;
 
 use crate::{
@@ -497,6 +499,7 @@ pub(crate) struct Vm<'a, S: Storage, C: PevmChain> {
     spec_id: SpecId,
     beneficiary_location_hash: MemoryLocationHash,
     reward_policy: RewardPolicy,
+    #[cfg(feature = "compiler")]
     worker: Arc<ExtCompileWorker>,
 }
 
@@ -508,7 +511,7 @@ impl<'a, S: Storage, C: PevmChain> Vm<'a, S, C> {
         block_env: &'a BlockEnv,
         txs: &'a [TxEnv],
         spec_id: SpecId,
-        worker: Arc<ExtCompileWorker>,
+        #[cfg(feature = "compiler")] worker: Arc<ExtCompileWorker>,
     ) -> Self {
         Self {
             storage,
@@ -521,6 +524,7 @@ impl<'a, S: Storage, C: PevmChain> Vm<'a, S, C> {
                 block_env.coinbase,
             )),
             reward_policy: chain.get_reward_policy(),
+            #[cfg(feature = "compiler")]
             worker,
         }
     }
@@ -565,6 +569,7 @@ impl<'a, S: Storage, C: PevmChain> Vm<'a, S, C> {
             self.block_env.clone(),
             Some(tx.clone()),
             false,
+            #[cfg(feature = "compiler")]
             self.worker.clone(),
         );
         match evm.transact() {
@@ -803,6 +808,7 @@ impl<'a, S: Storage, C: PevmChain> Vm<'a, S, C> {
     }
 }
 
+#[cfg(feature = "compiler")]
 #[inline]
 pub(crate) fn build_evm<'a, DB: Database, C: PevmChain>(
     db: DB,
@@ -829,6 +835,31 @@ pub(crate) fn build_evm<'a, DB: Database, C: PevmChain>(
         // The external must be set after the handler, otherwise the
         // compile handler will be overwritten the chain handler.
         .append_handler_register(metis_vm::register_compile_handler)
+        .build();
+    evm
+}
+
+#[cfg(not(feature = "compiler"))]
+#[inline]
+pub(crate) fn build_evm<'a, DB: Database, C: PevmChain>(
+    db: DB,
+    chain: &C,
+    spec_id: SpecId,
+    block_env: BlockEnv,
+    tx_env: Option<TxEnv>,
+    with_reward_beneficiary: bool,
+) -> Evm<'a, (), DB> {
+    let handler = chain.get_handler(spec_id, with_reward_beneficiary);
+    // New a VM and run the tx.
+    let evm = Evm::builder()
+        .with_db(db)
+        .with_spec_id(spec_id)
+        .modify_cfg_env(|cfg| {
+            cfg.chain_id = chain.id();
+        })
+        .with_block_env(block_env)
+        .with_tx_env(tx_env.unwrap_or_default())
+        .with_handler(handler)
         .build();
     evm
 }
