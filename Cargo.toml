@@ -31,7 +31,7 @@ pevm = { path = "crates/pevm", features = ["full"] }
 anyhow = "1.0.97"
 
 # alloy
-alloy-chains = "0.1.67"
+alloy-chains = "0.1.68"
 alloy-consensus = "0.9.2"
 alloy-primitives = { version = "0.8.25", features = [
   "asm-keccak",
