@@ -31,10 +31,10 @@ use crate::{
     },
 };
 
-/// Errors when executing a block with pevm.
+/// Errors when executing a block with the parallel executor.
 // TODO: implement traits explicitly due to trait bounds on `C` instead of types of `PevmChain`
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
-pub enum PevmError<C: PevmChain> {
+pub enum ParallelExecutorError<C: PevmChain> {
     /// Cannot derive the chain spec from the block header.
     #[error("Cannot derive the chain spec from the block header")]
     BlockSpecError(#[source] C::BlockSpecError),
@@ -67,14 +67,12 @@ pub enum PevmError<C: PevmChain> {
     ),
     /// Impractical errors that should be unreachable.
     /// The library has bugs if this is yielded.
-    #[error(
-        "PEVM encountered a bug. Please open an issue in https://github.com/risechain/pevm/issues/new"
-    )]
+    #[error("Unreachable error")]
     UnreachableError,
 }
 
 /// Execution result of a block
-pub type PevmResult<C> = Result<Vec<PevmTxExecutionResult>, PevmError<C>>;
+pub type PevmResult<C> = Result<Vec<PevmTxExecutionResult>, ParallelExecutorError<C>>;
 
 #[derive(Debug)]
 enum AbortReason {
@@ -107,10 +105,10 @@ impl<T> AsyncDropper<T> {
 }
 
 // TODO: Port more recyclable resources into here.
-/// The main pevm struct that executes blocks.
+/// The main executor struct that executes blocks.
 #[derive(Debug)]
 #[cfg_attr(not(feature = "compiler"), derive(Default))]
-pub struct Pevm {
+pub struct ParallelExecutor {
     execution_results: Vec<Mutex<Option<PevmTxExecutionResult>>>,
     abort_reason: OnceLock<AbortReason>,
     dropper: AsyncDropper<(MvMemory, Scheduler, Vec<TxEnv>)>,
@@ -120,7 +118,7 @@ pub struct Pevm {
 }
 
 #[cfg(feature = "compiler")]
-impl Default for Pevm {
+impl Default for ParallelExecutor {
     fn default() -> Self {
         Self {
             execution_results: Default::default(),
@@ -131,7 +129,7 @@ impl Default for Pevm {
     }
 }
 
-impl Pevm {
+impl ParallelExecutor {
     /// New a parrallel VM with the compiler feature.
     #[cfg(feature = "compiler")]
     pub fn compiler() -> Self {
@@ -142,7 +140,7 @@ impl Pevm {
     }
 }
 
-impl Pevm {
+impl ParallelExecutor {
     /// Execute an Alloy block, which is becoming the "standard" format in Rust.
     /// TODO: Better error handling.
     pub fn execute<S, C>(
@@ -165,15 +163,15 @@ impl Pevm {
     {
         let spec_id = chain
             .get_block_spec(&block.header)
-            .map_err(PevmError::BlockSpecError)?;
+            .map_err(ParallelExecutorError::BlockSpecError)?;
         let block_env = get_block_env(&block.header, spec_id);
         let tx_envs = match &block.transactions {
             BlockTransactions::Full(txs) => txs
                 .iter()
                 .map(|tx| chain.get_tx_env(tx))
                 .collect::<Result<Vec<TxEnv>, _>>()
-                .map_err(PevmError::InvalidTransaction)?,
-            _ => return Err(PevmError::MissingTransactionData),
+                .map_err(ParallelExecutorError::InvalidTransaction)?,
+            _ => return Err(ParallelExecutorError::MissingTransactionData),
         };
         // TODO: Continue to fine tune this condition.
         if force_sequential
@@ -293,7 +291,7 @@ impl Pevm {
                 }
                 AbortReason::ExecutionError(err) => {
                     self.dropper.drop((mv_memory, scheduler, txs));
-                    return Err(PevmError::ExecutionError(err));
+                    return Err(ParallelExecutorError::ExecutionError(err));
                 }
             }
         }
@@ -328,12 +326,14 @@ impl Pevm {
                 // Accounts that take implicit writes like the beneficiary account can be contract!
                 let code_hash = match storage.code_hash(&address) {
                     Ok(code_hash) => code_hash,
-                    Err(err) => return Err(PevmError::StorageError(err.to_string())),
+                    Err(err) => return Err(ParallelExecutorError::StorageError(err.to_string())),
                 };
                 let code = if let Some(code_hash) = &code_hash {
                     match storage.code_by_hash(code_hash) {
                         Ok(code) => code,
-                        Err(err) => return Err(PevmError::StorageError(err.to_string())),
+                        Err(err) => {
+                            return Err(ParallelExecutorError::StorageError(err.to_string()));
+                        }
                     }
                 } else {
                     None
@@ -385,13 +385,13 @@ impl Pevm {
                     if tx.caller == address {
                         if let Some(tx_nonce) = tx.nonce {
                             let executed_nonce = if nonce == 0 {
-                                return Err(PevmError::UnreachableError);
+                                return Err(ParallelExecutorError::UnreachableError);
                             } else {
                                 nonce - 1
                             };
                             if tx_nonce != executed_nonce {
                                 // TODO: Consider falling back to sequential instead
-                                return Err(PevmError::NonceMismatch {
+                                return Err(ParallelExecutorError::NonceMismatch {
                                     tx_idx: *tx_idx,
                                     tx_nonce,
                                     executed_nonce,

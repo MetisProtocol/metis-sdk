@@ -11,7 +11,7 @@ use alloy_primitives::{Address, B256, Bytes, PrimitiveSignature, TxKind, U256};
 use alloy_rpc_types_eth::{Block, BlockTransactions, Header};
 use flate2::bufread::GzDecoder;
 use hashbrown::HashMap;
-use pevm::{
+use metis_pe::{
     BlockHashes, BuildSuffixHasher, ChainState, EvmAccount, InMemoryStorage, chain::PevmChain,
 };
 

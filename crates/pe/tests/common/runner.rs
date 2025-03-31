@@ -1,7 +1,7 @@
 use alloy_primitives::Bloom;
 use alloy_rpc_types_eth::Block;
-use pevm::{
-    EvmAccount, Pevm, Storage,
+use metis_pe::{
+    EvmAccount, ParallelExecutor, Storage,
     chain::{CalculateReceiptRootError, PevmChain},
 };
 use revm::primitives::{Address, BlockEnv, SpecId, TxEnv, U256, alloy_primitives::U160};
@@ -29,18 +29,18 @@ where
     S: Storage + Send + Sync,
 {
     let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
-    let mut pevm = Pevm::default();
+    let mut pe = ParallelExecutor::default();
     assert_eq!(
-        pevm::execute_revm_sequential(
+        metis_pe::execute_revm_sequential(
             chain,
             &storage,
             SpecId::LATEST,
             BlockEnv::default(),
             txs.clone(),
             #[cfg(feature = "compiler")]
-            pevm.worker.clone(),
+            pe.worker.clone(),
         ),
-        pevm.execute_revm_parallel(
+        pe.execute_revm_parallel(
             chain,
             &storage,
             SpecId::LATEST,
@@ -51,7 +51,7 @@ where
     );
 }
 
-/// Execute an Alloy block sequentially & with pevm and assert that
+/// Execute an Alloy block sequentially & with pe and assert that
 /// the execution results match.
 pub fn test_execute_alloy<C, S>(
     chain: &C,
@@ -63,9 +63,9 @@ pub fn test_execute_alloy<C, S>(
     S: Storage + Send + Sync,
 {
     let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
-    let mut pevm = Pevm::default();
-    let sequential_result = pevm.execute(chain, storage, &block, concurrency_level, true);
-    let parallel_result = pevm.execute(chain, storage, &block, concurrency_level, false);
+    let mut pe = ParallelExecutor::default();
+    let sequential_result = pe.execute(chain, storage, &block, concurrency_level, true);
+    let parallel_result = pe.execute(chain, storage, &block, concurrency_level, false);
     assert!(sequential_result.is_ok());
     assert_eq!(&sequential_result, &parallel_result);
 

@@ -13,14 +13,20 @@ The tables below were produced on a `c7g.8xlarge` EC2 instance with Graviton3 (3
 
 ## Gigagas Blocks
 
-This benchmark includes mocked 1-Gigagas blocks to see how pevm aids in building and syncing large blocks going forward. All blocks are in the CANCUN spec with no dependencies to measure the maximum speedup. We pick `jemalloc` with THP as the global memory allocator, which performs the best for big blocks. `rpmalloc` is much better for the Uniswap case, but much worse on the others and is not stable on AWS Graviton.
+This benchmark includes mocked 1-Gigagas blocks to see how metis parallel execution aids in building and syncing large blocks going forward. All blocks are in the CANCUN spec with no dependencies to measure the maximum speedup. We pick `jemalloc` with THP as the global memory allocator, which performs the best for big blocks. `rpmalloc` is much better for the Uniswap case, but much worse on the others and is not stable on AWS Graviton.
 
 The benchmark runs with a single transaction type, not representing real-world blocks on a universal L2. However, it may be representative of application-specific L2s.
 
 To run the benchmark yourself:
 
-```sh
-$ JEMALLOC_SYS_WITH_MALLOC_CONF="thp:always,metadata_thp:always" cargo bench --features global-alloc --bench gigagas
+```shell
+JEMALLOC_SYS_WITH_MALLOC_CONF="thp:always,metadata_thp:always" cargo bench --features global-alloc --bench gigagas
+```
+
+To run the benchmark with the compiler feature
+
+```shell
+JEMALLOC_SYS_WITH_MALLOC_CONF="thp:always,metadata_thp:always" cargo bench --features global-alloc --bench gigagas --features compiler
 ```
 
 |                 | No. Transactions | Gas Used      | Sequential (ms) | Parallel (ms) | Speedup    |

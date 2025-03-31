@@ -4,7 +4,7 @@
 pub mod contract;
 
 use contract::ERC20Token;
-use pevm::{Bytecodes, ChainState, EvmAccount};
+use metis_pe::{Bytecodes, ChainState, EvmAccount};
 use rand::Rng;
 use revm::primitives::{Address, TransactTo, TxEnv, U256, uint};
 

@@ -1,5 +1,5 @@
 [package]
-name = "pevm"
+name = "metis-pe"
 edition.workspace = true
 version.workspace = true
 

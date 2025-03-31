@@ -12,8 +12,8 @@ pub mod erc20;
 pub mod uniswap;
 
 use crate::uniswap::generate_cluster;
-use pevm::chain::PevmEthereum;
-use pevm::{Bytecodes, ChainState, EvmAccount, InMemoryStorage};
+use metis_pe::chain::PevmEthereum;
+use metis_pe::{Bytecodes, ChainState, EvmAccount, InMemoryStorage};
 use revm::primitives::{Address, TxEnv};
 use std::sync::Arc;
 

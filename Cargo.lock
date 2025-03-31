@@ -4014,6 +4014,47 @@ dependencies = [
 ]
 
 [[package]]
+name = "metis-pe"
+version = "0.1.0"
+dependencies = [
+ "alloy-consensus",
+ "alloy-primitives",
+ "alloy-provider",
+ "alloy-rlp",
+ "alloy-rpc-types-eth",
+ "alloy-transport",
+ "alloy-transport-http",
+ "alloy-trie",
+ "bincode",
+ "bitflags 2.9.0",
+ "bitvec",
+ "criterion",
+ "dashmap",
+ "flate2",
+ "hashbrown 0.15.2",
+ "metis-primitives",
+ "metis-vm",
+ "op-alloy-consensus",
+ "op-alloy-network",
+ "op-alloy-rpc-types",
+ "rand 0.9.0",
+ "rayon",
+ "reqwest 0.12.15",
+ "revm",
+ "revmc-build",
+ "rpmalloc",
+ "rustc-hash 2.1.1",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "snmalloc-rs",
+ "thiserror 2.0.12",
+ "tikv-jemallocator",
+ "tokio",
+ "walkdir",
+]
+
+[[package]]
 name = "metis-primitives"
 version = "0.1.0"
 dependencies = [
@@ -4690,47 +4731,6 @@ dependencies = [
  "memchr",
  "thiserror 2.0.12",
  "ucd-trie",
-]
-
-[[package]]
-name = "pevm"
-version = "0.1.0"
-dependencies = [
- "alloy-consensus",
- "alloy-primitives",
- "alloy-provider",
- "alloy-rlp",
- "alloy-rpc-types-eth",
- "alloy-transport",
- "alloy-transport-http",
- "alloy-trie",
- "bincode",
- "bitflags 2.9.0",
- "bitvec",
- "criterion",
- "dashmap",
- "flate2",
- "hashbrown 0.15.2",
- "metis-primitives",
- "metis-vm",
- "op-alloy-consensus",
- "op-alloy-network",
- "op-alloy-rpc-types",
- "rand 0.9.0",
- "rayon",
- "reqwest 0.12.15",
- "revm",
- "revmc-build",
- "rpmalloc",
- "rustc-hash 2.1.1",
- "serde",
- "serde_json",
- "smallvec",
- "snmalloc-rs",
- "thiserror 2.0.12",
- "tikv-jemallocator",
- "tokio",
- "walkdir",
 ]
 
 [[package]]

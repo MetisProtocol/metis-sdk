@@ -1,8 +1,8 @@
 //! Tests for the beneficiary account, especially for the lazy update of its balance to avoid
 //! "implicit" dependency among consecutive transactions.
 
-use pevm::InMemoryStorage;
-use pevm::chain::PevmEthereum;
+use metis_pe::InMemoryStorage;
+use metis_pe::chain::PevmEthereum;
 use rand::random;
 use revm::primitives::{Address, TransactTo, U256, alloy_primitives::U160, env::TxEnv};
 
