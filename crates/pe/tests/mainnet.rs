@@ -1,6 +1,6 @@
 //! Test with mainnet blocks
 
-use pevm::chain::PevmEthereum;
+use metis_pe::chain::PevmEthereum;
 
 pub mod common;
 
@@ -9,7 +9,7 @@ pub mod common;
 async fn mainnet_blocks_from_rpc() {
     use alloy_provider::{Provider, ProviderBuilder};
     use alloy_rpc_types_eth::{BlockId, BlockTransactionsKind};
-    use pevm::chain::PevmChain;
+    use metis_pe::chain::PevmChain;
 
     let rpc_url = match std::env::var("ETHEREUM_RPC_URL") {
         // The empty check is for GitHub Actions where the variable is set with an empty string when unset!?
@@ -42,7 +42,7 @@ async fn mainnet_blocks_from_rpc() {
         let chain = PevmEthereum::mainnet();
         let spec_id = chain.get_block_spec(&block.header).unwrap();
         let rpc_storage =
-            pevm::RpcStorage::new(provider, spec_id, BlockId::number(block_number - 1));
+            metis_pe::RpcStorage::new(provider, spec_id, BlockId::number(block_number - 1));
         common::test_execute_alloy(&chain, &rpc_storage, block, true);
     }
 }
@@ -63,7 +63,7 @@ fn mainnet_blocks_from_disk() {
 async fn optimism_mainnet_blocks_from_rpc() {
     use alloy_provider::{Provider, ProviderBuilder};
     use alloy_rpc_types_eth::{BlockId, BlockTransactionsKind};
-    use pevm::chain::{PevmChain, PevmOptimism};
+    use metis_pe::chain::{PevmChain, PevmOptimism};
 
     let rpc_url = match std::env::var("OPTIMISM_RPC_URL") {
         Ok(value) if !value.is_empty() => value.parse().unwrap(),
@@ -91,7 +91,7 @@ async fn optimism_mainnet_blocks_from_rpc() {
         let spec_id = chain.get_block_spec(&block.header).unwrap();
 
         let rpc_storage =
-            pevm::RpcStorage::new(provider, spec_id, BlockId::number(block_number - 1));
+            metis_pe::RpcStorage::new(provider, spec_id, BlockId::number(block_number - 1));
         common::test_execute_alloy(&chain, &rpc_storage, block, true);
     }
 }

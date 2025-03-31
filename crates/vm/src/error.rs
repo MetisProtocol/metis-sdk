@@ -1,11 +1,8 @@
-use rocksdb::Error as DbError;
 use thiserror::Error;
 use tokio::task::JoinError;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Database error: {0}")]
-    Database(#[from] DbError),
     #[error("Backend init error: {0}")]
     BackendInit(String),
     #[error("IO error: {0}")]

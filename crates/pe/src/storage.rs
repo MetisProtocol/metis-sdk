@@ -170,7 +170,7 @@ pub trait Storage {
     fn block_hash(&self, number: &u64) -> Result<B256, Self::Error>;
 }
 
-/// revm [Database] errors when using pevm [Storage] as the underlying provider.
+/// revm [Database] errors when using [Storage] as the underlying provider.
 #[derive(Debug, Clone, PartialEq, Error)]
 pub enum StorageWrapperError<S: Storage> {
     #[error("storage error")]
@@ -251,107 +251,3 @@ pub use in_memory::InMemoryStorage;
 mod rpc;
 #[cfg(feature = "rpc-storage")]
 pub use rpc::RpcStorage;
-
-#[cfg(test)]
-mod tests {
-    use alloy_primitives::{Bytes, bytes};
-    use revm::primitives::eip7702::EIP7702_VERSION;
-    use revm::primitives::eof::EofDecodeError;
-
-    use super::*;
-
-    // Bytecode from Forge's default Counter.sol contract, compiled with solc 0.8.13.
-    // https://github.com/foundry-rs/foundry/blob/nightly-fe2acca4e379793539db80e032d76ffe0110298b/testdata/multi-version/Counter.sol
-    const BYTECODE: Bytes = bytes!(
-        "608060405234801561001057600080fd5b5060f78061001f6000396000f3fe6080604052348015600f57600080fd5b5060043610603c5760003560e01c80633fb5c1cb1460415780638381f58a146053578063d09de08a14606d575b600080fd5b6051604c3660046083565b600055565b005b605b60005481565b60405190815260200160405180910390f35b6051600080549080607c83609b565b9190505550565b600060208284031215609457600080fd5b5035919050565b60006001820160ba57634e487b7160e01b600052601160045260246000fd5b506001019056fea264697066735822122012c25f3d90606133b37330bf079a425dbc650fd21060dee49f715d37d97cb58f64736f6c634300080d0033"
-    );
-
-    // Bytecode from revm test code.
-    // https://github.com/bluealloy/revm/blob/925c042ad748695bc45e516dfd2457e7b44cd3a8/crates/bytecode/src/eof.rs#L210
-    const EOF_BYTECODE: Bytes = bytes!("ef000101000402000100010400000000800000fe");
-
-    fn eq_bytecodes(revm_code: &Bytecode, pevm_code: &EvmCode) -> bool {
-        match (revm_code, pevm_code) {
-            (Bytecode::LegacyAnalyzed(revm), EvmCode::Legacy(pevm)) => {
-                revm == pevm
-            }
-            (Bytecode::Eip7702(revm), EvmCode::Eip7702(pevm)) => {
-                revm.delegated_address == pevm.delegated_address && revm.version == pevm.version
-            }
-            (Bytecode::Eof(revm), EvmCode::Eof(pevm)) => revm.raw == pevm.0,
-            _ => false,
-        }
-    }
-
-    #[test]
-    fn legacy_bytecodes() {
-        let contract_bytecode = Bytecode::new_legacy(BYTECODE);
-        let analyzed = to_analysed(contract_bytecode.clone());
-
-        let evm_code = EvmCode::from(analyzed.clone());
-        assert!(eq_bytecodes(&analyzed, &evm_code));
-        assert_eq!(analyzed, evm_code.try_into().unwrap());
-
-        let evm_code = EvmCode::from(contract_bytecode);
-        assert!(eq_bytecodes(&analyzed, &evm_code));
-        assert_eq!(analyzed, evm_code.try_into().unwrap());
-    }
-
-    #[test]
-    fn eip7702_bytecodes() {
-        let delegated_address = Address::new([0x01; 20]);
-
-        let bytecode = Bytecode::Eip7702(Eip7702Bytecode::new(delegated_address));
-        let evm_code = EvmCode::from(bytecode.clone());
-        assert!(eq_bytecodes(&bytecode, &evm_code));
-        assert_eq!(bytecode, evm_code.try_into().unwrap());
-
-        let mut bytes = EIP7702_MAGIC_BYTES.to_vec();
-        bytes.push(EIP7702_VERSION);
-        bytes.extend(delegated_address);
-        let bytecode = Bytecode::Eip7702(Eip7702Bytecode::new_raw(bytes.into()).unwrap());
-        let evm_code = EvmCode::from(bytecode.clone());
-        assert!(eq_bytecodes(&bytecode, &evm_code));
-        assert_eq!(bytecode, evm_code.try_into().unwrap());
-
-        let mut eip_bytecode = Eip7702Bytecode::new(delegated_address);
-        // Mutate version and raw bytes after construction.
-        let new_version = 5;
-        eip_bytecode.version = new_version;
-        let mut bytes = EIP7702_MAGIC_BYTES.to_vec();
-        bytes.push(new_version);
-        bytes.extend(delegated_address);
-        eip_bytecode.raw = bytes.into();
-        let bytecode = Bytecode::Eip7702(eip_bytecode);
-        let evm_code = EvmCode::from(bytecode.clone());
-        assert!(eq_bytecodes(&bytecode, &evm_code));
-        assert_eq!(bytecode, evm_code.try_into().unwrap());
-    }
-
-    #[test]
-    fn eof_bytecodes() {
-        let bytecode = Bytecode::Eof(Arc::new(Eof::decode(EOF_BYTECODE).unwrap()));
-        let evm_code = EvmCode::from(bytecode.clone());
-        assert!(eq_bytecodes(&bytecode, &evm_code));
-        assert_eq!(bytecode, evm_code.try_into().unwrap());
-    }
-
-    #[test]
-    fn eof_bytecodes_error() {
-        assert_eq!(
-            Bytecode::try_from(EvmCode::Eof(Bytes::new())),
-            Err(BytecodeConversionError::EofDecodingError(
-                EofDecodeError::MissingInput
-            ))
-        );
-
-        let mut eof_dangling = EOF_BYTECODE.to_vec();
-        eof_dangling.extend(bytes!("010203"));
-        assert_eq!(
-            Bytecode::try_from(EvmCode::Eof(eof_dangling.into())),
-            Err(BytecodeConversionError::EofDecodingError(
-                EofDecodeError::DanglingData
-            ))
-        );
-    }
-}

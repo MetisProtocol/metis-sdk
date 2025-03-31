@@ -4,7 +4,7 @@
 use std::{num::NonZeroUsize, thread};
 
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use pevm::{Pevm, chain::PevmEthereum};
+use metis_pe::{ParallelExecutor, Pevm, chain::PevmEthereum};
 
 // Better project structure
 
@@ -40,7 +40,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             )
             .unwrap(),
         );
-    let mut pevm = Pevm::default();
+    let mut pe = ParallelExecutor::default();
 
     common::for_each_block_from_disk(|block, storage| {
         let mut group = c.benchmark_group(format!(
@@ -51,7 +51,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         ));
         group.bench_function("Sequential", |b| {
             b.iter(|| {
-                pevm.execute(
+                pe.execute(
                     black_box(&chain),
                     black_box(&storage),
                     black_box(&block),
@@ -62,7 +62,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         });
         group.bench_function("Parallel", |b| {
             b.iter(|| {
-                pevm.execute(
+                pe.execute(
                     black_box(&chain),
                     black_box(&storage),
                     black_box(&block),

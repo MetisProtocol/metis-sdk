@@ -1,6 +1,6 @@
 //! Test raw transfers -- only send some ETH from one account to another without extra data.
 
-use pevm::{InMemoryStorage, chain::PevmEthereum};
+use metis_pe::{InMemoryStorage, chain::PevmEthereum};
 use rand::random;
 use revm::primitives::{Address, TransactTo, U256, alloy_primitives::U160, env::TxEnv};
 
@@ -94,20 +94,20 @@ fn ethereum_independent_raw_transfers() {
 #[cfg(feature = "optimism")]
 #[test]
 fn optimism_empty_alloy_block() {
-    use pevm::chain::PevmOptimism;
+    use metis_pe::chain::PevmOptimism;
     common::test_independent_raw_transfers(&PevmOptimism::mainnet(), 0);
 }
 
 #[cfg(feature = "optimism")]
 #[test]
 fn optimism_one_tx_alloy_block() {
-    use pevm::chain::PevmOptimism;
+    use metis_pe::chain::PevmOptimism;
     common::test_independent_raw_transfers(&PevmOptimism::mainnet(), 1);
 }
 
 #[cfg(feature = "optimism")]
 #[test]
 fn optimism_independent_raw_transfers() {
-    use pevm::chain::PevmOptimism;
+    use metis_pe::chain::PevmOptimism;
     common::test_independent_raw_transfers(&PevmOptimism::mainnet(), 100_000);
 }

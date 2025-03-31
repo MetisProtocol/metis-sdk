@@ -1,7 +1,7 @@
 //! Test raw transfers -- A block with random raw transfers, ERC-20 transfers, and Uniswap swaps.
 
-use pevm::chain::PevmEthereum;
-use pevm::{Bytecodes, ChainState, EvmAccount, InMemoryStorage};
+use metis_pe::chain::PevmEthereum;
+use metis_pe::{Bytecodes, ChainState, EvmAccount, InMemoryStorage};
 use rand::random;
 use revm::primitives::{Address, TransactTo, U256, env::TxEnv};
 use std::sync::Arc;
