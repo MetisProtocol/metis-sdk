@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 metis-primitives.workspace = true
+metis-pe.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true
 rustc-hash.workspace = true
@@ -20,3 +21,4 @@ eyre = "0.6"
 
 alloy-eips = { version = "0.12.6", default-features = false }
 alloy-consensus = { version = "0.12.6", default-features = false }
+num_cpus = "1.16.0"

@@ -8,7 +8,7 @@ use revm::primitives::{BlobExcessGasAndPrice, BlockEnv, SpecId, U256};
 // https://github.com/paradigmxyz/reth/blob/280aaaedc4699c14a5b6e88f25d929fe22642fa3/crates/primitives/src/revm/env.rs#L23-L48
 // TODO: Better error handling & properly test this, especially
 // [blob_excess_gas_and_price].
-pub(crate) fn get_block_env(header: &Header, spec_id: SpecId) -> BlockEnv {
+pub fn get_block_env(header: &Header, spec_id: SpecId) -> BlockEnv {
     BlockEnv {
         number: U256::from(header.number),
         coinbase: header.beneficiary,

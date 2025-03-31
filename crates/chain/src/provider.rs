@@ -1,3 +1,5 @@
+use std::hash::Hash;
+use std::num::NonZeroUsize;
 use alloy_evm::{
     EthEvm, EthEvmFactory,
     block::{BlockExecutorFactory, BlockExecutorFor},
@@ -24,14 +26,17 @@ use reth_primitives::{
     SealedHeader, TransactionSigned,
 };
 use std::sync::Arc;
+use metis_pe::chain::PevmChain;
+use reth_primitives::{transaction::FillTxEnv};
 
 pub struct BlockParallelExecutorProvider<F> {
     strategy_factory: F,
+    chain_spec: Arc<ChainSpec>,
 }
 
 impl<F> BlockParallelExecutorProvider<F> {
-    pub const fn new(strategy_factory: F) -> Self {
-        Self { strategy_factory }
+    pub const fn new(strategy_factory: F, chain_spec: Arc<ChainSpec>) -> Self {
+        Self { strategy_factory, chain_spec }
     }
 }
 
@@ -42,6 +47,7 @@ where
     fn clone(&self) -> Self {
         Self {
             strategy_factory: self.strategy_factory.clone(),
+            chain_spec: self.chain_spec.clone(),
         }
     }
 }
@@ -58,7 +64,7 @@ where
     where
         DB: Database,
     {
-        ParallelExecutor::new(self.strategy_factory.clone(), db)
+        ParallelExecutor::new(self.strategy_factory.clone(), db, self.chain_spec.clone())
     }
 }
 
@@ -67,10 +73,12 @@ pub struct ParallelExecutor<F, DB> {
     pub(crate) strategy_factory: F,
     /// Database.
     pub(crate) db: State<DB>,
+    /// Chain spec
+    pub chain_spec: Arc<ChainSpec>,
 }
 
 impl<F, DB: Database> ParallelExecutor<F, DB> {
-    pub fn new(strategy_factory: F, db: DB) -> Self {
+    pub fn new(strategy_factory: F, db: DB, chain_spec: Arc<ChainSpec>) -> Self {
         let db = State::builder()
             .with_database(db)
             .with_bundle_update()
@@ -79,6 +87,7 @@ impl<F, DB: Database> ParallelExecutor<F, DB> {
         Self {
             strategy_factory,
             db,
+            chain_spec,
         }
     }
 }
@@ -101,10 +110,7 @@ where
             .executor_for_block(&mut self.db, block);
 
         strategy.apply_pre_execution_changes()?;
-        // TODO(fk): change this code to the parallel execution based on the `metis-pe` crate.
-        for tx in block.transactions_recovered() {
-            strategy.execute_transaction(tx)?;
-        }
+        self.execute_block(block)?;
         let result = strategy.apply_post_execution_changes()?;
 
         self.db.merge_transitions(BundleRetention::Reverts);
@@ -126,10 +132,7 @@ where
             .with_state_hook(Some(Box::new(state_hook)));
 
         strategy.apply_pre_execution_changes()?;
-        // TODO(fk): change this code to the parallel execution based on the `metis-pe` crate.
-        for tx in block.transactions_recovered() {
-            strategy.execute_transaction(tx)?;
-        }
+        self.execute_block(block)?;
         let result = strategy.apply_post_execution_changes()?;
 
         self.db.merge_transitions(BundleRetention::Reverts);
@@ -145,6 +148,55 @@ where
         self.db.bundle_state.size_hint()
     }
 }
+
+impl<F, DB> ParallelExecutor<F, DB>
+where
+    F: ConfigureEvm,
+    DB: Database,
+{
+    fn execute_block(
+        &mut self,
+        block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
+    ) -> Result<BlockExecutionResult<<Self::Primitives as NodePrimitives>::Receipt>, Self::Error>
+    {
+        let mut executor = metis_pe::ParallelExecutor::default();
+        let chain_spec = self.chain_spec.clone();
+        let spec_id_generator = metis_pe::chain::PevmEthereum::mainnet();
+        let spec_id = spec_id_generator.get_block_spec(block.header()).unwrap();
+        let block_env = metis_pe::compat::get_block_env(block.header(), spec_id);
+        let tx_envs = block.transactions_with_sender()
+            .iter()
+            .map(|(addr, signed_tx)| {
+                let data = &TransactionSigned::from(signed_tx);
+                let mut tx_env = TxEnv::default();
+                data.fill_tx_env(tx_env);
+                Ok(tx_env.clone())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let results = executor.execute_revm_parallel(
+            &chain_spec,
+            &self.db,
+            spec_id,
+            block_env,
+            tx_envs,
+            NonZeroUsize::new(num_cpus::get()).unwrap_or(NonZeroUsize::new(1).unwrap()),
+        );
+
+        let mut cumulative_gas_used = 0;
+        let mut receipts = vec![];
+        for result in results.unwrap() {
+            cumulative_gas_used += result.receipt.cumulative_gas_used
+        }
+
+        Ok(BlockExecutionResult {
+            receipts,
+            gas_used: cumulative_gas_used,
+            requests: vec![],
+        })
+    }
+}
+
 
 /// A custom executor builder
 #[derive(Debug, Default, Clone, Copy)]
@@ -163,11 +215,14 @@ where
         self,
         ctx: &BuilderContext<Node>,
     ) -> eyre::Result<(Self::EVM, Self::Executor)> {
+        let chain_spec = ctx.chain_spec();
         let evm_config = ParallelEvmConfig {
-            inner: EthEvmConfig::new(ctx.chain_spec()),
+            inner: EthEvmConfig::new(chain_spec.clone()),
         };
-        let executor = BlockParallelExecutorProvider::new(evm_config.clone());
-
+        let executor = BlockParallelExecutorProvider::new(
+            evm_config.clone(),
+            chain_spec,
+        );
         Ok((evm_config, executor))
     }
 }
@@ -175,6 +230,12 @@ where
 #[derive(Debug, Clone)]
 pub struct ParallelEvmConfig {
     inner: EthEvmConfig,
+}
+
+impl ParallelEvmConfig {
+    pub fn chain_spec(&self) -> &ChainSpec {
+        self.inner.chain_spec()
+    }
 }
 
 impl BlockExecutorFactory for ParallelEvmConfig {
