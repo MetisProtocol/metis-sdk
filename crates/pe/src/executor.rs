@@ -20,21 +20,19 @@ use revm::{
 
 use crate::{
     EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, Storage, Task, TxIdx, TxVersion,
-    chain::PevmChain,
+    chain::Chain,
     compat::get_block_env,
     hash_deterministic,
     mv_memory::MvMemory,
     scheduler::Scheduler,
     storage::StorageWrapper,
-    vm::{
-        ExecutionError, PevmTxExecutionResult, Vm, VmExecutionError, VmExecutionResult, build_evm,
-    },
+    vm::{ExecutionError, TxExecutionResult, Vm, VmExecutionError, VmExecutionResult, build_evm},
 };
 
 /// Errors when executing a block with the parallel executor.
-// TODO: implement traits explicitly due to trait bounds on `C` instead of types of `PevmChain`
+// TODO: implement traits explicitly due to trait bounds on `C` instead of types of `Chain`
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
-pub enum ParallelExecutorError<C: PevmChain> {
+pub enum ParallelExecutorError<C: Chain> {
     /// Cannot derive the chain spec from the block header.
     #[error("Cannot derive the chain spec from the block header")]
     BlockSpecError(#[source] C::BlockSpecError),
@@ -72,7 +70,7 @@ pub enum ParallelExecutorError<C: PevmChain> {
 }
 
 /// Execution result of a block
-pub type PevmResult<C> = Result<Vec<PevmTxExecutionResult>, ParallelExecutorError<C>>;
+pub type ParallelExecutorResult<C> = Result<Vec<TxExecutionResult>, ParallelExecutorError<C>>;
 
 #[derive(Debug)]
 enum AbortReason {
@@ -109,7 +107,7 @@ impl<T> AsyncDropper<T> {
 #[derive(Debug)]
 #[cfg_attr(not(feature = "compiler"), derive(Default))]
 pub struct ParallelExecutor {
-    execution_results: Vec<Mutex<Option<PevmTxExecutionResult>>>,
+    execution_results: Vec<Mutex<Option<TxExecutionResult>>>,
     abort_reason: OnceLock<AbortReason>,
     dropper: AsyncDropper<(MvMemory, Scheduler, Vec<TxEnv>)>,
     /// The compile work shared with different vm instance.
@@ -156,9 +154,9 @@ impl ParallelExecutor {
         block: &Block<C::Transaction>,
         concurrency_level: NonZeroUsize,
         force_sequential: bool,
-    ) -> PevmResult<C>
+    ) -> ParallelExecutorResult<C>
     where
-        C: PevmChain + Send + Sync,
+        C: Chain + Send + Sync,
         S: Storage + Send + Sync,
     {
         let spec_id = chain
@@ -210,9 +208,9 @@ impl ParallelExecutor {
         block_env: BlockEnv,
         txs: Vec<TxEnv>,
         concurrency_level: NonZeroUsize,
-    ) -> PevmResult<C>
+    ) -> ParallelExecutorResult<C>
     where
-        C: PevmChain + Send + Sync,
+        C: Chain + Send + Sync,
         S: Storage + Send + Sync,
     {
         if txs.is_empty() {
@@ -402,7 +400,7 @@ impl ParallelExecutor {
                     // SAFETY: The multi-version data structure should not leak an index over block size.
                     let tx_result = unsafe { fully_evaluated_results.get_unchecked_mut(*tx_idx) };
                     let account = tx_result.state.entry(address).or_default();
-                    // TODO: Deduplicate this logic with [PevmTxExecutionResult::from_revm]
+                    // TODO: Deduplicate this logic with [TxExecutionResult::from_revm]
                     if chain.is_eip_161_enabled(spec_id)
                         && code_hash.is_none()
                         && nonce == 0
@@ -435,7 +433,7 @@ impl ParallelExecutor {
         Ok(fully_evaluated_results)
     }
 
-    fn try_execute<S: Storage, C: PevmChain>(
+    fn try_execute<S: Storage, C: Chain>(
         &self,
         vm: &Vm<'_, S, C>,
         scheduler: &Scheduler,
@@ -500,14 +498,14 @@ fn try_validate(
 /// Execute REVM transactions sequentially.
 // Useful for falling back for (small) blocks with many dependencies.
 // TODO: Use this for a long chain of sequential transactions even in parallel mode.
-pub fn execute_revm_sequential<S: Storage, C: PevmChain>(
+pub fn execute_revm_sequential<S: Storage, C: Chain>(
     chain: &C,
     storage: &S,
     spec_id: SpecId,
     block_env: BlockEnv,
     txs: Vec<TxEnv>,
     #[cfg(feature = "compiler")] worker: Arc<ExtCompileWorker>,
-) -> PevmResult<C> {
+) -> ParallelExecutorResult<C> {
     let mut db = CacheDB::new(StorageWrapper(storage));
     let mut evm = build_evm(
         &mut db,
@@ -531,8 +529,7 @@ pub fn execute_revm_sequential<S: Storage, C: PevmChain>(
 
         evm.db_mut().commit(result_and_state.state.clone());
 
-        let mut execution_result =
-            PevmTxExecutionResult::from_revm(chain, spec_id, result_and_state);
+        let mut execution_result = TxExecutionResult::from_revm(chain, spec_id, result_and_state);
 
         cumulative_gas_used =
             cumulative_gas_used.saturating_add(execution_result.receipt.cumulative_gas_used);

@@ -2,7 +2,7 @@
 //! "implicit" dependency among consecutive transactions.
 
 use metis_pe::InMemoryStorage;
-use metis_pe::chain::PevmEthereum;
+use metis_pe::chain::Ethereum;
 use rand::random;
 use revm::primitives::{Address, TransactTo, U256, alloy_primitives::U160, env::TxEnv};
 
@@ -12,7 +12,7 @@ const BLOCK_SIZE: usize = 100_000;
 
 fn test_beneficiary(get_address: fn(usize) -> Address) {
     common::test_execute_revm(
-        &PevmEthereum::mainnet(),
+        &Ethereum::mainnet(),
         // Mock the beneficiary account (`Address:ZERO`) and the next `BLOCK_SIZE` user accounts.
         InMemoryStorage::new(
             (0..=BLOCK_SIZE).map(common::mock_account).collect(),

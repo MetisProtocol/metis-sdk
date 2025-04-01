@@ -14,19 +14,18 @@ use revm::{
     primitives::{AuthorizationList, BlockEnv, OptimismFields, SpecId, TxEnv},
 };
 use crate::{
-    BuildIdentityHasher, MemoryLocation, PevmTxExecutionResult, hash_deterministic,
-    mv_memory::MvMemory,
+    BuildIdentityHasher, MemoryLocation, TxExecutionResult, hash_deterministic, mv_memory::MvMemory,
 };
 
-use super::{CalculateReceiptRootError, PevmChain, RewardPolicy};
+use super::{CalculateReceiptRootError, Chain, RewardPolicy};
 
-/// Implementation of [`PevmChain`] for Optimism
+/// Implementation of [`Chain`] for Optimism
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PevmOptimism {
+pub struct Optimism {
     id: ChainId,
 }
 
-impl PevmOptimism {
+impl Optimism {
     /// Optimism Mainnet
     pub const fn mainnet() -> Self {
         Self { id: 10 }
@@ -82,7 +81,7 @@ fn get_optimism_fields(
     })
 }
 
-impl PevmChain for PevmOptimism {
+impl Chain for Optimism {
     type Transaction = op_alloy_rpc_types::Transaction;
     type Envelope = OpTxEnvelope;
     type BlockSpecError = OptimismBlockSpecError;
@@ -191,7 +190,7 @@ impl PevmChain for PevmOptimism {
         &self,
         spec_id: SpecId,
         txs: &BlockTransactions<Self::Transaction>,
-        tx_results: &[PevmTxExecutionResult],
+        tx_results: &[TxExecutionResult],
     ) -> Result<B256, CalculateReceiptRootError> {
         let mut trie_entries = txs
             .txns()

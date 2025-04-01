@@ -218,7 +218,9 @@ pub mod chain;
 pub mod compat;
 mod executor;
 mod mv_memory;
-pub use executor::{ParallelExecutor, ParallelExecutorError, PevmResult, execute_revm_sequential};
+pub use executor::{
+    ParallelExecutor, ParallelExecutorError, ParallelExecutorResult, execute_revm_sequential,
+};
 mod scheduler;
 mod storage;
 pub use storage::{
@@ -226,7 +228,7 @@ pub use storage::{
     Storage, StorageWrapper,
 };
 mod vm;
-pub use vm::{ExecutionError, PevmTxExecutionResult};
+pub use vm::{ExecutionError, TxExecutionResult};
 
 #[cfg(feature = "rpc-storage")]
 pub use storage::RpcStorage;

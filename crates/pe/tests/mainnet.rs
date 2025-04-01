@@ -1,6 +1,6 @@
 //! Test with mainnet blocks
 
-use metis_pe::chain::PevmEthereum;
+use metis_pe::chain::Ethereum;
 
 pub mod common;
 
@@ -9,7 +9,7 @@ pub mod common;
 async fn mainnet_blocks_from_rpc() {
     use alloy_provider::{Provider, ProviderBuilder};
     use alloy_rpc_types_eth::{BlockId, BlockTransactionsKind};
-    use metis_pe::chain::PevmChain;
+    use metis_pe::chain::Chain;
 
     let rpc_url = match std::env::var("ETHEREUM_RPC_URL") {
         // The empty check is for GitHub Actions where the variable is set with an empty string when unset!?
@@ -39,7 +39,7 @@ async fn mainnet_blocks_from_rpc() {
             .await
             .unwrap()
             .unwrap();
-        let chain = PevmEthereum::mainnet();
+        let chain = Ethereum::mainnet();
         let spec_id = chain.get_block_spec(&block.header).unwrap();
         let rpc_storage =
             metis_pe::RpcStorage::new(provider, spec_id, BlockId::number(block_number - 1));
@@ -53,7 +53,7 @@ fn mainnet_blocks_from_disk() {
         // Run several times to try catching a race condition if there is any.
         // 1000~2000 is a better choice for local testing after major changes.
         for _ in 0..3 {
-            common::test_execute_alloy(&PevmEthereum::mainnet(), &storage, block.clone(), true)
+            common::test_execute_alloy(&Ethereum::mainnet(), &storage, block.clone(), true)
         }
     });
 }
@@ -63,7 +63,7 @@ fn mainnet_blocks_from_disk() {
 async fn optimism_mainnet_blocks_from_rpc() {
     use alloy_provider::{Provider, ProviderBuilder};
     use alloy_rpc_types_eth::{BlockId, BlockTransactionsKind};
-    use metis_pe::chain::{PevmChain, PevmOptimism};
+    use metis_pe::chain::{Chain, Optimism};
 
     let rpc_url = match std::env::var("OPTIMISM_RPC_URL") {
         Ok(value) if !value.is_empty() => value.parse().unwrap(),
@@ -87,7 +87,7 @@ async fn optimism_mainnet_blocks_from_rpc() {
             .unwrap()
             .unwrap();
 
-        let chain = PevmOptimism::mainnet();
+        let chain = Optimism::mainnet();
         let spec_id = chain.get_block_spec(&block.header).unwrap();
 
         let rpc_storage =
