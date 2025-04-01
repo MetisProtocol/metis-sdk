@@ -12,7 +12,7 @@ pub mod erc20;
 pub mod uniswap;
 
 use crate::uniswap::generate_cluster;
-use metis_pe::chain::PevmEthereum;
+use metis_pe::chain::Ethereum;
 use metis_pe::{Bytecodes, ChainState, EvmAccount, InMemoryStorage};
 use revm::primitives::{Address, TxEnv};
 use std::sync::Arc;
@@ -35,7 +35,7 @@ fn uniswap_clusters() {
         final_txs.extend(txs);
     }
     common::test_execute_revm(
-        &PevmEthereum::mainnet(),
+        &Ethereum::mainnet(),
         InMemoryStorage::new(final_state, Arc::new(final_bytecodes), Default::default()),
         final_txs,
     )

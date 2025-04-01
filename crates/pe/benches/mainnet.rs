@@ -4,7 +4,7 @@
 use std::{num::NonZeroUsize, thread};
 
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use metis_pe::{ParallelExecutor, Pevm, chain::PevmEthereum};
+use metis_pe::{ParallelExecutor, chain::Ethereum};
 
 // Better project structure
 
@@ -22,9 +22,9 @@ static GLOBAL: snmalloc_rs::SnMalloc = snmalloc_rs::SnMalloc;
 #[global_allocator]
 static GLOBAL: rpmalloc::RpMalloc = rpmalloc::RpMalloc;
 
-/// Benchmark for the Ethereum Mainnet Simulation using `PevmEthereum`.
+/// Benchmark for the Ethereum Mainnet Simulation using `Ethereum`.
 pub fn criterion_benchmark(c: &mut Criterion) {
-    let chain = PevmEthereum::mainnet();
+    let chain = Ethereum::mainnet();
     let concurrency_level = thread::available_parallelism()
         .unwrap_or(NonZeroUsize::MIN)
         // This max should be tuned to the running machine,

@@ -146,7 +146,7 @@ pub type Bytecodes = HashMap<B256, EvmCode, BuildSuffixHasher>;
 /// Mapping from block numbers to block hashes
 pub type BlockHashes = HashMap<u64, B256, BuildIdentityHasher>;
 
-/// An interface to provide chain state to Pevm for transaction execution.
+/// An interface to provide chain state for the transaction execution.
 /// Staying close to the underlying REVM's Database trait while not leaking
 /// its primitives to library users (favoring Alloy at the moment).
 /// TODO: Better API for third-party integration.

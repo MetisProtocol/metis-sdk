@@ -11,7 +11,7 @@ use revm::{
     primitives::{BlockEnv, SpecId, TxEnv},
 };
 
-use crate::{PevmTxExecutionResult, mv_memory::MvMemory};
+use crate::{TxExecutionResult, mv_memory::MvMemory};
 
 /// Different chains may have varying reward policies.
 /// This enum specifies which policy to follow, with optional
@@ -30,7 +30,7 @@ pub enum RewardPolicy {
     },
 }
 
-/// The error type of [`PevmChain::calculate_receipt_root`]
+/// The error type of [`Chain::calculate_receipt_root`]
 #[derive(Debug, Clone)]
 pub enum CalculateReceiptRootError {
     /// Unsupported
@@ -45,7 +45,7 @@ pub enum CalculateReceiptRootError {
 }
 
 /// Custom behaviours for different chains & networks
-pub trait PevmChain: Debug {
+pub trait Chain: Debug {
     /// The transaction type
     type Transaction: Debug + Clone + PartialEq;
 
@@ -103,7 +103,7 @@ pub trait PevmChain: Debug {
         &self,
         spec_id: SpecId,
         txs: &BlockTransactions<Self::Transaction>,
-        tx_results: &[PevmTxExecutionResult],
+        tx_results: &[TxExecutionResult],
     ) -> Result<B256, CalculateReceiptRootError>;
 
     /// Check whether EIP-1559 is enabled
@@ -116,9 +116,9 @@ pub trait PevmChain: Debug {
 }
 
 mod ethereum;
-pub use ethereum::PevmEthereum;
+pub use ethereum::Ethereum;
 
 #[cfg(feature = "optimism")]
 mod optimism;
 #[cfg(feature = "optimism")]
-pub use optimism::PevmOptimism;
+pub use optimism::Optimism;

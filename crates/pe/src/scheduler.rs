@@ -11,7 +11,7 @@ use smallvec::SmallVec;
 
 use crate::{FinishExecFlags, IncarnationStatus, Task, TxIdx, TxStatus, TxVersion};
 
-// The Pevm collaborative scheduler coordinates execution & validation
+// The parallel executor collaborative scheduler coordinates execution & validation
 // tasks among work threads.
 //
 // To pick a task, threads increment the smaller of the (execution and

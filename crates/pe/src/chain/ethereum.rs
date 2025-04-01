@@ -10,21 +10,21 @@ use revm::{
     primitives::{AuthorizationList, BlockEnv, SpecId, TxEnv},
 };
 
-use super::{CalculateReceiptRootError, PevmChain, RewardPolicy};
+use super::{CalculateReceiptRootError, Chain, RewardPolicy};
 use crate::{
-    BuildIdentityHasher, MemoryLocation, PevmTxExecutionResult, TxIdx, hash_deterministic,
+    BuildIdentityHasher, MemoryLocation, TxExecutionResult, TxIdx, hash_deterministic,
     mv_memory::MvMemory,
 };
 
 use std::sync::Arc;
 
-/// Implementation of [`PevmChain`] for Ethereum
+/// Implementation of [`Chain`] for Ethereum
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PevmEthereum {
+pub struct Ethereum {
     id: u64,
 }
 
-impl PevmEthereum {
+impl Ethereum {
     /// Ethereum Mainnet
     pub const fn mainnet() -> Self {
         Self { id: 1 }
@@ -51,7 +51,7 @@ fn get_ethereum_gas_price(tx: &TxEnvelope) -> Result<U256, EthereumTransactionPa
     }
 }
 
-impl PevmChain for PevmEthereum {
+impl Chain for Ethereum {
     type Transaction = alloy_rpc_types_eth::Transaction;
     type Envelope = TxEnvelope;
     type BlockSpecError = std::convert::Infallible;
@@ -164,7 +164,7 @@ impl PevmChain for PevmEthereum {
         &self,
         spec_id: SpecId,
         txs: &BlockTransactions<Self::Transaction>,
-        tx_results: &[PevmTxExecutionResult],
+        tx_results: &[TxExecutionResult],
     ) -> Result<B256, CalculateReceiptRootError> {
         if spec_id < SpecId::BYZANTIUM {
             // We can only calculate the receipts root from Byzantium.

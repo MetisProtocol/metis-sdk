@@ -2,7 +2,7 @@ use alloy_primitives::Bloom;
 use alloy_rpc_types_eth::Block;
 use metis_pe::{
     EvmAccount, ParallelExecutor, Storage,
-    chain::{CalculateReceiptRootError, PevmChain},
+    chain::{CalculateReceiptRootError, Chain},
 };
 use revm::primitives::{Address, BlockEnv, SpecId, TxEnv, U256, alloy_primitives::U160};
 use std::{num::NonZeroUsize, thread};
@@ -25,7 +25,7 @@ pub fn mock_account(idx: usize) -> (Address, EvmAccount) {
 /// the execution results match.
 pub fn test_execute_revm<C, S>(chain: &C, storage: S, txs: Vec<TxEnv>)
 where
-    C: PevmChain + PartialEq + Send + Sync,
+    C: Chain + PartialEq + Send + Sync,
     S: Storage + Send + Sync,
 {
     let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
@@ -59,7 +59,7 @@ pub fn test_execute_alloy<C, S>(
     block: Block<C::Transaction>,
     must_match_block_header: bool,
 ) where
-    C: PevmChain + PartialEq + Send + Sync,
+    C: Chain + PartialEq + Send + Sync,
     S: Storage + Send + Sync,
 {
     let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
