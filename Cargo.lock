@@ -6211,6 +6211,7 @@ dependencies = [
  "reth-evm-ethereum",
  "reth-node-ethereum",
  "reth-primitives",
+ "revm 19.7.0",
  "rustc-hash 2.1.1",
  "thiserror 2.0.12",
 ]

@@ -9,6 +9,7 @@ metis-pe.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true
 rustc-hash.workspace = true
+revm.workspace = true
 alloy-rpc-types-eth.workspace = true
 alloy-consensus.workspace = true
 
