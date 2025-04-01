@@ -502,6 +502,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-eips"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10b11c382ca8075128d1ae6822b60921cf484c911d9a5831797a01218f98125f"
+dependencies = [
+ "alloy-eip2124",
+ "alloy-eip2930",
+ "alloy-eip7702",
+ "alloy-primitives",
+ "alloy-rlp",
+ "auto_impl",
+ "derive_more 2.0.1",
+ "either",
+]
+
+[[package]]
 name = "alloy-evm"
 version = "0.1.0-alpha.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6198,7 +6214,7 @@ name = "metis-chain"
 version = "0.1.0"
 dependencies = [
  "alloy-consensus 0.12.6",
- "alloy-eips 0.12.6",
+ "alloy-eips 0.13.0",
  "alloy-evm",
  "anyhow",
  "eyre",
