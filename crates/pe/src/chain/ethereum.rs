@@ -1,13 +1,13 @@
 //! Ethereum
 
-use alloy_consensus::{ReceiptEnvelope, Transaction, TxEnvelope, TxType};
-use alloy_primitives::{Address, B256, U256};
+use alloy_consensus::{ReceiptEnvelope, Transaction, TxEnvelope, TxType, Typed2718};
+use alloy_primitives::{Address, B256};
 use alloy_provider::network::eip2718::Encodable2718;
 use alloy_rpc_types_eth::{BlockTransactions, Header};
 use hashbrown::HashMap;
 use revm::{
-    Handler,
-    primitives::{AuthorizationList, BlockEnv, SpecId, TxEnv},
+    context::{BlockEnv, TxEnv},
+    primitives::hardfork::SpecId,
 };
 
 use super::{CalculateReceiptRootError, Chain, RewardPolicy};
@@ -15,8 +15,6 @@ use crate::{
     BuildIdentityHasher, MemoryLocation, TxExecutionResult, TxIdx, hash_deterministic,
     mv_memory::MvMemory,
 };
-
-use std::sync::Arc;
 
 /// Implementation of [`Chain`] for Ethereum
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,13 +39,12 @@ pub enum EthereumTransactionParsingError {
     MissingGasPrice,
 }
 
-fn get_ethereum_gas_price(tx: &TxEnvelope) -> Result<U256, EthereumTransactionParsingError> {
+fn get_ethereum_gas_price(tx: &TxEnvelope) -> Result<u128, EthereumTransactionParsingError> {
     match tx.tx_type() {
         TxType::Legacy | TxType::Eip2930 => tx
             .gas_price()
-            .map(U256::from)
             .ok_or(EthereumTransactionParsingError::MissingGasPrice),
-        TxType::Eip1559 | TxType::Eip4844 | TxType::Eip7702 => Ok(U256::from(tx.max_fee_per_gas())),
+        TxType::Eip1559 | TxType::Eip4844 | TxType::Eip7702 => Ok(tx.max_fee_per_gas()),
     }
 }
 
@@ -110,27 +107,31 @@ impl Chain for Ethereum {
             caller: tx.from,
             gas_limit: tx.gas_limit(),
             gas_price: get_ethereum_gas_price(&tx.inner)?,
-            gas_priority_fee: tx.max_priority_fee_per_gas().map(U256::from),
-            transact_to: tx.kind(),
+            gas_priority_fee: tx.max_priority_fee_per_gas(),
+            kind: tx.kind(),
             value: tx.value(),
             data: tx.input().clone(),
-            nonce: Some(tx.nonce()),
+            nonce: tx.nonce(),
             chain_id: tx.chain_id(),
-            access_list: tx.access_list().cloned().unwrap_or_default().to_vec(),
+            access_list: tx
+                .access_list()
+                .cloned()
+                .unwrap_or_default()
+                .to_vec()
+                .into(),
             blob_hashes: tx.blob_versioned_hashes().unwrap_or_default().to_vec(),
-            max_fee_per_blob_gas: tx.max_fee_per_blob_gas().map(U256::from),
-            authorization_list: tx
-                .authorization_list()
-                .map(|auths| AuthorizationList::Signed(auths.to_vec())),
+            max_fee_per_blob_gas: tx.max_fee_per_blob_gas().unwrap_or_default(),
+            authorization_list: tx.authorization_list().unwrap_or_default().to_vec(),
             #[cfg(feature = "optimism")]
             optimism: revm::primitives::OptimismFields::default(),
+            tx_type: tx.ty(),
         })
     }
 
     fn build_mv_memory(&self, block_env: &BlockEnv, txs: &[TxEnv]) -> MvMemory {
         let block_size = txs.len();
         let beneficiary_location_hash =
-            hash_deterministic(MemoryLocation::Basic(block_env.coinbase));
+            hash_deterministic(MemoryLocation::Basic(block_env.beneficiary));
 
         // TODO: Estimate more locations based on sender, to, etc.
         let mut estimated_locations = HashMap::with_hasher(BuildIdentityHasher::default());
@@ -139,19 +140,7 @@ impl Chain for Ethereum {
             (0..block_size).collect::<Vec<TxIdx>>(),
         );
 
-        MvMemory::new(block_size, estimated_locations, [block_env.coinbase])
-    }
-
-    fn get_handler<'a, EXT, DB: revm::Database>(
-        &self,
-        spec_id: SpecId,
-        with_reward_beneficiary: bool,
-    ) -> Handler<'a, revm::Context<EXT, DB>, EXT, DB> {
-        let mut hander = Handler::mainnet_with_spec(spec_id);
-        if !with_reward_beneficiary {
-            hander.post_execution.reward_beneficiary = Arc::new(|_, __| Ok(()));
-        }
-        hander
+        MvMemory::new(block_size, estimated_locations, [block_env.beneficiary])
     }
 
     fn get_reward_policy(&self) -> RewardPolicy {

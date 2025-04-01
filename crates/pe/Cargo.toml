@@ -6,10 +6,9 @@ version.workspace = true
 [features]
 defaults = []
 
-full = ["optimism", "rpc-storage", "compiler"]
+full = ["optimism", "rpc-storage"]
 
 optimism = [
-  "revm/optimism",
   "dep:op-alloy-consensus",
   "dep:op-alloy-network",
   "dep:op-alloy-rpc-types",
