@@ -33,7 +33,7 @@ where
             data: tx.input().clone(),
             chain_id: tx.chain_id(),
             nonce: Some(tx.nonce()),
-            access_list: tx.access_list().into(),
+            access_list: tx.access_list().unwrap().to_vec(),
             blob_hashes: Default::default(),
             max_fee_per_blob_gas: Default::default(),
             authorization_list: Default::default(),
