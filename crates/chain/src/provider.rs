@@ -1,10 +1,9 @@
 use alloy_evm::eth::EthBlockExecutor;
 use reth::{
-    api::{ConfigureEvm, NodeTypesWithEngine},
-    builder::{BuilderContext, FullNodeTypes, components::ExecutorBuilder},
+    api::{ConfigureEvm},
     providers::BlockExecutionResult,
     revm::{
-        context::{TxEnv, result::ExecutionResult},
+        context::{result::ExecutionResult},
         db::{State, states::bundle_state::BundleRetention},
     },
 };
@@ -18,12 +17,8 @@ use reth_primitives::{
     EthPrimitives, NodePrimitives, Receipt, Recovered, RecoveredBlock, TransactionSigned,
 };
 use std::sync::Arc;
-use alloy_rpc_types_eth::BlockTransactions;
-use reth::rpc::api::TxPoolApiClient;
 use metis_pe::chain::{PevmChain, PevmEthereum};
-use reth_primitives::{transaction::FillTxEnv};
-use metis_pe::{ParallelExecutorError, Storage};
-
+use revm::primitives::TxEnv;
 
 pub struct BlockParallelExecutorProvider {
     strategy_factory: EthEvmConfig,
@@ -102,8 +97,12 @@ where
     DB: Database,
 =======
     F: ConfigureEvm,
+<<<<<<< HEAD
     DB: Database + Storage + Send + Sync,
 >>>>>>> 1a864d8 (use the same lib)
+=======
+    DB: Database,
+>>>>>>> 38c5225 (convert txenv)
 {
     type Primitives = <EthEvmConfig as ConfigureEvm>::Primitives;
     type Error = BlockExecutionError;
@@ -168,12 +167,13 @@ where
 impl<F, DB> ParallelExecutor<F, DB>
 where
     F: ConfigureEvm,
-    DB: Database + Storage + Send + Sync,
+    DB: Database,
+    <<F as ConfigureEvm>::Primitives as NodePrimitives>::SignedTx: Clone,
 {
     fn execute_block(
         &mut self,
         block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
-    ) -> Result<BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>, BlockExecutionError>
+    ) -> Result<u64, BlockExecutionError>
     {
         let mut executor = metis_pe::ParallelExecutor::default();
         let chain_spec = PevmEthereum::mainnet();
@@ -181,10 +181,9 @@ where
         let spec_id = chain_spec.get_block_spec(&header).unwrap();
         let block_env = metis_pe::compat::get_block_env(&header, spec_id);
 
-        let tx_envs = block.transactions_recovered()
-            .into_iter()
-            .map(|signed_tx, signer| {
-                let tx_env = TxEnv::from_recovered_tx(&signed_tx, signer);
+        let tx_envs = block.transactions_with_sender()
+            .map(|(sender, signed_tx)| {
+                let tx_env = crate::utils::from_recovered_tx(signed_tx.clone(), sender.clone());
                 Ok(tx_env)
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -199,20 +198,16 @@ where
         );
 
         let mut cumulative_gas_used = 0;
-        let mut receipts = vec![];
         for result in results.unwrap() {
             cumulative_gas_used += result.receipt.cumulative_gas_used
         }
 
-        Ok(BlockExecutionResult {
-            receipts,
-            gas_used: cumulative_gas_used,
-            requests: vec![].into(),
-        })
+        Ok(cumulative_gas_used)
     }
 }
 
 
+<<<<<<< HEAD
 /// A custom executor builder
 #[derive(Debug, Default, Clone, Copy)]
 #[non_exhaustive]
@@ -332,9 +327,11 @@ impl ConfigureEvm for ParallelEvmConfig {
 }
 
 >>>>>>> 1e3acca (execute block)
+=======
+>>>>>>> 38c5225 (convert txenv)
 pub struct ParallelBlockExecutor<'a, Evm> {
     /// Inner Ethereum execution strategy.
-    inner: EthBlockExecutor<'a, Evm, &'a Arc<ChainSpec>, &'a RethReceiptBuilder>,
+    pub(crate) inner: EthBlockExecutor<'a, Evm, &'a Arc<ChainSpec>, &'a RethReceiptBuilder>,
 }
 
 impl<'db, DB, E> BlockExecutor for ParallelBlockExecutor<'_, E>
@@ -371,7 +368,34 @@ where
     }
 }
 
-fn convert_to_alloy_header(header: &Header) -> alloy_rpc_types_eth::Header {
-    let inner = alloy_consensus::Header::try_from(header).unwrap();
+fn convert_to_alloy_header<H>(raw: &H) -> alloy_rpc_types_eth::Header
+where
+    H: Into<reth_primitives::Header>
+{
+    let header: reth_primitives::Header = raw.into();
+    let inner = alloy_consensus::Header {
+        parent_hash: header.parent_hash,
+        ommers_hash: header.ommers_hash,
+        beneficiary: header.beneficiary,
+        state_root: header.state_root,
+        transactions_root: header.transactions_root,
+        receipts_root: header.receipts_root,
+        logs_bloom: header.logs_bloom,
+        difficulty: header.difficulty,
+        number: header.number,
+        gas_limit: header.gas_limit,
+        gas_used: header.gas_used,
+        timestamp: header.timestamp,
+        extra_data: header.extra_data.clone(),
+        mix_hash: header.mix_hash,
+        nonce: header.nonce,
+        base_fee_per_gas: header.base_fee_per_gas,
+        withdrawals_root: header.withdrawals_root,
+        blob_gas_used: header.blob_gas_used,
+        excess_blob_gas: header.excess_blob_gas,
+        parent_beacon_block_root: header.parent_beacon_block_root,
+        requests_hash: header.requests_hash,
+    };
+
     alloy_rpc_types_eth::Header::new(inner)
 }
