@@ -1,8 +1,4 @@
-use alloy_evm::{
-    EthEvm, EthEvmFactory,
-    block::{BlockExecutorFactory, BlockExecutorFor},
-    eth::{EthBlockExecutionCtx, EthBlockExecutor},
-};
+use alloy_evm::eth::EthBlockExecutor;
 use reth::{
     api::{ConfigureEvm, NodeTypesWithEngine},
     builder::{BuilderContext, FullNodeTypes, components::ExecutorBuilder},
@@ -10,35 +6,30 @@ use reth::{
     revm::{
         context::{TxEnv, result::ExecutionResult},
         db::{State, states::bundle_state::BundleRetention},
-        primitives::hardfork::SpecId,
     },
 };
 use reth_chainspec::ChainSpec;
 use reth_evm::{
-    Database, Evm, EvmEnv, InspectorFor, NextBlockEnvAttributes, OnStateHook,
+    Database, Evm, OnStateHook,
     execute::{BlockExecutionError, BlockExecutor, BlockExecutorProvider, Executor},
 };
-use reth_evm_ethereum::{EthBlockAssembler, EthEvmConfig, RethReceiptBuilder};
+use reth_evm_ethereum::{EthEvmConfig, RethReceiptBuilder};
 use reth_primitives::{
-    EthPrimitives, Header, NodePrimitives, Receipt, Recovered, RecoveredBlock, SealedBlock,
-    SealedHeader, TransactionSigned,
+    EthPrimitives, NodePrimitives, Receipt, Recovered, RecoveredBlock, TransactionSigned,
 };
 use std::sync::Arc;
 
-pub struct BlockParallelExecutorProvider<F> {
-    strategy_factory: F,
+pub struct BlockParallelExecutorProvider {
+    strategy_factory: EthEvmConfig,
 }
 
-impl<F> BlockParallelExecutorProvider<F> {
-    pub const fn new(strategy_factory: F) -> Self {
+impl BlockParallelExecutorProvider {
+    pub const fn new(strategy_factory: EthEvmConfig) -> Self {
         Self { strategy_factory }
     }
 }
 
-impl<F> Clone for BlockParallelExecutorProvider<F>
-where
-    F: Clone,
-{
+impl Clone for BlockParallelExecutorProvider {
     fn clone(&self) -> Self {
         Self {
             strategy_factory: self.strategy_factory.clone(),
@@ -46,13 +37,10 @@ where
     }
 }
 
-impl<F> BlockExecutorProvider for BlockParallelExecutorProvider<F>
-where
-    F: ConfigureEvm + 'static,
-{
-    type Primitives = F::Primitives;
+impl BlockExecutorProvider for BlockParallelExecutorProvider {
+    type Primitives = <EthEvmConfig as ConfigureEvm>::Primitives;
 
-    type Executor<DB: Database> = ParallelExecutor<F, DB>;
+    type Executor<DB: Database> = ParallelExecutor<DB>;
 
     fn executor<DB>(&self, db: DB) -> Self::Executor<DB>
     where
@@ -62,15 +50,15 @@ where
     }
 }
 
-pub struct ParallelExecutor<F, DB> {
+pub struct ParallelExecutor<DB> {
     /// Block execution strategy.
-    pub(crate) strategy_factory: F,
+    pub(crate) strategy_factory: EthEvmConfig,
     /// Database.
     pub(crate) db: State<DB>,
 }
 
-impl<F, DB: Database> ParallelExecutor<F, DB> {
-    pub fn new(strategy_factory: F, db: DB) -> Self {
+impl<DB: Database> ParallelExecutor<DB> {
+    pub fn new(strategy_factory: EthEvmConfig, db: DB) -> Self {
         let db = State::builder()
             .with_database(db)
             .with_bundle_update()
@@ -83,12 +71,11 @@ impl<F, DB: Database> ParallelExecutor<F, DB> {
     }
 }
 
-impl<F, DB> Executor<DB> for ParallelExecutor<F, DB>
+impl<DB> Executor<DB> for ParallelExecutor<DB>
 where
-    F: ConfigureEvm,
     DB: Database,
 {
-    type Primitives = F::Primitives;
+    type Primitives = <EthEvmConfig as ConfigureEvm>::Primitives;
     type Error = BlockExecutionError;
 
     fn execute_one(
@@ -103,6 +90,7 @@ where
         strategy.apply_pre_execution_changes()?;
         // TODO(fk): change this code to the parallel execution based on the `metis-pe` crate.
         for tx in block.transactions_recovered() {
+            let _tx_env = self.strategy_factory.tx_env(tx);
             strategy.execute_transaction(tx)?;
         }
         let result = strategy.apply_post_execution_changes()?;
@@ -156,94 +144,17 @@ where
     Types: NodeTypesWithEngine<ChainSpec = ChainSpec, Primitives = EthPrimitives>,
     Node: FullNodeTypes<Types = Types>,
 {
-    type EVM = ParallelEvmConfig;
-    type Executor = BlockParallelExecutorProvider<Self::EVM>;
+    type EVM = EthEvmConfig;
+    type Executor = BlockParallelExecutorProvider;
 
     async fn build_evm(
         self,
         ctx: &BuilderContext<Node>,
     ) -> eyre::Result<(Self::EVM, Self::Executor)> {
-        let evm_config = ParallelEvmConfig {
-            inner: EthEvmConfig::new(ctx.chain_spec()),
-        };
+        let evm_config = EthEvmConfig::new(ctx.chain_spec());
         let executor = BlockParallelExecutorProvider::new(evm_config.clone());
 
         Ok((evm_config, executor))
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ParallelEvmConfig {
-    inner: EthEvmConfig,
-}
-
-impl BlockExecutorFactory for ParallelEvmConfig {
-    type EvmFactory = EthEvmFactory;
-    type ExecutionCtx<'a> = EthBlockExecutionCtx<'a>;
-    type Transaction = TransactionSigned;
-    type Receipt = Receipt;
-
-    fn evm_factory(&self) -> &Self::EvmFactory {
-        self.inner.evm_factory()
-    }
-
-    fn create_executor<'a, DB, I>(
-        &'a self,
-        evm: EthEvm<&'a mut State<DB>, I>,
-        ctx: EthBlockExecutionCtx<'a>,
-    ) -> impl BlockExecutorFor<'a, Self, DB, I>
-    where
-        DB: Database + 'a,
-        I: InspectorFor<Self, &'a mut State<DB>> + 'a,
-    {
-        ParallelBlockExecutor {
-            inner: EthBlockExecutor::new(
-                evm,
-                ctx,
-                self.inner.chain_spec(),
-                self.inner.executor_factory.receipt_builder(),
-            ),
-        }
-    }
-}
-
-impl ConfigureEvm for ParallelEvmConfig {
-    type Primitives = <EthEvmConfig as ConfigureEvm>::Primitives;
-    type Error = <EthEvmConfig as ConfigureEvm>::Error;
-    type NextBlockEnvCtx = <EthEvmConfig as ConfigureEvm>::NextBlockEnvCtx;
-    type BlockExecutorFactory = Self;
-    type BlockAssembler = EthBlockAssembler<ChainSpec>;
-
-    fn block_executor_factory(&self) -> &Self::BlockExecutorFactory {
-        self
-    }
-
-    fn block_assembler(&self) -> &Self::BlockAssembler {
-        self.inner.block_assembler()
-    }
-
-    fn evm_env(&self, header: &Header) -> EvmEnv<SpecId> {
-        self.inner.evm_env(header)
-    }
-
-    fn next_evm_env(
-        &self,
-        parent: &Header,
-        attributes: &NextBlockEnvAttributes,
-    ) -> Result<EvmEnv<SpecId>, Self::Error> {
-        self.inner.next_evm_env(parent, attributes)
-    }
-
-    fn context_for_block<'a>(&self, block: &'a SealedBlock) -> EthBlockExecutionCtx<'a> {
-        self.inner.context_for_block(block)
-    }
-
-    fn context_for_next_block(
-        &self,
-        parent: &SealedHeader,
-        attributes: Self::NextBlockEnvCtx,
-    ) -> EthBlockExecutionCtx<'_> {
-        self.inner.context_for_next_block(parent, attributes)
     }
 }
 

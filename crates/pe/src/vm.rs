@@ -3,12 +3,21 @@ use alloy_rpc_types_eth::Receipt;
 use hashbrown::HashMap;
 #[cfg(feature = "compiler")]
 use metis_vm::ExtCompileWorker;
+use revm::context::JournalOutput;
+use revm::context_interface::{JournalTr, result::HaltReason};
+use revm::handler::{EthFrame, EvmTr, Frame, FrameResult};
+use revm::handler::{EvmTrError, Handler};
+use revm::interpreter::FrameInput;
 use revm::{
-    Database, Evm,
-    primitives::{
-        AccountInfo, Address, B256, BlockEnv, Bytecode, EVMError, InvalidTransaction, KECCAK_EMPTY,
-        ResultAndState, SpecId, TxEnv, U256,
+    Database, ExecuteEvm, MainBuilder, MainnetEvm,
+    bytecode::Bytecode,
+    context::{
+        BlockEnv, ContextTr, DBErrorMarker, TxEnv,
+        result::{EVMError, InvalidTransaction, ResultAndState},
     },
+    handler::MainnetContext,
+    primitives::{Address, B256, KECCAK_EMPTY, U256, hardfork::SpecId},
+    state::AccountInfo,
 };
 use smallvec::{SmallVec, smallvec};
 #[cfg(feature = "compiler")]
@@ -21,7 +30,6 @@ use crate::{
     chain::{Chain, RewardPolicy},
     hash_deterministic,
     mv_memory::MvMemory,
-    storage::BytecodeConversionError,
 };
 
 /// The execution error from the underlying EVM executor.
@@ -105,9 +113,6 @@ pub enum ReadError {
     /// there is no performant way to mark all storage slots as cleared.
     #[error("Tried to read self-destructed account")]
     SelfDestructedAccount,
-    /// The bytecode is invalid and cannot be converted.
-    #[error("Invalid bytecode")]
-    InvalidBytecode(#[source] BytecodeConversionError),
     /// The stored memory value type doesn't match its location type.
     // TODO: Handle this at the type level?
     #[error("Invalid type of stored memory value")]
@@ -175,7 +180,7 @@ impl<'a, S: Storage, C: Chain> VmDb<'a, S, C> {
         // evaluating it concurrently.
         // TODO: Only lazy update in block syncing mode, not for block
         // building.
-        if let TxKind::Call(to) = tx.transact_to {
+        if let TxKind::Call(to) = tx.kind {
             db.to_code_hash = db.get_code_hash(to)?;
             db.is_lazy = db.to_code_hash.is_none()
                 && (vm.mv_memory.data.contains_key(&from_hash)
@@ -188,7 +193,7 @@ impl<'a, S: Storage, C: Chain> VmDb<'a, S, C> {
         if address == &self.tx.caller {
             return self.from_hash;
         }
-        if let TxKind::Call(to) = &self.tx.transact_to {
+        if let TxKind::Call(to) = &self.tx.kind {
             if to == address {
                 return self.to_hash.unwrap();
             }
@@ -248,6 +253,8 @@ impl<'a, S: Storage, C: Chain> VmDb<'a, S, C> {
     }
 }
 
+impl DBErrorMarker for ReadError {}
+
 impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
     type Error = ReadError;
 
@@ -259,7 +266,7 @@ impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
         if self.is_lazy {
             if location_hash == self.from_hash {
                 return Ok(Some(AccountInfo {
-                    nonce: self.tx.nonce.unwrap_or(1),
+                    nonce: self.tx.nonce,
                     balance: U256::MAX,
                     code: None,
                     code_hash: KECCAK_EMPTY,
@@ -379,9 +386,7 @@ impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
         if let Some(mut account) = final_account {
             // Check sender nonce
             account.nonce += nonce_addition;
-            if location_hash == self.from_hash
-                && self.tx.nonce.is_some_and(|nonce| nonce != account.nonce)
-            {
+            if location_hash == self.from_hash && self.tx.nonce != account.nonce {
                 return if self.tx_idx > 0 {
                     // TODO: Better retry strategy -- immediately, to the
                     // closest sender tx, to the missing sender tx, etc.
@@ -409,10 +414,7 @@ impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
                     Some(code.clone())
                 } else {
                     match self.vm.storage.code_by_hash(code_hash) {
-                        Ok(code) => code
-                            .map(Bytecode::try_from)
-                            .transpose()
-                            .map_err(ReadError::InvalidBytecode)?,
+                        Ok(code) => code,
                         Err(err) => return Err(ReadError::StorageError(err.to_string())),
                     }
                 }
@@ -434,15 +436,12 @@ impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
     }
 
     fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error> {
-        match self
+        Ok(self
             .vm
             .storage
             .code_by_hash(&code_hash)
             .map_err(|err| ReadError::StorageError(err.to_string()))?
-        {
-            Some(evm_code) => Bytecode::try_from(evm_code).map_err(ReadError::InvalidBytecode),
-            None => Ok(Bytecode::default()),
-        }
+            .unwrap_or_default())
     }
 
     fn storage(&mut self, address: Address, index: U256) -> Result<U256, Self::Error> {
@@ -521,7 +520,7 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
             txs,
             spec_id,
             beneficiary_location_hash: hash_deterministic(MemoryLocation::Basic(
-                block_env.coinbase,
+                block_env.beneficiary,
             )),
             reward_policy: chain.get_reward_policy(),
             #[cfg(feature = "compiler")]
@@ -553,7 +552,7 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
         let tx = unsafe { self.txs.get_unchecked(tx_version.tx_idx) };
         let from_hash = hash_deterministic(MemoryLocation::Basic(tx.caller));
         let to_hash = tx
-            .transact_to
+            .kind
             .to()
             .map(|to| hash_deterministic(MemoryLocation::Basic(*to)));
 
@@ -564,15 +563,18 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
         // as creating them is very expensive.
         let mut evm = build_evm(
             &mut db,
-            self.chain,
             self.spec_id,
             self.block_env.clone(),
-            Some(tx.clone()),
-            false,
             #[cfg(feature = "compiler")]
             self.worker.clone(),
         );
-        match evm.transact() {
+        let result_and_state = {
+            evm.set_tx(tx.clone());
+            let mut t =
+                MainnetWithoutRewardBeneficiaryHandler::<_, _, EthFrame<_, _, _>>::default();
+            t.run(&mut evm)
+        };
+        match result_and_state {
             Ok(result_and_state) => {
                 // There are at least three locations most of the time: the sender,
                 // the recipient, and the beneficiary accounts.
@@ -674,7 +676,7 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
 
                 if db.is_lazy {
                     self.mv_memory
-                        .add_lazy_addresses([tx.caller, *tx.transact_to.to().unwrap()]);
+                        .add_lazy_addresses([tx.caller, tx.kind.into_to().unwrap_or_default()]);
                 }
 
                 let mut flags = if tx_version.tx_idx > 0 && !db.is_lazy {
@@ -732,15 +734,15 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
         let mut gas_price = if let Some(priority_fee) = tx.gas_priority_fee {
             std::cmp::min(
                 tx.gas_price,
-                priority_fee.saturating_add(self.block_env.basefee),
+                priority_fee.saturating_add(self.block_env.basefee as u128),
             )
         } else {
             tx.gas_price
         };
         if self.chain.is_eip_1559_enabled(self.spec_id) {
-            gas_price = gas_price.saturating_sub(self.block_env.basefee);
+            gas_price = gas_price.saturating_sub(self.block_env.basefee as u128);
         }
-
+        let gas_price = U256::from(gas_price);
         let rewards: SmallVec<[(MemoryLocationHash, U256); 1]> = match self.reward_policy {
             RewardPolicy::Ethereum => {
                 smallvec![(
@@ -810,56 +812,59 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
 
 #[cfg(feature = "compiler")]
 #[inline]
-pub(crate) fn build_evm<'a, DB: Database, C: Chain>(
+pub(crate) fn build_evm<'a, DB: Database>(
     db: DB,
-    chain: &C,
     spec_id: SpecId,
     block_env: BlockEnv,
-    tx_env: Option<TxEnv>,
-    with_reward_beneficiary: bool,
     worker: Arc<ExtCompileWorker>,
 ) -> Evm<'a, Arc<metis_vm::ExtCompileWorker>, DB> {
-    let handler = chain.get_handler(spec_id, with_reward_beneficiary);
-    // New a VM and run the tx.
-    let evm = Evm::builder()
-        .with_external_context(worker)
-        .with_db(db)
-        .with_spec_id(spec_id)
-        .modify_cfg_env(|cfg| {
-            cfg.chain_id = chain.id();
-        })
-        .with_block_env(block_env)
-        .with_tx_env(tx_env.unwrap_or_default())
-        .with_handler(handler)
-        // Note: register the external AOT compiler handler here.
-        // The external must be set after the handler, otherwise the
-        // compile handler will be overwritten the chain handler.
-        .append_handler_register(metis_vm::register_compile_handler)
-        .build();
+    let mut evm = MainnetContext::new(db, spec_id).build_mainnet();
+    evm.set_block(block_env);
     evm
 }
 
 #[cfg(not(feature = "compiler"))]
 #[inline]
-pub(crate) fn build_evm<'a, DB: Database, C: Chain>(
+pub(crate) fn build_evm<DB: Database>(
     db: DB,
-    chain: &C,
     spec_id: SpecId,
     block_env: BlockEnv,
-    tx_env: Option<TxEnv>,
-    with_reward_beneficiary: bool,
-) -> Evm<'a, (), DB> {
-    let handler = chain.get_handler(spec_id, with_reward_beneficiary);
-    // New a VM and run the tx.
-    let evm = Evm::builder()
-        .with_db(db)
-        .with_spec_id(spec_id)
-        .modify_cfg_env(|cfg| {
-            cfg.chain_id = chain.id();
-        })
-        .with_block_env(block_env)
-        .with_tx_env(tx_env.unwrap_or_default())
-        .with_handler(handler)
-        .build();
+) -> MainnetEvm<MainnetContext<DB>> {
+    let mut evm = MainnetContext::new(db, spec_id).build_mainnet();
+    evm.set_block(block_env);
     evm
+}
+
+pub struct MainnetWithoutRewardBeneficiaryHandler<CTX, ERROR, FRAME> {
+    pub _phantom: core::marker::PhantomData<(CTX, ERROR, FRAME)>,
+}
+
+impl<EVM, ERROR, FRAME> Handler for MainnetWithoutRewardBeneficiaryHandler<EVM, ERROR, FRAME>
+where
+    EVM: EvmTr<Context: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput>>>,
+    ERROR: EvmTrError<EVM>,
+    FRAME: Frame<Evm = EVM, Error = ERROR, FrameResult = FrameResult, FrameInit = FrameInput>,
+{
+    type Evm = EVM;
+    type Error = ERROR;
+    type Frame = FRAME;
+    type HaltReason = HaltReason;
+
+    /// Transfers transaction fees to the block beneficiary's account.
+    #[inline]
+    fn reward_beneficiary(
+        &self,
+        _evm: &mut Self::Evm,
+        _exec_result: &mut <Self::Frame as Frame>::FrameResult,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
+impl<CTX, ERROR, FRAME> Default for MainnetWithoutRewardBeneficiaryHandler<CTX, ERROR, FRAME> {
+    fn default() -> Self {
+        Self {
+            _phantom: core::marker::PhantomData,
+        }
+    }
 }

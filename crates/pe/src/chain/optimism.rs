@@ -159,18 +159,6 @@ impl Chain for Optimism {
         )
     }
 
-    fn get_handler<'a, EXT, DB: revm::Database>(
-        &self,
-        spec_id: SpecId,
-        _with_reward_beneficiary: bool,
-    ) -> Handler<'a, revm::Context<EXT, DB>, EXT, DB> {
-        let mut hander = Handler::optimism_with_spec(spec_id);
-        if !with_reward_beneficiary {
-            hander.post_execution.reward_beneficiary = Arc::new(|_, __| Ok(()));
-        }
-        hander
-    }
-
     fn get_reward_policy(&self) -> RewardPolicy {
         RewardPolicy::Optimism {
             l1_fee_recipient_location_hash: hash_deterministic(MemoryLocation::Basic(

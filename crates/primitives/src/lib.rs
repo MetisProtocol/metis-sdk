@@ -1,13 +1,9 @@
+pub use revm::bytecode::Bytecode as EVMBytecode;
+pub use revm::context::{Block, BlockEnv, TransactTo, Transaction, TxEnv};
 pub use revm::primitives::{
-    AccessList, AccessListItem, Address, Authorization, AuthorizationList, B256,
-    BLOCK_HASH_HISTORY, BLOCKHASH_SERVE_WINDOW, BLOCKHASH_STORAGE_ADDRESS, BlobExcessGasAndPrice,
-    BlockEnv, Bytecode as EVMBytecode, Bytes, CfgEnv, EOF_MAGIC_BYTES, EOF_MAGIC_HASH, Env,
-    EvmStorageSlot, FixedBytes, GAS_PER_BLOB, I256, InvalidHeader, InvalidTransaction,
-    KECCAK_EMPTY, Log, LogData, MAX_CODE_SIZE, MAX_INITCODE_SIZE, RecoveredAuthority,
-    RecoveredAuthorization, SignedAuthorization, SpecId, TxEnv, TxKind, TxType, U256, address,
-    alloy_primitives, b256, calc_blob_gasprice, calc_excess_blob_gas,
+    Address, B256, BLOCK_HASH_HISTORY, Bytes, FixedBytes, I256, KECCAK_EMPTY, Log, LogData,
+    MAX_INITCODE_SIZE, TxKind, U256, address, alloy_primitives, b256,
     eip7702::{self, PER_AUTH_BASE_COST, PER_EMPTY_ACCOUNT_COST},
-    eof::{Eof, EofBody, TypesSection},
     fixed_bytes, hex,
     hex::{FromHex, ToHexExt},
     keccak256, uint,

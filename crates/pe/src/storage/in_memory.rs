@@ -2,8 +2,9 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use alloy_primitives::{Address, B256, U256, keccak256};
+use metis_primitives::EVMBytecode;
 
-use super::{BlockHashes, Bytecodes, ChainState, EvmCode};
+use super::{BlockHashes, Bytecodes, ChainState};
 use crate::{AccountBasic, Storage};
 
 /// A storage that stores chain data in memory.
@@ -47,7 +48,7 @@ impl Storage for InMemoryStorage {
             .and_then(|account| account.code_hash))
     }
 
-    fn code_by_hash(&self, code_hash: &B256) -> Result<Option<EvmCode>, Self::Error> {
+    fn code_by_hash(&self, code_hash: &B256) -> Result<Option<EVMBytecode>, Self::Error> {
         Ok(self.bytecodes.get(code_hash).cloned())
     }
 
