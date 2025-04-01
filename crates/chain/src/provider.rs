@@ -1,10 +1,7 @@
-use std::hash::Hash;
 use std::num::NonZeroUsize;
-use alloy_evm::{
-    EthEvm, EthEvmFactory,
-    block::{BlockExecutorFactory, BlockExecutorFor},
-    eth::{EthBlockExecutionCtx, EthBlockExecutor},
-};
+use alloy_evm::{EthEvm, EthEvmFactory, block::{BlockExecutorFactory, BlockExecutorFor},
+                eth::{EthBlockExecutionCtx, EthBlockExecutor},
+                FromRecoveredTx};
 use reth::{
     api::{ConfigureEvm, NodeTypesWithEngine},
     builder::{BuilderContext, FullNodeTypes, components::ExecutorBuilder},
@@ -26,8 +23,12 @@ use reth_primitives::{
     SealedHeader, TransactionSigned,
 };
 use std::sync::Arc;
-use metis_pe::chain::PevmChain;
+use alloy_rpc_types_eth::BlockTransactions;
+use reth::rpc::api::TxPoolApiClient;
+use metis_pe::chain::{PevmChain, PevmEthereum};
 use reth_primitives::{transaction::FillTxEnv};
+use metis_pe::{ParallelExecutorError, Storage};
+
 
 pub struct BlockParallelExecutorProvider<F> {
     strategy_factory: F,
@@ -95,7 +96,7 @@ impl<F, DB: Database> ParallelExecutor<F, DB> {
 impl<F, DB> Executor<DB> for ParallelExecutor<F, DB>
 where
     F: ConfigureEvm,
-    DB: Database,
+    DB: Database + Storage + Send + Sync,
 {
     type Primitives = F::Primitives;
     type Error = BlockExecutionError;
@@ -105,9 +106,8 @@ where
         block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
     ) -> Result<BlockExecutionResult<<Self::Primitives as NodePrimitives>::Receipt>, Self::Error>
     {
-        let mut strategy = self
-            .strategy_factory
-            .executor_for_block(&mut self.db, block);
+        let db = &mut self.db;
+        let mut strategy = self.strategy_factory.executor_for_block(db, block);
 
         strategy.apply_pre_execution_changes()?;
         self.execute_block(block)?;
@@ -126,9 +126,10 @@ where
     where
         H: OnStateHook + 'static,
     {
+        let db = &mut self.db;
         let mut strategy = self
             .strategy_factory
-            .executor_for_block(&mut self.db, block)
+            .executor_for_block(db, block)
             .with_state_hook(Some(Box::new(state_hook)));
 
         strategy.apply_pre_execution_changes()?;
@@ -152,25 +153,24 @@ where
 impl<F, DB> ParallelExecutor<F, DB>
 where
     F: ConfigureEvm,
-    DB: Database,
+    DB: Database + Storage + Send + Sync,
 {
     fn execute_block(
         &mut self,
-        block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
-    ) -> Result<BlockExecutionResult<<Self::Primitives as NodePrimitives>::Receipt>, Self::Error>
+        block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
+    ) -> Result<BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>, BlockExecutionError>
     {
         let mut executor = metis_pe::ParallelExecutor::default();
-        let chain_spec = self.chain_spec.clone();
-        let spec_id_generator = metis_pe::chain::PevmEthereum::mainnet();
-        let spec_id = spec_id_generator.get_block_spec(block.header()).unwrap();
-        let block_env = metis_pe::compat::get_block_env(block.header(), spec_id);
-        let tx_envs = block.transactions_with_sender()
-            .iter()
-            .map(|(addr, signed_tx)| {
-                let data = &TransactionSigned::from(signed_tx);
-                let mut tx_env = TxEnv::default();
-                data.fill_tx_env(tx_env);
-                Ok(tx_env.clone())
+        let chain_spec = PevmEthereum::mainnet();
+        let header = convert_to_alloy_header(&block.header());
+        let spec_id = chain_spec.get_block_spec(&header).unwrap();
+        let block_env = metis_pe::compat::get_block_env(&header, spec_id);
+
+        let tx_envs = block.transactions_recovered()
+            .into_iter()
+            .map(|signed_tx, signer| {
+                let tx_env = TxEnv::from_recovered_tx(&signed_tx, signer);
+                Ok(tx_env)
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -192,7 +192,7 @@ where
         Ok(BlockExecutionResult {
             receipts,
             gas_used: cumulative_gas_used,
-            requests: vec![],
+            requests: vec![].into(),
         })
     }
 }
@@ -345,4 +345,9 @@ where
     fn evm_mut(&mut self) -> &mut Self::Evm {
         self.inner.evm_mut()
     }
+}
+
+fn convert_to_alloy_header(header: &Header) -> alloy_rpc_types_eth::Header {
+    let inner = alloy_consensus::Header::try_from(header).unwrap();
+    alloy_rpc_types_eth::Header::new(inner)
 }
