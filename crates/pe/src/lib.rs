@@ -224,8 +224,8 @@ pub use executor::{
 mod scheduler;
 mod storage;
 pub use storage::{
-    AccountBasic, BlockHashes, Bytecodes, ChainState, EvmAccount, EvmCode, InMemoryStorage,
-    Storage, StorageWrapper,
+    AccountBasic, BlockHashes, Bytecodes, ChainState, EvmAccount, InMemoryStorage, Storage,
+    StorageWrapper,
 };
 mod vm;
 pub use vm::{ExecutionError, TxExecutionResult};

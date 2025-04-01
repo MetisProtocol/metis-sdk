@@ -7,8 +7,8 @@ use alloy_consensus::{Signed, TxLegacy};
 use alloy_primitives::{Address, B256};
 use alloy_rpc_types_eth::{BlockTransactions, Header, Transaction};
 use revm::{
-    Handler,
-    primitives::{BlockEnv, SpecId, TxEnv},
+    context::{BlockEnv, TxEnv},
+    primitives::hardfork::SpecId,
 };
 
 use crate::{TxExecutionResult, mv_memory::MvMemory};
@@ -87,13 +87,6 @@ pub trait Chain: Debug {
     fn build_mv_memory(&self, _block_env: &BlockEnv, txs: &[TxEnv]) -> MvMemory {
         MvMemory::new(txs.len(), [], [])
     }
-
-    /// Get [Handler]
-    fn get_handler<'a, EXT, DB: revm::Database>(
-        &self,
-        spec_id: SpecId,
-        with_reward_beneficiary: bool,
-    ) -> Handler<'a, revm::Context<EXT, DB>, EXT, DB>;
 
     /// Get [`RewardPolicy`]
     fn get_reward_policy(&self) -> RewardPolicy;

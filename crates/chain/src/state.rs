@@ -11,7 +11,8 @@ use reth_evm::{
 use std::sync::Arc;
 use alloy_primitives::{Address, B256, U256};
 use reth::revm::Database;
-use metis_pe::{AccountBasic, EvmCode, Storage};
+use revm::bytecode::Bytecode;
+use metis_pe::{AccountBasic, Storage};
 
 #[derive(Clone)]
 pub struct StateStorageAdapter<DB> {
@@ -29,7 +30,7 @@ impl<DB> StateStorageAdapter<DB> {
 impl<DB: Database + Send + Sync + 'static> Storage for StateStorageAdapter<DB> {
     type Error = BlockExecutionError;
 
-    fn basic(&self, address: &Address) -> Result<Option<AccountBasic>, Self::Error> {
+    fn basic(&mut self, address: &Address) -> Result<Option<AccountBasic>, Self::Error> {
         let account = self.state.basic(*address)?;
         Ok(account.map(|account| AccountBasic {
             balance: account.balance,
@@ -48,7 +49,7 @@ impl<DB: Database + Send + Sync + 'static> Storage for StateStorageAdapter<DB> {
         )
     }
 
-    fn code_by_hash(&mut self, code_hash: &B256) -> Result<Option<EvmCode>, Self::Error> {
+    fn code_by_hash(&mut self, code_hash: &B256) -> Result<Option<Bytecode>, Self::Error> {
         self.state.code_by_hash(*code_hash)
     }
 

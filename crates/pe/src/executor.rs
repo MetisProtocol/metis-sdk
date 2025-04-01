@@ -10,12 +10,14 @@ use std::{
 use alloy_primitives::{TxNonce, U256};
 use alloy_rpc_types_eth::{Block, BlockTransactions};
 use hashbrown::HashMap;
+use metis_primitives::Transaction;
 #[cfg(feature = "compiler")]
 use metis_vm::ExtCompileWorker;
 use revm::{
-    DatabaseCommit,
-    db::CacheDB,
-    primitives::{BlockEnv, InvalidTransaction, SpecId, TxEnv},
+    DatabaseCommit, ExecuteEvm,
+    context::{BlockEnv, ContextTr, TxEnv, result::InvalidTransaction},
+    database::CacheDB,
+    primitives::hardfork::SpecId,
 };
 
 use crate::{
@@ -157,7 +159,7 @@ impl ParallelExecutor {
     ) -> ParallelExecutorResult<C>
     where
         C: Chain + Send + Sync,
-        S: Storage + Send + Sync,
+        S: Storage + Debug + Send + Sync,
     {
         let spec_id = chain
             .get_block_spec(&block.header)
@@ -211,7 +213,7 @@ impl ParallelExecutor {
     ) -> ParallelExecutorResult<C>
     where
         C: Chain + Send + Sync,
-        S: Storage + Send + Sync,
+        S: Storage + Debug + Send + Sync,
     {
         if txs.is_empty() {
             return Ok(Vec::new());
@@ -357,12 +359,12 @@ impl ParallelExecutor {
                             // Ideally we would share these calculations with revm
                             // (using their utility functions).
                             let mut max_fee = U256::from(tx.gas_limit)
-                                .saturating_mul(tx.gas_price)
+                                .saturating_mul(U256::from(tx.gas_price))
                                 .saturating_add(tx.value);
-                            if let Some(blob_fee) = tx.max_fee_per_blob_gas {
+                            {
                                 max_fee = max_fee.saturating_add(
-                                    U256::from(tx.get_total_blob_gas())
-                                        .saturating_mul(U256::from(blob_fee)),
+                                    U256::from(tx.total_blob_gas())
+                                        .saturating_mul(U256::from(tx.max_fee_per_blob_gas)),
                                 );
                             }
                             if balance < max_fee {
@@ -381,20 +383,18 @@ impl ParallelExecutor {
                     }
                     // Assert that evaluated nonce is correct when address is caller.
                     if tx.caller == address {
-                        if let Some(tx_nonce) = tx.nonce {
-                            let executed_nonce = if nonce == 0 {
-                                return Err(ParallelExecutorError::UnreachableError);
-                            } else {
-                                nonce - 1
-                            };
-                            if tx_nonce != executed_nonce {
-                                // TODO: Consider falling back to sequential instead
-                                return Err(ParallelExecutorError::NonceMismatch {
-                                    tx_idx: *tx_idx,
-                                    tx_nonce,
-                                    executed_nonce,
-                                });
-                            }
+                        let executed_nonce = if tx.nonce == 0 {
+                            return Err(ParallelExecutorError::UnreachableError);
+                        } else {
+                            nonce - 1
+                        };
+                        if tx.nonce != executed_nonce {
+                            // TODO: Consider falling back to sequential instead
+                            return Err(ParallelExecutorError::NonceMismatch {
+                                tx_idx: *tx_idx,
+                                tx_nonce: tx.nonce,
+                                executed_nonce,
+                            });
                         }
                     }
                     // SAFETY: The multi-version data structure should not leak an index over block size.
@@ -498,7 +498,7 @@ fn try_validate(
 /// Execute REVM transactions sequentially.
 // Useful for falling back for (small) blocks with many dependencies.
 // TODO: Use this for a long chain of sequential transactions even in parallel mode.
-pub fn execute_revm_sequential<S: Storage, C: Chain>(
+pub fn execute_revm_sequential<S: Storage + Debug, C: Chain>(
     chain: &C,
     storage: &S,
     spec_id: SpecId,
@@ -509,25 +509,19 @@ pub fn execute_revm_sequential<S: Storage, C: Chain>(
     let mut db = CacheDB::new(StorageWrapper(storage));
     let mut evm = build_evm(
         &mut db,
-        chain,
         spec_id,
         block_env,
-        None,
-        true,
         #[cfg(feature = "compiler")]
         worker,
     );
     let mut results = Vec::with_capacity(txs.len());
     let mut cumulative_gas_used: u64 = 0;
     for tx in txs {
-        *evm.tx_mut() = tx;
-
-        // TODO: More concrete type for `EVMError<StorageWrapperError<S>>`
         let result_and_state = evm
-            .transact()
+            .transact(tx)
             .map_err(|err| ExecutionError::Custom(err.to_string()))?;
 
-        evm.db_mut().commit(result_and_state.state.clone());
+        evm.db().commit(result_and_state.state.clone());
 
         let mut execution_result = TxExecutionResult::from_revm(chain, spec_id, result_and_state);
 

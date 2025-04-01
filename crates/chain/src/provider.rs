@@ -1,11 +1,12 @@
 use std::num::NonZeroUsize;
-use alloy_evm::{eth::{EthBlockExecutor}};
+use alloy_evm::eth::EthBlockExecutor;
 
 use reth::{
-    api::{ConfigureEvm},
+    api::{ConfigureEvm, NodeTypesWithEngine},
+    builder::{BuilderContext, FullNodeTypes, components::ExecutorBuilder},
     providers::BlockExecutionResult,
     revm::{
-        context::{result::ExecutionResult},
+        context::{TxEnv, result::ExecutionResult},
         db::{State, states::bundle_state::BundleRetention},
     },
 };
@@ -14,62 +15,57 @@ use reth_evm::{
     Database, Evm, OnStateHook,
     execute::{BlockExecutionError, BlockExecutor, BlockExecutorProvider, Executor},
 };
-use reth_evm_ethereum::{RethReceiptBuilder};
-use reth_primitives::{NodePrimitives, Receipt, Recovered, RecoveredBlock,TransactionSigned};
-use std::sync::Arc;
-use metis_pe::chain::{PevmChain, PevmEthereum};
-use revm::primitives::TxEnv;
 
-pub struct BlockParallelExecutorProvider<F> {
-    strategy_factory: F,
-    chain_spec: Arc<ChainSpec>,
+use reth_evm_ethereum::{EthEvmConfig, RethReceiptBuilder};
+use reth_primitives::{
+    EthPrimitives, NodePrimitives, Receipt, Recovered, RecoveredBlock, TransactionSigned,
+};
+use std::sync::Arc;
+use metis_pe::chain::{Chain, Ethereum};
+use metis_pe::Storage;
+
+pub struct BlockParallelExecutorProvider {
+    strategy_factory: EthEvmConfig,
 }
 
-impl<F> BlockParallelExecutorProvider<F> {
-    pub const fn new(strategy_factory: F, chain_spec: Arc<ChainSpec>) -> Self {
-        Self { strategy_factory, chain_spec }
+impl BlockParallelExecutorProvider {
+    pub const fn new(strategy_factory: EthEvmConfig) -> Self {
+        Self { strategy_factory }
     }
 }
 
-impl<F> Clone for BlockParallelExecutorProvider<F>
-where
-    F: Clone,
-{
+impl Clone for BlockParallelExecutorProvider {
     fn clone(&self) -> Self {
         Self {
             strategy_factory: self.strategy_factory.clone(),
-            chain_spec: self.chain_spec.clone(),
         }
     }
 }
 
-impl<F> BlockExecutorProvider for BlockParallelExecutorProvider<F>
-where
-    F: ConfigureEvm + 'static,
-{
-    type Primitives = F::Primitives;
+impl BlockExecutorProvider for BlockParallelExecutorProvider {
+    type Primitives = <EthEvmConfig as ConfigureEvm>::Primitives;
 
-    type Executor<DB: Database> = ParallelExecutor<F, DB>;
+    type Executor<DB: Database> = ParallelExecutor<DB>;
 
     fn executor<DB>(&self, db: DB) -> Self::Executor<DB>
     where
         DB: Database,
     {
-        ParallelExecutor::new(self.strategy_factory.clone(), db, self.chain_spec.clone())
+        ParallelExecutor::new(self.strategy_factory.clone(), db)
     }
 }
 
-pub struct ParallelExecutor<F, DB> {
+pub struct ParallelExecutor<DB> {
     /// Block execution strategy.
-    pub(crate) strategy_factory: F,
+    pub(crate) strategy_factory: EthEvmConfig,
     /// Database.
     pub(crate) db: State<DB>,
     /// Chain spec
     pub chain_spec: Arc<ChainSpec>,
 }
 
-impl<F, DB: Database> ParallelExecutor<F, DB> {
-    pub fn new(strategy_factory: F, db: DB, chain_spec: Arc<ChainSpec>) -> Self {
+impl<DB: Database> ParallelExecutor<DB> {
+    pub fn new(strategy_factory: EthEvmConfig, db: DB) -> Self {
         let db = State::builder()
             .with_database(db)
             .with_bundle_update()
@@ -83,12 +79,11 @@ impl<F, DB: Database> ParallelExecutor<F, DB> {
     }
 }
 
-impl<F, DB> Executor<DB> for ParallelExecutor<F, DB>
+impl<DB> Executor<DB> for ParallelExecutor<DB>
 where
-    F: ConfigureEvm,
     DB: Database,
 {
-    type Primitives = F::Primitives;
+    type Primitives = <EthEvmConfig as ConfigureEvm>::Primitives;
     type Error = BlockExecutionError;
 
     fn execute_one(
@@ -140,11 +135,9 @@ where
     }
 }
 
-impl<F, DB> ParallelExecutor<F, DB>
+impl<DB> ParallelExecutor<DB>
 where
-    F: ConfigureEvm,
-    DB: Database,
-    <<F as ConfigureEvm>::Primitives as NodePrimitives>::SignedTx: Clone,
+    DB: Database + Storage + Send + Sync,
 {
     fn execute_block(
         &mut self,
@@ -152,20 +145,19 @@ where
     ) -> Result<u64, BlockExecutionError>
     {
         let mut executor = metis_pe::ParallelExecutor::default();
-        let chain_spec = PevmEthereum::mainnet();
-        let header = crate::utils::convert_to_alloy_header(&block.header());
-        let spec_id = chain_spec.get_block_spec(&header).unwrap();
+        let eth_chain = Ethereum::mainnet();
+        let header = crate::utils::convert_to_alloy_header(block.header());
+        let spec_id = eth_chain.get_block_spec(&header.clone()).unwrap();
         let block_env = metis_pe::compat::get_block_env(&header, spec_id);
 
         let tx_envs = block.transactions_with_sender()
-            .map(|(sender, signed_tx)| {
-                let tx_env = crate::utils::from_recovered_tx(signed_tx.clone(), sender.clone());
-                Ok(tx_env)
+            .map(|(_, signed_tx)| {
+                Ok(signed_tx.tx_env(block_env.clone()))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
         let results = executor.execute_revm_parallel(
-            &chain_spec,
+            &self.chain_spec.as_ref(),
             &self.db,
             spec_id,
             block_env,
@@ -182,10 +174,33 @@ where
     }
 }
 
+/// A custom executor builder
+#[derive(Debug, Default, Clone, Copy)]
+#[non_exhaustive]
+pub struct ParallelExecutorBuilder;
+
+impl<Types, Node> ExecutorBuilder<Node> for ParallelExecutorBuilder
+where
+    Types: NodeTypesWithEngine<ChainSpec = ChainSpec, Primitives = EthPrimitives>,
+    Node: FullNodeTypes<Types = Types>,
+{
+    type EVM = EthEvmConfig;
+    type Executor = BlockParallelExecutorProvider;
+
+    async fn build_evm(
+        self,
+        ctx: &BuilderContext<Node>,
+    ) -> eyre::Result<(Self::EVM, Self::Executor)> {
+        let evm_config = EthEvmConfig::new(ctx.chain_spec());
+        let executor = BlockParallelExecutorProvider::new(evm_config.clone());
+
+        Ok((evm_config, executor))
+    }
+}
 
 pub struct ParallelBlockExecutor<'a, Evm> {
     /// Inner Ethereum execution strategy.
-    pub(crate) inner: EthBlockExecutor<'a, Evm, &'a Arc<ChainSpec>, &'a RethReceiptBuilder>,
+    inner: EthBlockExecutor<'a, Evm, &'a Arc<ChainSpec>, &'a RethReceiptBuilder>,
 }
 
 impl<'db, DB, E> BlockExecutor for ParallelBlockExecutor<'_, E>
@@ -221,4 +236,3 @@ where
         self.inner.evm_mut()
     }
 }
-
