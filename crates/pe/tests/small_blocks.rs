@@ -3,24 +3,20 @@
 
 use alloy_primitives::{Address, U256};
 use metis_pe::InMemoryStorage;
-use metis_pe::chain::PevmEthereum;
+use metis_pe::chain::Ethereum;
 use revm::primitives::{TransactTo, TxEnv};
 
 pub mod common;
 
 #[test]
 fn empty_revm_block() {
-    common::test_execute_revm(
-        &PevmEthereum::mainnet(),
-        InMemoryStorage::default(),
-        Vec::new(),
-    );
+    common::test_execute_revm(&Ethereum::mainnet(), InMemoryStorage::default(), Vec::new());
 }
 
 #[test]
 fn one_tx_revm_block() {
     common::test_execute_revm(
-        &PevmEthereum::mainnet(),
+        &Ethereum::mainnet(),
         InMemoryStorage::new(
             [common::mock_account(0)].into_iter().collect(),
             Default::default(),

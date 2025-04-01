@@ -7,7 +7,7 @@ use std::{num::NonZeroUsize, sync::Arc, thread};
 use alloy_primitives::{Address, U160, U256};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use metis_pe::{
-    Bytecodes, ChainState, EvmAccount, InMemoryStorage, ParallelExecutor, chain::PevmEthereum,
+    Bytecodes, ChainState, EvmAccount, InMemoryStorage, ParallelExecutor, chain::Ethereum,
     execute_revm_sequential,
 };
 use revm::primitives::{BlockEnv, SpecId, TransactTo, TxEnv};
@@ -36,7 +36,7 @@ static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 /// Runs a benchmark for executing a set of transactions on a given blockchain state.
 pub fn bench(c: &mut Criterion, name: &str, storage: InMemoryStorage, txs: Vec<TxEnv>) {
     let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
-    let chain = PevmEthereum::mainnet();
+    let chain = Ethereum::mainnet();
     let spec_id = SpecId::LATEST;
     let block_env = BlockEnv::default();
     let mut pe = ParallelExecutor::default();

@@ -45,7 +45,7 @@ pub struct RpcStorage<N: Network> {
     // the storage is re-used, like for comparing sequential & parallel
     // execution on the same block.
     // Using a [Mutex] so we don't propagate mutability requirements back
-    // to our [Storage] trait and meet [Send]/[Sync] requirements for Pevm.
+    // to our [Storage] trait and meet [Send]/[Sync] requirements the executor.
     cache_accounts: Mutex<ChainState>,
     cache_bytecodes: Mutex<Bytecodes>,
     cache_block_hashes: Mutex<BlockHashes>,

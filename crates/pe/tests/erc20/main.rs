@@ -10,7 +10,7 @@ pub mod erc20;
 
 use common::test_execute_revm;
 use erc20::generate_cluster;
-use metis_pe::chain::PevmEthereum;
+use metis_pe::chain::Ethereum;
 use metis_pe::{Bytecodes, ChainState, EvmAccount, InMemoryStorage};
 use revm::primitives::{Address, TxEnv};
 use std::sync::Arc;
@@ -21,7 +21,7 @@ fn erc20_independent() {
     let (mut state, bytecodes, txs) = generate_cluster(N, 1, 1);
     state.insert(Address::ZERO, EvmAccount::default()); // Beneficiary
     test_execute_revm(
-        &PevmEthereum::mainnet(),
+        &Ethereum::mainnet(),
         InMemoryStorage::new(state, Arc::new(bytecodes), Default::default()),
         txs,
     );
@@ -49,7 +49,7 @@ fn erc20_clusters() {
         final_txs.extend(txs);
     }
     common::test_execute_revm(
-        &PevmEthereum::mainnet(),
+        &Ethereum::mainnet(),
         InMemoryStorage::new(final_state, Arc::new(final_bytecodes), Default::default()),
         final_txs,
     )

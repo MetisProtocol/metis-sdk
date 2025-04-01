@@ -1,6 +1,6 @@
 //! Test raw transfers -- only send some ETH from one account to another without extra data.
 
-use metis_pe::{InMemoryStorage, chain::PevmEthereum};
+use metis_pe::{InMemoryStorage, chain::Ethereum};
 use rand::random;
 use revm::primitives::{Address, TransactTo, U256, alloy_primitives::U160, env::TxEnv};
 
@@ -10,7 +10,7 @@ pub mod common;
 fn raw_transfers_independent() {
     let block_size = 100_000; // number of transactions
     common::test_execute_revm(
-        &PevmEthereum::mainnet(),
+        &Ethereum::mainnet(),
         // Mock the beneficiary account (`Address:ZERO`) and the next `block_size` user accounts.
         InMemoryStorage::new(
             (0..=block_size).map(common::mock_account).collect(),
@@ -45,7 +45,7 @@ fn raw_transfers_same_sender_multiple_txs() {
     let mut same_sender_nonce: u64 = 0;
 
     common::test_execute_revm(
-        &PevmEthereum::mainnet(),
+        &Ethereum::mainnet(),
         // Mock the beneficiary account (`Address:ZERO`) and the next `block_size` user accounts.
         InMemoryStorage::new(
             (0..=block_size).map(common::mock_account).collect(),
@@ -78,36 +78,36 @@ fn raw_transfers_same_sender_multiple_txs() {
 
 #[test]
 fn ethereum_empty_alloy_block() {
-    common::test_independent_raw_transfers(&PevmEthereum::mainnet(), 0);
+    common::test_independent_raw_transfers(&Ethereum::mainnet(), 0);
 }
 
 #[test]
 fn ethereum_one_tx_alloy_block() {
-    common::test_independent_raw_transfers(&PevmEthereum::mainnet(), 1);
+    common::test_independent_raw_transfers(&Ethereum::mainnet(), 1);
 }
 
 #[test]
 fn ethereum_independent_raw_transfers() {
-    common::test_independent_raw_transfers(&PevmEthereum::mainnet(), 100_000);
+    common::test_independent_raw_transfers(&Ethereum::mainnet(), 100_000);
 }
 
 #[cfg(feature = "optimism")]
 #[test]
 fn optimism_empty_alloy_block() {
-    use metis_pe::chain::PevmOptimism;
-    common::test_independent_raw_transfers(&PevmOptimism::mainnet(), 0);
+    use metis_pe::chain::Optimism;
+    common::test_independent_raw_transfers(&Optimism::mainnet(), 0);
 }
 
 #[cfg(feature = "optimism")]
 #[test]
 fn optimism_one_tx_alloy_block() {
-    use metis_pe::chain::PevmOptimism;
-    common::test_independent_raw_transfers(&PevmOptimism::mainnet(), 1);
+    use metis_pe::chain::Optimism;
+    common::test_independent_raw_transfers(&Optimism::mainnet(), 1);
 }
 
 #[cfg(feature = "optimism")]
 #[test]
 fn optimism_independent_raw_transfers() {
-    use metis_pe::chain::PevmOptimism;
-    common::test_independent_raw_transfers(&PevmOptimism::mainnet(), 100_000);
+    use metis_pe::chain::Optimism;
+    common::test_independent_raw_transfers(&Optimism::mainnet(), 100_000);
 }

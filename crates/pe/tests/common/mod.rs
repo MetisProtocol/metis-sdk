@@ -12,7 +12,7 @@ use alloy_rpc_types_eth::{Block, BlockTransactions, Header};
 use flate2::bufread::GzDecoder;
 use hashbrown::HashMap;
 use metis_pe::{
-    BlockHashes, BuildSuffixHasher, ChainState, EvmAccount, InMemoryStorage, chain::PevmChain,
+    BlockHashes, BuildSuffixHasher, ChainState, EvmAccount, InMemoryStorage, chain::Chain,
 };
 
 /// runner module
@@ -70,7 +70,7 @@ pub fn for_each_block_from_disk(mut handler: impl FnMut(Block, InMemoryStorage))
 /// Test a chain with [`block_size`] independent raw transactions that transfer to itself
 pub fn test_independent_raw_transfers<C>(chain: &C, block_size: usize)
 where
-    C: PevmChain + Send + Sync + PartialEq,
+    C: Chain + Send + Sync + PartialEq,
 {
     let accounts = (0..block_size).map(mock_account).collect::<ChainState>();
     let block: Block<C::Transaction> = Block {

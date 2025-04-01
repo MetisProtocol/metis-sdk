@@ -18,7 +18,7 @@ use crate::{
     AccountBasic, BuildIdentityHasher, BuildSuffixHasher, EvmAccount, FinishExecFlags, MemoryEntry,
     MemoryLocation, MemoryLocationHash, MemoryValue, ReadOrigin, ReadOrigins, ReadSet, Storage,
     TxIdx, TxVersion, WriteSet,
-    chain::{PevmChain, RewardPolicy},
+    chain::{Chain, RewardPolicy},
     hash_deterministic,
     mv_memory::MvMemory,
     storage::BytecodeConversionError,
@@ -35,7 +35,7 @@ type EvmStateTransitions = HashMap<Address, Option<EvmAccount>, BuildSuffixHashe
 
 /// Execution result of a transaction
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PevmTxExecutionResult {
+pub struct TxExecutionResult {
     /// Receipt of execution
     // TODO: Consider promoting to [ReceiptEnvelope] if there is high demand
     pub receipt: Receipt,
@@ -43,11 +43,11 @@ pub struct PevmTxExecutionResult {
     pub state: EvmStateTransitions,
 }
 
-impl PevmTxExecutionResult {
-    /// Construct a Pevm execution result from a raw Revm result.
+impl TxExecutionResult {
+    /// Construct an execution result from a raw Revm result.
     /// Note that [`cumulative_gas_used`] is preset to the gas used in this transaction.
     /// It should be post-processed with the remaining transactions in the block.
-    pub fn from_revm<C: PevmChain>(
+    pub fn from_revm<C: Chain>(
         chain: &C,
         spec_id: SpecId,
         ResultAndState { result, state }: ResultAndState,
@@ -126,14 +126,14 @@ impl From<ReadError> for VmExecutionError {
 }
 
 pub(crate) struct VmExecutionResult {
-    pub(crate) execution_result: PevmTxExecutionResult,
+    pub(crate) execution_result: TxExecutionResult,
     pub(crate) flags: FinishExecFlags,
 }
 
 // A database interface that intercepts reads while executing a specific
 // transaction with Revm. It provides values from the multi-version data
 // structure & storage, and tracks the read set of the current execution.
-struct VmDb<'a, S: Storage, C: PevmChain> {
+struct VmDb<'a, S: Storage, C: Chain> {
     vm: &'a Vm<'a, S, C>,
     tx_idx: TxIdx,
     tx: &'a TxEnv,
@@ -148,7 +148,7 @@ struct VmDb<'a, S: Storage, C: PevmChain> {
     read_accounts: HashMap<MemoryLocationHash, (AccountBasic, Option<B256>), BuildIdentityHasher>,
 }
 
-impl<'a, S: Storage, C: PevmChain> VmDb<'a, S, C> {
+impl<'a, S: Storage, C: Chain> VmDb<'a, S, C> {
     fn new(
         vm: &'a Vm<'a, S, C>,
         tx_idx: TxIdx,
@@ -248,7 +248,7 @@ impl<'a, S: Storage, C: PevmChain> VmDb<'a, S, C> {
     }
 }
 
-impl<S: Storage, C: PevmChain> Database for VmDb<'_, S, C> {
+impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
     type Error = ReadError;
 
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
@@ -490,7 +490,7 @@ impl<S: Storage, C: PevmChain> Database for VmDb<'_, S, C> {
     }
 }
 
-pub(crate) struct Vm<'a, S: Storage, C: PevmChain> {
+pub(crate) struct Vm<'a, S: Storage, C: Chain> {
     storage: &'a S,
     mv_memory: &'a MvMemory,
     chain: &'a C,
@@ -503,7 +503,7 @@ pub(crate) struct Vm<'a, S: Storage, C: PevmChain> {
     worker: Arc<ExtCompileWorker>,
 }
 
-impl<'a, S: Storage, C: PevmChain> Vm<'a, S, C> {
+impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
     pub(crate) fn new(
         storage: &'a S,
         mv_memory: &'a MvMemory,
@@ -688,7 +688,7 @@ impl<'a, S: Storage, C: PevmChain> Vm<'a, S, C> {
                 }
 
                 Ok(VmExecutionResult {
-                    execution_result: PevmTxExecutionResult::from_revm(
+                    execution_result: TxExecutionResult::from_revm(
                         self.chain,
                         self.spec_id,
                         result_and_state,
@@ -810,7 +810,7 @@ impl<'a, S: Storage, C: PevmChain> Vm<'a, S, C> {
 
 #[cfg(feature = "compiler")]
 #[inline]
-pub(crate) fn build_evm<'a, DB: Database, C: PevmChain>(
+pub(crate) fn build_evm<'a, DB: Database, C: Chain>(
     db: DB,
     chain: &C,
     spec_id: SpecId,
@@ -841,7 +841,7 @@ pub(crate) fn build_evm<'a, DB: Database, C: PevmChain>(
 
 #[cfg(not(feature = "compiler"))]
 #[inline]
-pub(crate) fn build_evm<'a, DB: Database, C: PevmChain>(
+pub(crate) fn build_evm<'a, DB: Database, C: Chain>(
     db: DB,
     chain: &C,
     spec_id: SpecId,
