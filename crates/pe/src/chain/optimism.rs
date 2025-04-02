@@ -1,13 +1,10 @@
 //! Optimism
 
-use std::sync::Arc;
 use alloy_consensus::Transaction;
 use alloy_primitives::{Address, B256, Bytes, ChainId, U256};
 use alloy_rpc_types_eth::{BlockTransactions, Header};
 use hashbrown::HashMap;
-use op_alloy_consensus::{
-    DepositTransaction, OpDepositReceipt, OpReceiptEnvelope, OpTxEnvelope, OpTxType,
-};
+use op_alloy_consensus::{ OpDepositReceipt, OpReceiptEnvelope, OpTxEnvelope, OpTxType };
 use op_alloy_network::eip2718::Encodable2718;
 use op_revm::OpSpecId;
 use revm::context::{BlockEnv, TxEnv};
@@ -15,7 +12,6 @@ use revm::primitives::hardfork::SpecId;
 use crate::{
     BuildIdentityHasher, MemoryLocation, TxExecutionResult, hash_deterministic, mv_memory::MvMemory,
 };
-
 use super::{CalculateReceiptRootError, Chain, RewardPolicy};
 
 /// Implementation of [`Chain`] for Optimism
@@ -231,7 +227,7 @@ impl Chain for Optimism {
             authorization_list: tx.authorization_list().unwrap().to_vec(),
             ..Default::default()
         };
-        tx_env.derive_tx_type()?;
+        tx_env.derive_tx_type().unwrap();
         Ok(tx_env)
     }
 
