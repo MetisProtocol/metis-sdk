@@ -4,7 +4,9 @@ pub use revm::primitives::{
     Address, B256, BLOCK_HASH_HISTORY, Bytes, FixedBytes, I256, KECCAK_EMPTY, Log, LogData,
     MAX_INITCODE_SIZE, TxKind, U256, address, alloy_primitives, b256,
     eip7702::{self, PER_AUTH_BASE_COST, PER_EMPTY_ACCOUNT_COST},
-    fixed_bytes, hex,
+    fixed_bytes,
+    hardfork::SpecId,
+    hex,
     hex::{FromHex, ToHexExt},
     keccak256, uint,
 };

@@ -51,7 +51,7 @@ alloy-trie = "0.7.8"
 revm = { version = "20.0.0", features = ["std", "serde-json"] }
 op-revm = { version = "1.0.0" }
 # OP
-op-alloy-consensus = "0.9.2"
+op-alloy-consensus = "0.9.6"
 op-alloy-network = "0.9.2"
 op-alloy-rpc-types = "0.9.2"
 

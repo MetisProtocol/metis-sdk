@@ -5,9 +5,13 @@ use hashbrown::HashMap;
 use metis_vm::ExtCompileWorker;
 use revm::context::JournalOutput;
 use revm::context_interface::{JournalTr, result::HaltReason};
-use revm::handler::{EthFrame, EvmTr, Frame, FrameResult};
-use revm::handler::{EvmTrError, Handler};
-use revm::interpreter::FrameInput;
+#[cfg(feature = "compiler")]
+use revm::handler::FrameInitOrResult;
+use revm::handler::Handler;
+use revm::handler::instructions::InstructionProvider;
+use revm::handler::{EthFrame, EvmTr, FrameResult, PrecompileProvider};
+use revm::interpreter::InterpreterResult;
+use revm::interpreter::interpreter::EthInterpreter;
 use revm::{
     Database, ExecuteEvm, MainBuilder, MainnetEvm,
     bytecode::Bytecode,
@@ -561,17 +565,13 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
             .map_err(VmExecutionError::from)?;
         // TODO: Share as much [Evm], [Context], [Handler], etc. among threads as possible
         // as creating them is very expensive.
-        let mut evm = build_evm(
-            &mut db,
-            self.spec_id,
-            self.block_env.clone(),
-            #[cfg(feature = "compiler")]
-            self.worker.clone(),
-        );
+        let mut evm = build_evm(&mut db, self.spec_id, self.block_env.clone());
         let result_and_state = {
             evm.set_tx(tx.clone());
-            let mut t =
-                MainnetWithoutRewardBeneficiaryHandler::<_, _, EthFrame<_, _, _>>::default();
+            #[cfg(feature = "compiler")]
+            let mut t = WithoutRewardBeneficiaryHandler::new(self.worker.clone());
+            #[cfg(not(feature = "compiler"))]
+            let mut t = WithoutRewardBeneficiaryHandler::default();
             t.run(&mut evm)
         };
         match result_and_state {
@@ -810,20 +810,6 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
     }
 }
 
-#[cfg(feature = "compiler")]
-#[inline]
-pub(crate) fn build_evm<'a, DB: Database>(
-    db: DB,
-    spec_id: SpecId,
-    block_env: BlockEnv,
-    worker: Arc<ExtCompileWorker>,
-) -> Evm<'a, Arc<metis_vm::ExtCompileWorker>, DB> {
-    let mut evm = MainnetContext::new(db, spec_id).build_mainnet();
-    evm.set_block(block_env);
-    evm
-}
-
-#[cfg(not(feature = "compiler"))]
 #[inline]
 pub(crate) fn build_evm<DB: Database>(
     db: DB,
@@ -835,36 +821,107 @@ pub(crate) fn build_evm<DB: Database>(
     evm
 }
 
-pub struct MainnetWithoutRewardBeneficiaryHandler<CTX, ERROR, FRAME> {
-    pub _phantom: core::marker::PhantomData<(CTX, ERROR, FRAME)>,
+pub struct WithoutRewardBeneficiaryHandler<EVM> {
+    _phantom: core::marker::PhantomData<EVM>,
+    #[cfg(feature = "compiler")]
+    worker: Arc<metis_vm::ExtCompileWorker>,
 }
 
-impl<EVM, ERROR, FRAME> Handler for MainnetWithoutRewardBeneficiaryHandler<EVM, ERROR, FRAME>
+impl<EVM> Handler for WithoutRewardBeneficiaryHandler<EVM>
 where
-    EVM: EvmTr<Context: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput>>>,
-    ERROR: EvmTrError<EVM>,
-    FRAME: Frame<Evm = EVM, Error = ERROR, FrameResult = FrameResult, FrameInit = FrameInput>,
+    EVM: EvmTr<
+            Context: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput>>,
+            Precompiles: PrecompileProvider<EVM::Context, Output = InterpreterResult>,
+            Instructions: InstructionProvider<
+                Context = EVM::Context,
+                InterpreterTypes = EthInterpreter,
+            >,
+        >,
 {
     type Evm = EVM;
-    type Error = ERROR;
-    type Frame = FRAME;
+    type Error = EVMError<<<EVM::Context as ContextTr>::Db as Database>::Error, InvalidTransaction>;
+    type Frame = EthFrame<
+        EVM,
+        EVMError<<<EVM::Context as ContextTr>::Db as Database>::Error, InvalidTransaction>,
+        <EVM::Instructions as InstructionProvider>::InterpreterTypes,
+    >;
     type HaltReason = HaltReason;
 
-    /// Transfers transaction fees to the block beneficiary's account.
-    #[inline]
     fn reward_beneficiary(
         &self,
         _evm: &mut Self::Evm,
-        _exec_result: &mut <Self::Frame as Frame>::FrameResult,
+        _exec_result: &mut FrameResult,
     ) -> Result<(), Self::Error> {
+        // Skip beneficiary reward
         Ok(())
+    }
+
+    #[cfg(feature = "compiler")]
+    fn frame_call(
+        &mut self,
+        frame: &mut Self::Frame,
+        evm: &mut Self::Evm,
+    ) -> Result<FrameInitOrResult<Self::Frame>, Self::Error> {
+        let interpreter = &mut frame.interpreter;
+        let code_hash = interpreter.bytecode.hash();
+        let next_action = match code_hash {
+            Some(code_hash) => {
+                match self.worker.get_function(&code_hash) {
+                    Ok(metis_vm::FetchedFnResult::NotFound) => {
+                        use revm::context::Cfg;
+                        // Compile the code
+                        let spec_id = evm.ctx().cfg().spec().into();
+                        let bytecode = interpreter.bytecode.bytes();
+                        let _res = self.worker.spawn(spec_id, code_hash, bytecode);
+                        evm.run_interpreter(interpreter)
+                    }
+                    Ok(metis_vm::FetchedFnResult::Found(_f)) => {
+                        // TODO: sync revmc and revm structures for the compiler
+                        // https://github.com/paradigmxyz/revmc/issues/75
+                        // f.call_with_interpreter_and_memory(interpreter, memory, context)
+                        evm.run_interpreter(interpreter)
+                    }
+                    Err(_) => {
+                        // Fallback to the interpreter
+                        evm.run_interpreter(interpreter)
+                    }
+                }
+            }
+            None => {
+                // Fallback to the interpreter
+                evm.run_interpreter(interpreter)
+            }
+        };
+        frame.process_next_action(evm, next_action)
     }
 }
 
-impl<CTX, ERROR, FRAME> Default for MainnetWithoutRewardBeneficiaryHandler<CTX, ERROR, FRAME> {
+#[cfg(not(feature = "compiler"))]
+impl<EVM> Default for WithoutRewardBeneficiaryHandler<EVM> {
     fn default() -> Self {
         Self {
             _phantom: core::marker::PhantomData,
+        }
+    }
+}
+
+#[cfg(feature = "compiler")]
+impl<EVM> Default for WithoutRewardBeneficiaryHandler<EVM> {
+    fn default() -> Self {
+        Self {
+            _phantom: core::marker::PhantomData,
+            worker: Arc::new(metis_vm::ExtCompileWorker::disable()),
+        }
+    }
+}
+
+#[cfg(feature = "compiler")]
+impl<EVM> WithoutRewardBeneficiaryHandler<EVM> {
+    #[inline]
+    pub fn new(worker: Arc<metis_vm::ExtCompileWorker>) -> Self {
+        Self {
+            _phantom: core::marker::PhantomData,
+            worker,
         }
     }
 }

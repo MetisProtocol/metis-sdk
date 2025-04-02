@@ -44,7 +44,7 @@ async fn compile_test(bytecode: Bytes) {
 
     let code_hash = keccak256(&bytecode);
     let spec_id = SpecId::CANCUN;
-    let compiler = ExtCompileWorker::new_aot().unwrap();
+    let compiler = ExtCompileWorker::aot().unwrap();
     println!("aS: {:?}", compiler.get_function(&code_hash));
     let r = compiler.block(spec_id, code_hash, bytecode).await.unwrap();
     assert!(matches!(r, FetchedFnResult::Found(_)))
