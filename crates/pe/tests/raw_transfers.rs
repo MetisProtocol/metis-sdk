@@ -2,7 +2,8 @@
 
 use metis_pe::{InMemoryStorage, chain::Ethereum};
 use rand::random;
-use revm::primitives::{Address, TransactTo, U256, alloy_primitives::U160, env::TxEnv};
+use revm::context::{TransactTo, TxEnv};
+use revm::primitives::{Address, U256, alloy_primitives::U160};
 
 pub mod common;
 
@@ -24,10 +25,10 @@ fn raw_transfers_independent() {
                 let address = Address::from(U160::from(i));
                 TxEnv {
                     caller: address,
-                    transact_to: TransactTo::Call(address),
+                    kind: TransactTo::Call(address),
                     value: U256::from(1),
                     gas_limit: common::RAW_TRANSFER_GAS_LIMIT,
-                    gas_price: U256::from(1),
+                    gas_price: 1_u128,
                     ..TxEnv::default()
                 }
             })
@@ -64,11 +65,11 @@ fn raw_transfers_same_sender_multiple_txs() {
                 };
                 TxEnv {
                     caller: address,
-                    transact_to: TransactTo::Call(address),
+                    kind: TransactTo::Call(address),
                     value: U256::from(1),
                     gas_limit: common::RAW_TRANSFER_GAS_LIMIT,
-                    gas_price: U256::from(1),
-                    nonce: Some(nonce),
+                    gas_price: 1_u128,
+                    nonce: nonce,
                     ..TxEnv::default()
                 }
             })

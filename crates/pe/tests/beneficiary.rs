@@ -4,7 +4,8 @@
 use metis_pe::InMemoryStorage;
 use metis_pe::chain::Ethereum;
 use rand::random;
-use revm::primitives::{Address, TransactTo, U256, alloy_primitives::U160, env::TxEnv};
+use revm::context::{TransactTo, TxEnv};
+use revm::primitives::{Address, U256, alloy_primitives::U160};
 
 pub mod common;
 
@@ -27,9 +28,9 @@ fn test_beneficiary(get_address: fn(usize) -> Address) {
                 let address = get_address(i);
                 TxEnv {
                     caller: address,
-                    transact_to: TransactTo::Call(address),
+                    kind: TransactTo::Call(address),
                     value: U256::from(1),
-                    gas_price: U256::from(1),
+                    gas_price: 1_u128,
                     ..TxEnv::default()
                 }
             })

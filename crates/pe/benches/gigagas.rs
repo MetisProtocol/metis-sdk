@@ -10,7 +10,8 @@ use metis_pe::{
     Bytecodes, ChainState, EvmAccount, InMemoryStorage, ParallelExecutor, chain::Ethereum,
     execute_revm_sequential,
 };
-use revm::primitives::{BlockEnv, SpecId, TransactTo, TxEnv};
+use revm::context::{BlockEnv, TransactTo, TxEnv};
+use revm::primitives::hardfork::SpecId;
 
 // Better project structure
 
@@ -120,10 +121,10 @@ pub fn bench_raw_transfers(c: &mut Criterion) {
                 let address = Address::from(U160::from(START_ADDRESS + i));
                 TxEnv {
                     caller: address,
-                    transact_to: TransactTo::Call(address),
+                    kind: TransactTo::Call(address),
                     value: U256::from(1),
                     gas_limit: common::RAW_TRANSFER_GAS_LIMIT,
-                    gas_price: U256::from(1),
+                    gas_price: 1_u128,
                     ..TxEnv::default()
                 }
             })

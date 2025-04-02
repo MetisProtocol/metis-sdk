@@ -4,7 +4,9 @@ use metis_pe::{
     EvmAccount, ParallelExecutor, Storage,
     chain::{CalculateReceiptRootError, Chain},
 };
-use revm::primitives::{Address, BlockEnv, SpecId, TxEnv, U256, alloy_primitives::U160};
+use revm::context::{BlockEnv, TxEnv};
+use revm::primitives::hardfork::SpecId;
+use revm::primitives::{Address, U256, alloy_primitives::U160};
 use std::{num::NonZeroUsize, thread};
 
 /// Mock an account from an integer index that is used as the address.
@@ -26,7 +28,7 @@ pub fn mock_account(idx: usize) -> (Address, EvmAccount) {
 pub fn test_execute_revm<C, S>(chain: &C, storage: S, txs: Vec<TxEnv>)
 where
     C: Chain + PartialEq + Send + Sync,
-    S: Storage + Send + Sync,
+    S: Storage + Send + Sync + std::fmt::Debug,
 {
     let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
     let mut pe = ParallelExecutor::default();
@@ -60,7 +62,7 @@ pub fn test_execute_alloy<C, S>(
     must_match_block_header: bool,
 ) where
     C: Chain + PartialEq + Send + Sync,
-    S: Storage + Send + Sync,
+    S: Storage + Send + Sync + std::fmt::Debug,
 {
     let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
     let mut pe = ParallelExecutor::default();
