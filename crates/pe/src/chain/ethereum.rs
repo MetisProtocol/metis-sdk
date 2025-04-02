@@ -6,10 +6,10 @@ use alloy_provider::network::eip2718::Encodable2718;
 use alloy_rpc_types_eth::{BlockTransactions, Header};
 use hashbrown::HashMap;
 use revm::{
-    context::{BlockEnv, TxEnv},
+    context::{BlockEnv},
     primitives::hardfork::SpecId,
 };
-
+use revm::context::TxEnv;
 use super::{CalculateReceiptRootError, Chain, RewardPolicy};
 use crate::{
     BuildIdentityHasher, MemoryLocation, TxExecutionResult, TxIdx, hash_deterministic,

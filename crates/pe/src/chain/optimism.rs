@@ -1,5 +1,6 @@
 //! Optimism
 
+use std::sync::Arc;
 use alloy_consensus::Transaction;
 use alloy_primitives::{Address, B256, Bytes, ChainId, U256};
 use alloy_rpc_types_eth::{BlockTransactions, Header};
@@ -8,9 +9,9 @@ use op_alloy_consensus::{
     DepositTransaction, OpDepositReceipt, OpReceiptEnvelope, OpTxEnvelope, OpTxType,
 };
 use op_alloy_network::eip2718::Encodable2718;
-use revm::primitives::hardfork::SpecId;
 use op_revm::OpSpecId;
 use revm::context::{BlockEnv, TxEnv};
+use revm::primitives::hardfork::SpecId;
 use crate::{
     BuildIdentityHasher, MemoryLocation, TxExecutionResult, hash_deterministic, mv_memory::MvMemory,
 };
@@ -59,7 +60,7 @@ fn get_optimism_gas_price(tx: &OpTxEnvelope) -> Result<U256, OptimismTransaction
     }
 }
 
-// /// Extract [`OptimismFields`] from [`OpTxEnvelope`]
+/// Extract [`OptimismFields`] from [`OpTxEnvelope`]
 // fn get_optimism_fields(
 //     tx: &OpTxEnvelope,
 // ) -> Result<OptimismFields, OptimismTransactionParsingError> {
@@ -150,18 +151,6 @@ impl Chain for Optimism {
             ],
         )
     }
-
-    // fn get_handler<'a, EXT, DB: revm::Database>(
-    //     &self,
-    //     spec_id: SpecId,
-    //     _with_reward_beneficiary: bool,
-    // ) -> Handler<'a, revm::Context<EXT, DB>, EXT, DB> {
-    //     let mut hander = Handler::optimism_with_spec(spec_id);
-    //     if !_with_reward_beneficiary {
-    //         hander.post_execution.reward_beneficiary = Arc::new(|_, __| Ok(()));
-    //     }
-    //     hander
-    // }
 
     fn get_reward_policy(&self) -> RewardPolicy {
         RewardPolicy::Optimism {

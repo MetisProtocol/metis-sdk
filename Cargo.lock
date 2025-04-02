@@ -6211,7 +6211,7 @@ dependencies = [
  "reth-evm-ethereum",
  "reth-node-ethereum",
  "reth-primitives",
- "revm 19.7.0",
+ "revm",
  "rustc-hash 2.1.1",
  "thiserror 2.0.12",
 ]
@@ -6240,6 +6240,7 @@ dependencies = [
  "op-alloy-consensus 0.9.6",
  "op-alloy-network",
  "op-alloy-rpc-types",
+ "op-revm",
  "rand 0.9.0",
  "rayon",
  "reqwest 0.12.15",
