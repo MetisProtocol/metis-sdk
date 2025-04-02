@@ -14,7 +14,8 @@ pub mod uniswap;
 use crate::uniswap::generate_cluster;
 use metis_pe::chain::Ethereum;
 use metis_pe::{Bytecodes, ChainState, EvmAccount, InMemoryStorage};
-use revm::primitives::{Address, TxEnv};
+use revm::context::TxEnv;
+use revm::primitives::Address;
 use std::sync::Arc;
 
 #[test]
