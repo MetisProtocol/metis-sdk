@@ -215,7 +215,7 @@ macro_rules! index_mutex {
 }
 
 pub mod chain;
-pub mod compat;
+mod compat;
 mod executor;
 mod mv_memory;
 pub use executor::{

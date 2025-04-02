@@ -118,7 +118,7 @@ impl ERC20Token {
                 &B256::from(from_address(recipient))[..],
                 &B256::from(amount)[..],
             ]
-            .concat(),
+                .concat(),
         )
     }
 }

@@ -21,17 +21,17 @@ async fn mainnet_blocks_from_rpc() {
     for block_number in [
         46147, // FRONTIER
         1150000, // HOMESTEAD
-               // TODO: Enable these when CI is less flaky.
-               // 2463002,  // TANGERINE
-               // 2675000,  // SPURIOUS_DRAGON
-               // 4370003,  // BYZANTIUM
-               // 7280003,  // PETERSBURG
-               // 9069001,  // ISTANBUL
-               // 12244002, // BERLIN
-               // 12965034, // LONDON
-               // 15537395, // MERGE
-               // 17035010, // SHANGHAI
-               // 19426587, // CANCUN
+        // TODO: Enable these when CI is less flaky.
+        // 2463002,  // TANGERINE
+        // 2675000,  // SPURIOUS_DRAGON
+        // 4370003,  // BYZANTIUM
+        // 7280003,  // PETERSBURG
+        // 9069001,  // ISTANBUL
+        // 12244002, // BERLIN
+        // 12965034, // LONDON
+        // 15537395, // MERGE
+        // 17035010, // SHANGHAI
+        // 19426587, // CANCUN
     ] {
         let provider = ProviderBuilder::new().on_http(rpc_url.clone());
         let block = provider
@@ -73,10 +73,10 @@ async fn optimism_mainnet_blocks_from_rpc() {
     // First block under 50 transactions of each EVM-spec-changing fork
     for block_number in [
         114874075, // CANYON (https://specs.optimism.io/protocol/canyon/overview.html)
-                  // TODO: doesn't pass `Err(ExecutionError("Database(InvalidNonce(0))"))`
-                  // 117874236, // ECOTONE (https://specs.optimism.io/protocol/ecotone/overview.html)
-                  // 122874325, // FJORD (https://specs.optimism.io/protocol/fjord/overview.html)
-                  // 125874340, // GRANITE (https://specs.optimism.io/protocol/granite/overview.html)
+        // TODO: doesn't pass `Err(ExecutionError("Database(InvalidNonce(0))"))`
+        // 117874236, // ECOTONE (https://specs.optimism.io/protocol/ecotone/overview.html)
+        // 122874325, // FJORD (https://specs.optimism.io/protocol/fjord/overview.html)
+        // 125874340, // GRANITE (https://specs.optimism.io/protocol/granite/overview.html)
     ] {
         let provider = ProviderBuilder::new()
             .network::<op_alloy_network::Optimism>()

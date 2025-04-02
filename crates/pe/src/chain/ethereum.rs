@@ -9,6 +9,7 @@ use revm::{
     context::{BlockEnv, TxEnv},
     primitives::hardfork::SpecId,
 };
+
 use super::{CalculateReceiptRootError, Chain, RewardPolicy};
 use crate::{
     BuildIdentityHasher, MemoryLocation, TxExecutionResult, TxIdx, hash_deterministic,
@@ -121,8 +122,6 @@ impl Chain for Ethereum {
             blob_hashes: tx.blob_versioned_hashes().unwrap_or_default().to_vec(),
             max_fee_per_blob_gas: tx.max_fee_per_blob_gas().unwrap_or_default(),
             authorization_list: tx.authorization_list().unwrap_or_default().to_vec(),
-            // #[cfg(feature = "optimism")]
-            // optimism: revm::primitives::OptimismFields::default(),
             tx_type: tx.ty(),
         })
     }

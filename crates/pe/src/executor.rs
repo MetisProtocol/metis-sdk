@@ -470,9 +470,9 @@ impl ParallelExecutor {
                     None
                 }
                 Ok(VmExecutionResult {
-                    execution_result,
-                    flags,
-                }) => {
+                       execution_result,
+                       flags,
+                   }) => {
                     *index_mutex!(self.execution_results, tx_version.tx_idx) =
                         Some(execution_result);
                     scheduler.finish_execution(tx_version, flags)
