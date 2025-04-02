@@ -141,24 +141,24 @@ pub fn generate_cluster(
                     &fixed_bytes!("c92b0891")[..],
                     &B256::from(U256::from(2000))[..],
                 ]
-                .concat(),
+                    .concat(),
                 1 => [
                     &fixed_bytes!("6b055260")[..],
                     &B256::from(U256::from(2000))[..],
                 ]
-                .concat(),
+                    .concat(),
                 2 => [
                     &fixed_bytes!("8dc33f82")[..],
                     &B256::from(U256::from(1000))[..],
                     &B256::from(U256::from(2000))[..],
                 ]
-                .concat(),
+                    .concat(),
                 3 => [
                     &fixed_bytes!("b2db18a2")[..],
                     &B256::from(U256::from(1000))[..],
                     &B256::from(U256::from(2000))[..],
                 ]
-                .concat(),
+                    .concat(),
                 _ => Default::default(),
             };
 

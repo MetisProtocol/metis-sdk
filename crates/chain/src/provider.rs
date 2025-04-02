@@ -1,3 +1,4 @@
+use std::num::NonZeroUsize;
 use alloy_evm::eth::EthBlockExecutor;
 use reth::{
     api::{ConfigureEvm, NodeTypesWithEngine},
@@ -8,7 +9,7 @@ use reth::{
         db::{State, states::bundle_state::BundleRetention},
     },
 };
-use reth_chainspec::ChainSpec;
+use reth_chainspec::{ChainSpec, EthChainSpec};
 use reth_evm::{
     Database, Evm, OnStateHook,
     execute::{BlockExecutionError, BlockExecutor, BlockExecutorProvider, Executor},
@@ -18,6 +19,8 @@ use reth_primitives::{
     EthPrimitives, NodePrimitives, Receipt, Recovered, RecoveredBlock, TransactionSigned,
 };
 use std::sync::Arc;
+use metis_pe::chain::{Chain, Ethereum};
+use metis_pe::Storage;
 
 pub struct BlockParallelExecutorProvider {
     strategy_factory: EthEvmConfig,
@@ -73,7 +76,7 @@ impl<DB: Database> ParallelExecutor<DB> {
 
 impl<DB> Executor<DB> for ParallelExecutor<DB>
 where
-    DB: Database,
+    DB: Database + Storage + Send + Sync,
 {
     type Primitives = <EthEvmConfig as ConfigureEvm>::Primitives;
     type Error = BlockExecutionError;
@@ -83,16 +86,10 @@ where
         block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
     ) -> Result<BlockExecutionResult<<Self::Primitives as NodePrimitives>::Receipt>, Self::Error>
     {
-        let mut strategy = self
-            .strategy_factory
-            .executor_for_block(&mut self.db, block);
-
+        let db = &mut self.db;
+        let mut strategy = self.strategy_factory.executor_for_block(db, block);
         strategy.apply_pre_execution_changes()?;
-        // TODO(fk): change this code to the parallel execution based on the `metis-pe` crate.
-        for tx in block.transactions_recovered() {
-            let _tx_env = self.strategy_factory.tx_env(tx);
-            strategy.execute_transaction(tx)?;
-        }
+        self.execute_block(block)?;
         let result = strategy.apply_post_execution_changes()?;
 
         self.db.merge_transitions(BundleRetention::Reverts);
@@ -108,16 +105,14 @@ where
     where
         H: OnStateHook + 'static,
     {
+        let db = &mut self.db;
         let mut strategy = self
             .strategy_factory
-            .executor_for_block(&mut self.db, block)
+            .executor_for_block(db, block)
             .with_state_hook(Some(Box::new(state_hook)));
 
         strategy.apply_pre_execution_changes()?;
-        // TODO(fk): change this code to the parallel execution based on the `metis-pe` crate.
-        for tx in block.transactions_recovered() {
-            strategy.execute_transaction(tx)?;
-        }
+        self.execute_block(block)?;
         let result = strategy.apply_post_execution_changes()?;
 
         self.db.merge_transitions(BundleRetention::Reverts);
@@ -131,6 +126,44 @@ where
 
     fn size_hint(&self) -> usize {
         self.db.bundle_state.size_hint()
+    }
+}
+
+impl<DB> ParallelExecutor<DB>
+where
+    DB: Database + Storage + Send + Sync,
+{
+    fn execute_block(
+        &mut self,
+        block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
+    ) -> Result<u64, BlockExecutionError>
+    {
+        let mut executor = metis_pe::ParallelExecutor::default();
+        let eth_chain = Ethereum::mainnet();
+        let chain_spec = self.strategy_factory.chain_spec();
+        let spec_id = eth_chain.get_block_spec(block.header()).unwrap();
+        let block_env = metis_pe::compat::get_block_env(&block.header(), spec_id);
+        let tx_envs = block.transactions_with_sender()
+            .map(|(_, signed_tx)| {
+                signed_tx.tx_env(block_env.clone())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let results = executor.execute_revm_parallel(
+            &chain_spec.as_ref(),
+            &self.db,
+            spec_id,
+            block_env,
+            tx_envs,
+            NonZeroUsize::new(num_cpus::get()).unwrap_or(NonZeroUsize::new(1).unwrap()),
+        );
+
+        let mut cumulative_gas_used = 0;
+        for result in results.unwrap() {
+            cumulative_gas_used += result.receipt.cumulative_gas_used
+        }
+
+        Ok(cumulative_gas_used)
     }
 }
 
@@ -196,3 +229,4 @@ where
         self.inner.evm_mut()
     }
 }
+

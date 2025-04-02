@@ -275,7 +275,7 @@ impl UniswapV3Pool {
                 B256::left_padding_from(self.token_1.as_slice()).as_slice(),
                 B256::from(U256::from(POOL_FEE)).as_slice(),
             ])
-            .as_slice(),
+                .as_slice(),
             pool_init_code_hash.as_slice(),
         ]);
         Address::from_slice(&hash[12..32])

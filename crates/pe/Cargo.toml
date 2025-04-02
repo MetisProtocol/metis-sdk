@@ -45,6 +45,7 @@ serde.workspace = true
 smallvec.workspace = true
 thiserror.workspace = true
 revm.workspace = true
+op-revm.workspace = true
 
 # OP dependencies
 op-alloy-consensus = { workspace = true, optional = true }
