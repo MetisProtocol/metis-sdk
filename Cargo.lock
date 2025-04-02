@@ -6238,7 +6238,7 @@ dependencies = [
  "hashbrown 0.15.2",
  "metis-primitives",
  "metis-vm",
- "op-alloy-consensus 0.9.6",
+ "op-alloy-consensus 0.11.3",
  "op-alloy-network",
  "op-alloy-rpc-types",
  "op-revm",
