@@ -12,10 +12,12 @@ use alloy_transport::TransportError;
 use alloy_transport_http::Http;
 use hashbrown::HashMap;
 use op_alloy_network::primitives::HeaderResponse;
+
 use reqwest::Client;
 use revm::{
+    bytecode::Bytecode,
     precompile::{PrecompileSpecId, Precompiles},
-    primitives::{Bytecode, SpecId},
+    primitives::{hardfork::SpecId}
 };
 use tokio::{
     runtime::{Handle, Runtime},
@@ -23,8 +25,7 @@ use tokio::{
 };
 
 use crate::{AccountBasic, EvmAccount, Storage};
-
-use super::{BlockHashes, Bytecodes, ChainState, EvmCode};
+use super::{BlockHashes, Bytecodes, ChainState};
 
 type RpcProvider<N> = RootProvider<Http<Client>, N>;
 
@@ -190,7 +191,7 @@ impl<N: Network> Storage for RpcStorage<N> {
             .and_then(|account| account.code_hash))
     }
 
-    fn code_by_hash(&self, code_hash: &B256) -> Result<Option<EvmCode>, Self::Error> {
+    fn code_by_hash(&self, code_hash: &B256) -> Result<Option<Bytecode>, Self::Error> {
         Ok(self.cache_bytecodes.lock().unwrap().get(code_hash).cloned())
     }
 
