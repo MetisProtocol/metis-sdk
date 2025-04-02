@@ -4,7 +4,7 @@
 use alloy_primitives::{Address, U256};
 use metis_pe::InMemoryStorage;
 use metis_pe::chain::Ethereum;
-use revm::primitives::{TransactTo, TxEnv};
+use revm::context::{TransactTo, TxEnv};
 
 pub mod common;
 
@@ -24,9 +24,9 @@ fn one_tx_revm_block() {
         ),
         vec![TxEnv {
             caller: Address::ZERO,
-            transact_to: TransactTo::Call(Address::ZERO),
+            kind: TransactTo::Call(Address::ZERO),
             value: U256::from(1),
-            gas_price: U256::from(1),
+            gas_price: 1_u128,
             ..TxEnv::default()
         }],
     );

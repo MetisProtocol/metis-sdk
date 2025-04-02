@@ -3,7 +3,8 @@
 use metis_pe::chain::Ethereum;
 use metis_pe::{Bytecodes, ChainState, EvmAccount, InMemoryStorage};
 use rand::random;
-use revm::primitives::{Address, TransactTo, U256, env::TxEnv};
+use revm::context::{TransactTo, TxEnv};
+use revm::primitives::{Address, U256};
 use std::sync::Arc;
 
 pub mod common;
@@ -32,10 +33,10 @@ fn mixed_block() {
                     final_state.insert(address, account);
                     final_txs.push(TxEnv {
                         caller: address,
-                        transact_to: TransactTo::Call(address), // TODO: Randomize for tighter test
+                        kind: TransactTo::Call(address), // TODO: Randomize for tighter test
                         value: U256::from(1),
                         gas_limit: common::RAW_TRANSFER_GAS_LIMIT,
-                        gas_price: U256::from(1),
+                        gas_price: 1_u128,
                         ..TxEnv::default()
                     });
                 }
