@@ -19,8 +19,10 @@ use reth_primitives::{
     EthPrimitives, NodePrimitives, Receipt, Recovered, RecoveredBlock, TransactionSigned,
 };
 use std::sync::Arc;
+use reth::builder::rpc::EngineValidatorBuilder;
 use metis_pe::chain::{Chain, Ethereum};
 use metis_pe::Storage;
+use crate::state::StateStorageAdapter;
 
 pub struct BlockParallelExecutorProvider {
     strategy_factory: EthEvmConfig,
@@ -57,19 +59,20 @@ pub struct ParallelExecutor<DB> {
     /// Block execution strategy.
     pub(crate) strategy_factory: EthEvmConfig,
     /// Database.
-    pub(crate) db: State<DB>,
+    pub(crate) db: StateStorageAdapter<DB>,
 }
 
 impl<DB: Database> ParallelExecutor<DB> {
-    pub fn new(strategy_factory: EthEvmConfig, db: DB) -> Self {
+    pub fn new(strategy_factory: EthEvmConfig, db: StateStorageAdapter<DB>) -> Self {
         let db = State::builder()
             .with_database(db)
             .with_bundle_update()
             .without_state_clear()
             .build();
+        let adapter = StateStorageAdapter::new(db);
         Self {
             strategy_factory,
-            db,
+            db: adapter,
         }
     }
 }
@@ -121,11 +124,11 @@ where
     }
 
     fn into_state(self) -> State<DB> {
-        self.db
+        self.db.state.into_inner().unwrap()
     }
 
     fn size_hint(&self) -> usize {
-        self.db.bundle_state.size_hint()
+        self.db.state.lock().unwrap().bundle_state.size_hint()
     }
 }
 
