@@ -9,7 +9,7 @@ use reth::{
         db::{State, states::bundle_state::BundleRetention},
     },
 };
-use reth_chainspec::ChainSpec;
+use reth_chainspec::{ChainSpec, EthChainSpec};
 use reth_evm::{
     Database, Evm, OnStateHook,
     execute::{BlockExecutionError, BlockExecutor, BlockExecutorProvider, Executor},
@@ -19,7 +19,6 @@ use reth_primitives::{
     EthPrimitives, NodePrimitives, Receipt, Recovered, RecoveredBlock, TransactionSigned,
 };
 use std::sync::Arc;
-use reth::transaction_pool::TransactionPool;
 use metis_pe::chain::{Chain, Ethereum};
 use metis_pe::Storage;
 
@@ -140,19 +139,18 @@ where
     ) -> Result<u64, BlockExecutionError>
     {
         let mut executor = metis_pe::ParallelExecutor::default();
-        let chain_spec = Ethereum::mainnet();
-        let header = crate::utils::convert_to_alloy_header(&block.header());
-        let spec_id = chain_spec.get_block_spec(&header).unwrap();
-        let block_env = metis_pe::compat::get_block_env(&header, spec_id);
-
+        let eth_chain = Ethereum::mainnet();
+        let chain_spec = self.strategy_factory.chain_spec();
+        let spec_id = eth_chain.get_block_spec(block.header()).unwrap();
+        let block_env = metis_pe::compat::get_block_env(&block.header(), spec_id);
         let tx_envs = block.transactions_with_sender()
             .map(|(_, signed_tx)| {
-                Ok(self.strategy_factory.tx_env(signed_tx))
+                signed_tx.tx_env(block_env.clone())
             })
             .collect::<Result<Vec<_>, _>>()?;
 
         let results = executor.execute_revm_parallel(
-            &chain_spec,
+            &chain_spec.as_ref(),
             &self.db,
             spec_id,
             block_env,

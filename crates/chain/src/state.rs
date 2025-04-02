@@ -11,8 +11,8 @@ use reth_evm::{
 use std::sync::Arc;
 use alloy_primitives::{Address, B256, U256};
 use reth::revm::Database;
-use revm::bytecode::Bytecode;
 use metis_pe::{AccountBasic, Storage};
+use revm::bytecode::Bytecode;
 
 #[derive(Clone)]
 pub struct StateStorageAdapter<DB> {

@@ -1,7 +1,7 @@
 //! Chain specific utils
 
-use std::error::Error as StdError;
-use std::fmt::Debug;
+use std::error::{Error as StdError, Error};
+use std::fmt::{Debug, Display, Formatter};
 
 use alloy_consensus::{Signed, TxLegacy};
 use alloy_primitives::{Address, B256};
