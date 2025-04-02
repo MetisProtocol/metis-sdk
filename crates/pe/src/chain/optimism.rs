@@ -225,9 +225,9 @@ impl Chain for Optimism {
             data: tx.input().clone(),
             nonce: tx.nonce(),
             chain_id: tx.chain_id(),
-            access_list: tx.access_list().to_vec(),
+            access_list: tx.access_list().unwrap().clone(),
             blob_hashes: tx.blob_versioned_hashes().unwrap_or_default().to_vec(),
-            max_fee_per_blob_gas: tx.max_fee_per_blob_gas().map(U256::from),
+            max_fee_per_blob_gas: tx.max_fee_per_blob_gas().unwrap(),
             authorization_list: tx.authorization_list().unwrap().to_vec(),
             ..Default::default()
         };
