@@ -6,13 +6,28 @@ use crate::{
 use libloading::{Library, Symbol};
 use lru::LruCache;
 use metis_primitives::{B256, Bytes, SpecId};
-use revm::{Database, handler::register::EvmHandler};
+use revm::{
+    Database,
+    context::{
+        Cfg, JournalOutput,
+        result::{EVMError, HaltReason, InvalidTransaction},
+    },
+    context_interface::{ContextTr, JournalTr},
+    handler::{
+        EthFrame, EvmTr, FrameInitOrResult, Handler, PrecompileProvider,
+        instructions::InstructionProvider,
+    },
+    interpreter::{InterpreterResult, interpreter::EthInterpreter},
+};
 use revmc::EvmCompilerFn;
 use revmc::{EvmCompiler, EvmLlvmBackend, OptimizationLevel, llvm::Context};
 use rustc_hash::FxBuildHasher;
 use rustc_hash::FxHashMap as HashMap;
-use std::sync::{Arc, TryLockError};
 use std::{fmt::Debug, fs, path::PathBuf};
+use std::{
+    mem::transmute,
+    sync::{Arc, TryLockError},
+};
 
 pub use revmc::llvm::Context as InnerContext;
 
@@ -81,7 +96,11 @@ impl<'ctx> Compiler<'ctx> {
         let name = module_name();
         unsafe {
             self.compiler
-                .jit(&name, &bytecode, spec_id)
+                .jit(
+                    &name,
+                    &bytecode,
+                    transmute::<metis_primitives::SpecId, revmc::primitives::SpecId>(spec_id),
+                )
                 .map_err(|err| Error::Compile(err.to_string()))
         }
     }
@@ -106,7 +125,9 @@ impl<'ctx> Compiler<'ctx> {
 
         // Compile.
         let _f_id = compiler
-            .translate(&name, &bytecode, spec_id)
+            .translate(&name, &bytecode, unsafe {
+                transmute::<metis_primitives::SpecId, revmc::primitives::SpecId>(spec_id)
+            })
             .map_err(|err| Error::Compile(err.to_string()))?;
 
         let out_dir = store_path();
@@ -184,7 +205,7 @@ impl ExtCompileWorker {
     }
 
     #[inline]
-    pub fn new_aot() -> Result<Self, Error> {
+    pub fn aot() -> Result<Self, Error> {
         Self::new_with_opts(ExtCompileOptions {
             is_aot: true,
             ..Default::default()
@@ -192,7 +213,7 @@ impl ExtCompileWorker {
     }
 
     #[inline]
-    pub fn new_jit() -> Result<Self, Error> {
+    pub fn jit() -> Result<Self, Error> {
         Self::new_with_opts(ExtCompileOptions {
             is_aot: false,
             ..Default::default()
@@ -305,33 +326,101 @@ impl Default for ExtCompileOptions {
     }
 }
 
-/// Register handler for external context to support background compile worker in node runtime
-pub fn register_compile_handler<DB: Database>(
-    handler: &mut EvmHandler<'_, Arc<ExtCompileWorker>, DB>,
-) {
-    let prev = handler.execution.execute_frame.clone();
-    handler.execution.execute_frame = Arc::new(move |frame, memory, tables, context| {
-        let interpreter = frame.interpreter_mut();
-        let code_hash = interpreter.contract.hash.unwrap_or_default();
-        match context.external.get_function(&code_hash) {
-            Ok(FetchedFnResult::NotFound) => {
-                // Compile the code
-                let spec_id = context.evm.inner.spec_id();
-                let bytecode = context.evm.db.code_by_hash(code_hash).unwrap_or_default();
-                let _res = context
-                    .external
-                    .spawn(spec_id, code_hash, bytecode.original_bytes());
-                prev(frame, memory, tables, context)
+/// Compiler handler plugin for the evm
+pub struct CompilerHandler<EVM> {
+    pub worker: Arc<ExtCompileWorker>,
+    _phantom: core::marker::PhantomData<EVM>,
+}
+
+impl<EVM> Handler for CompilerHandler<EVM>
+where
+    EVM: EvmTr<
+            Context: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput>>,
+            Precompiles: PrecompileProvider<EVM::Context, Output = InterpreterResult>,
+            Instructions: InstructionProvider<
+                Context = EVM::Context,
+                InterpreterTypes = EthInterpreter,
+            >,
+        >,
+{
+    type Evm = EVM;
+    type Error = EVMError<<<EVM::Context as ContextTr>::Db as Database>::Error, InvalidTransaction>;
+    type Frame = EthFrame<
+        EVM,
+        EVMError<<<EVM::Context as ContextTr>::Db as Database>::Error, InvalidTransaction>,
+        <EVM::Instructions as InstructionProvider>::InterpreterTypes,
+    >;
+    type HaltReason = HaltReason;
+
+    fn frame_call(
+        &mut self,
+        frame: &mut Self::Frame,
+        evm: &mut Self::Evm,
+    ) -> Result<FrameInitOrResult<Self::Frame>, Self::Error> {
+        let interpreter = &mut frame.interpreter;
+        let code_hash = interpreter.bytecode.hash();
+        let next_action = match code_hash {
+            Some(code_hash) => {
+                match self.worker.get_function(&code_hash) {
+                    Ok(FetchedFnResult::NotFound) => {
+                        // Compile the code
+                        let spec_id = evm.ctx().cfg().spec().into();
+                        let bytecode = interpreter.bytecode.bytes();
+                        let _res = self.worker.spawn(spec_id, code_hash, bytecode);
+                        evm.run_interpreter(interpreter)
+                    }
+                    Ok(FetchedFnResult::Found(_f)) => {
+                        // TODO: sync revmc and revm structures for the compiler
+                        // https://github.com/paradigmxyz/revmc/issues/75
+                        // f.call_with_interpreter_and_memory(interpreter, memory, context)
+                        evm.run_interpreter(interpreter)
+                    }
+                    Err(_) => {
+                        // Fallback to the interpreter
+                        evm.run_interpreter(interpreter)
+                    }
+                }
             }
-            Ok(FetchedFnResult::Found(f)) => {
-                let res =
-                    unsafe { f.call_with_interpreter_and_memory(interpreter, memory, context) };
-                Ok(res)
-            }
-            Err(_) => {
+            None => {
                 // Fallback to the interpreter
-                prev(frame, memory, tables, context)
+                evm.run_interpreter(interpreter)
             }
+        };
+        frame.process_next_action(evm, next_action)
+    }
+}
+
+impl<EVM> Default for CompilerHandler<EVM> {
+    fn default() -> Self {
+        Self {
+            _phantom: core::marker::PhantomData,
+            worker: Arc::new(ExtCompileWorker::disable()),
         }
-    });
+    }
+}
+
+impl<EVM> CompilerHandler<EVM> {
+    #[inline]
+    pub fn new(worker: Arc<ExtCompileWorker>) -> Self {
+        Self {
+            _phantom: core::marker::PhantomData,
+            worker,
+        }
+    }
+
+    #[inline]
+    pub fn aot() -> Result<Self, Error> {
+        Ok(Self {
+            _phantom: core::marker::PhantomData,
+            worker: Arc::new(ExtCompileWorker::aot()?),
+        })
+    }
+
+    #[inline]
+    pub fn jit() -> Result<Self, Error> {
+        Ok(Self {
+            _phantom: core::marker::PhantomData,
+            worker: Arc::new(ExtCompileWorker::jit()?),
+        })
+    }
 }

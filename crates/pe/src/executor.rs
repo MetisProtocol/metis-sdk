@@ -13,8 +13,10 @@ use hashbrown::HashMap;
 use metis_primitives::Transaction;
 #[cfg(feature = "compiler")]
 use metis_vm::ExtCompileWorker;
+#[cfg(feature = "compiler")]
+use revm::ExecuteEvm;
 use revm::{
-    DatabaseCommit, ExecuteEvm,
+    DatabaseCommit,
     context::{BlockEnv, ContextTr, TxEnv, result::InvalidTransaction},
     database::CacheDB,
     primitives::hardfork::SpecId,
@@ -134,7 +136,7 @@ impl ParallelExecutor {
     #[cfg(feature = "compiler")]
     pub fn compiler() -> Self {
         Self {
-            worker: Arc::new(ExtCompileWorker::new_aot().expect("compile worker init failed")),
+            worker: Arc::new(ExtCompileWorker::aot().expect("compile worker init failed")),
             ..Default::default()
         }
     }
@@ -507,20 +509,26 @@ pub fn execute_revm_sequential<S: Storage + Debug, C: Chain>(
     #[cfg(feature = "compiler")] worker: Arc<ExtCompileWorker>,
 ) -> ParallelExecutorResult<C> {
     let mut db = CacheDB::new(StorageWrapper(storage));
-    let mut evm = build_evm(
-        &mut db,
-        spec_id,
-        block_env,
-        #[cfg(feature = "compiler")]
-        worker,
-    );
+    let mut evm = build_evm(&mut db, spec_id, block_env);
     let mut results = Vec::with_capacity(txs.len());
     let mut cumulative_gas_used: u64 = 0;
     for tx in txs {
-        let result_and_state = evm
-            .transact(tx)
-            .map_err(|err| ExecutionError::Custom(err.to_string()))?;
+        #[cfg(feature = "compiler")]
+        let result_and_state = {
+            use revm::handler::Handler;
 
+            let mut t = metis_vm::CompilerHandler::new(worker.clone());
+            evm.set_tx(tx);
+            t.run(&mut evm)
+                .map_err(|err| ExecutionError::Custom(err.to_string()))?
+        };
+        #[cfg(not(feature = "compiler"))]
+        let result_and_state = {
+            use revm::ExecuteEvm;
+
+            evm.transact(tx)
+                .map_err(|err| ExecutionError::Custom(err.to_string()))?
+        };
         evm.db().commit(result_and_state.state.clone());
 
         let mut execution_result = TxExecutionResult::from_revm(chain, spec_id, result_and_state);

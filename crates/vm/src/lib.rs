@@ -1,7 +1,7 @@
 #[cfg(feature = "compiler")]
 pub mod compiler;
 #[cfg(feature = "compiler")]
-pub use compiler::{CompilerContext, ExtCompileWorker, register_compile_handler};
+pub use compiler::{CompilerContext, CompilerHandler, ExtCompileWorker, FetchedFnResult};
 #[cfg(feature = "compiler")]
 pub mod pool;
 
