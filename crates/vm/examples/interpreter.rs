@@ -1,7 +1,11 @@
 pub use alloy_sol_types::{SolCall, sol};
 pub use metis_primitives::hex;
 use metis_primitives::{EVMBytecode, KECCAK_EMPTY, SpecId, TxKind, U256, address, keccak256};
-use revm::{CacheState, Evm, primitives::AccountInfo};
+use revm::{
+    Context, ExecuteEvm, MainBuilder, MainContext,
+    database::{CacheState, State},
+    state::AccountInfo,
+};
 
 sol! {
     contract Counter {
@@ -19,7 +23,7 @@ fn main() {
     let mut cache = CacheState::new(true);
     let caller = address!("1000000000000000000000000000000000000001");
     let to = address!("2000000000000000000000000000000000000002");
-    let coinbase = address!("3000000000000000000000000000000000000003");
+    let beneficiary = address!("3000000000000000000000000000000000000003");
     let code_hash = keccak256(COUNTER_BYTECODE);
     let bytecode = EVMBytecode::new_raw(COUNTER_BYTECODE.into());
     cache.insert_account(
@@ -40,41 +44,32 @@ fn main() {
             nonce: 0,
         },
     );
-    let mut state = revm::db::State::builder()
+    let mut state = State::builder()
         .with_cached_prestate(cache)
         .with_bundle_update()
         .build();
     // New a VM and run the tx.
-    let evm = Evm::builder()
-        .with_db(&mut state)
-        .with_spec_id(SpecId::CANCUN)
-        .modify_cfg_env(|cfg| {
+    let mut evm = Context::mainnet()
+        .modify_cfg_chained(|cfg| {
+            cfg.spec = SpecId::CANCUN;
             cfg.chain_id = 1;
         })
-        .modify_block_env(|block| {
-            block.number = U256::from(30);
-            block.gas_limit = U256::from(5_000_000);
-            block.coinbase = coinbase;
+        .modify_block_chained(|block| {
+            block.number = 30;
+            block.gas_limit = 5_000_000;
+            block.beneficiary = beneficiary;
         })
-        .modify_tx_env(|tx| {
+        .modify_tx_chained(|tx| {
             tx.data = Counter::incrementCall {}.abi_encode().into();
             tx.gas_limit = 2_000_000;
-            tx.gas_price = U256::from(1);
+            tx.gas_price = 1;
             tx.caller = caller;
-            tx.transact_to = TxKind::Call(to);
-            tx.nonce = Some(0);
-        });
-    let result = if std::env::var("METIS_VM_TRACING").is_ok() {
-        let mut evm = evm
-            .with_external_context(
-                revm::inspectors::TracerEip3155::new(Box::new(std::io::stdout())).without_summary(),
-            )
-            .append_handler_register(revm::inspector_handle_register)
-            .build();
-        evm.transact().unwrap()
-    } else {
-        evm.build().transact().unwrap()
-    };
+            tx.kind = TxKind::Call(to);
+        })
+        .with_db(&mut state)
+        .build_mainnet();
+
+    let result = evm.replay().unwrap();
     // Contract output, logs and state diff.
     // There are at least three locations most of the time: the sender,
     // the recipient, and the beneficiary accounts.

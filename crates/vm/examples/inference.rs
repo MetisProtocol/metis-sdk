@@ -2,7 +2,11 @@ pub use alloy_sol_types::{SolCall, sol};
 pub use metis_primitives::hex;
 use metis_primitives::{EVMBytecode, KECCAK_EMPTY, SpecId, TxKind, U256, address, keccak256};
 use metis_vm::{Error, register_inference_handler};
-use revm::{CacheState, Evm, primitives::AccountInfo};
+use revm::{
+    Context, ExecuteEvm, MainBuilder, MainContext,
+    database::{CacheState, State},
+    state::AccountInfo,
+};
 
 sol! {
     contract Counter {
