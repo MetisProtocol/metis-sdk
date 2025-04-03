@@ -16,7 +16,7 @@ use metis_vm::ExtCompileWorker;
 #[cfg(feature = "compiler")]
 use revm::ExecuteEvm;
 use revm::{DatabaseCommit, context::{BlockEnv, ContextTr, TxEnv, result::InvalidTransaction}, database::CacheDB, primitives::hardfork::SpecId, Database};
-
+use revm::state::Bytecode;
 use crate::{
     EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, Task, TxIdx, TxVersion,
     chain::Chain,
@@ -27,6 +27,7 @@ use crate::{
     storage::StorageWrapper,
     vm::{ExecutionError, TxExecutionResult, Vm, VmExecutionError, VmExecutionResult, build_evm},
 };
+use crate::storage::Storage;
 
 /// Errors when executing a block with the parallel executor.
 // TODO: implement traits explicitly due to trait bounds on `C` instead of types of `Chain`
@@ -141,7 +142,7 @@ impl ParallelExecutor {
     pub fn execute<S, C>(
         &mut self,
         chain: &C,
-        storage: &mut S,
+        storage: Mutex<S> ,
         // We assume the block is still needed afterwards like in most Reth cases
         // so take in a reference and only copy values when needed. We may want
         // to use a [`std::borrow::Cow`] to build [`BlockEnv`] and [`TxEnv`] without
@@ -154,7 +155,7 @@ impl ParallelExecutor {
     ) -> ParallelExecutorResult<C>
     where
         C: Chain + Send + Sync,
-        S: Database + Debug + Send + Sync,
+        S: Database + Storage + Debug + Send + Sync,
     {
         let spec_id = chain.spec();
         let block_env = get_block_env(&block.header, spec_id);
@@ -198,7 +199,7 @@ impl ParallelExecutor {
     pub fn execute_revm_parallel<S, C>(
         &mut self,
         chain: &C,
-        storage: &mut S,
+        storage: Mutex<S>,
         spec_id: SpecId,
         block_env: BlockEnv,
         txs: Vec<TxEnv>,
@@ -206,7 +207,7 @@ impl ParallelExecutor {
     ) -> ParallelExecutorResult<C>
     where
         C: Chain + Send + Sync,
-        S: Database + Debug + Send + Sync,
+        S: Database + Debug + Send + Sync + Storage,
     {
         if txs.is_empty() {
             return Ok(Vec::new());
@@ -217,7 +218,7 @@ impl ParallelExecutor {
 
         let mv_memory = chain.build_mv_memory(&block_env, &txs);
         let vm = Vm::new(
-            storage,
+            &storage,
             &mv_memory,
             chain,
             &block_env,
@@ -311,25 +312,25 @@ impl ParallelExecutor {
                     write_history.first_key_value(),
                     Some((_, MemoryEntry::Data(_, MemoryValue::Basic(_))))
                 ) {
-                    if let Ok(Some(account)) = storage.basic(address) {
+                    if let Ok(Some(account)) = storage.lock().unwrap().basic(address) {
                         balance = account.balance;
                         nonce = account.nonce;
                     }
                 }
                 // Accounts that take implicit writes like the beneficiary account can be contract!
-                let code_hash = match storage.code_hash(&address) {
+                let code_hash = match storage.lock().unwrap().code_hash(&address) {
                     Ok(code_hash) => code_hash,
                     Err(err) => return Err(ParallelExecutorError::StorageError(err.to_string())),
                 };
                 let code = if let Some(code_hash) = &code_hash {
-                    match storage.code_by_hash(code_hash) {
+                    match storage.lock().unwrap().code_by_hash(*code_hash) {
                         Ok(code) => code,
                         Err(err) => {
                             return Err(ParallelExecutorError::StorageError(err.to_string()));
                         }
                     }
                 } else {
-                    None
+                    Bytecode::default()
                 };
 
                 for (tx_idx, memory_entry) in write_history.iter() {
@@ -413,7 +414,7 @@ impl ParallelExecutor {
                             balance,
                             nonce,
                             code_hash,
-                            code: code.clone(),
+                            code: Some(code.clone()),
                             storage: HashMap::default(),
                         });
                     }
@@ -426,7 +427,7 @@ impl ParallelExecutor {
         Ok(fully_evaluated_results)
     }
 
-    fn try_execute<DB: Database, C: Chain>(
+    fn try_execute<DB: Database + Storage, C: Chain>(
         &self,
         vm: &Vm<'_, DB, C>,
         scheduler: &Scheduler,
@@ -491,15 +492,15 @@ fn try_validate(
 /// Execute REVM transactions sequentially.
 // Useful for falling back for (small) blocks with many dependencies.
 // TODO: Use this for a long chain of sequential transactions even in parallel mode.
-pub fn execute_revm_sequential<DB: Database + Debug, C: Chain>(
+pub fn execute_revm_sequential<DB: Database + Storage + Debug, C: Chain>(
     chain: &C,
-    storage: &DB,
+    storage: Mutex<DB>,
     spec_id: SpecId,
     block_env: BlockEnv,
     txs: Vec<TxEnv>,
     #[cfg(feature = "compiler")] worker: Arc<ExtCompileWorker>,
 ) -> ParallelExecutorResult<C> {
-    let mut db = CacheDB::new(StorageWrapper(storage));
+    let mut db = CacheDB::new(StorageWrapper(&storage));
     let mut evm = build_evm(&mut db, spec_id, block_env);
     let mut results = Vec::with_capacity(txs.len());
     let mut cumulative_gas_used: u64 = 0;
@@ -513,6 +514,7 @@ pub fn execute_revm_sequential<DB: Database + Debug, C: Chain>(
             t.run(&mut evm)
                 .map_err(|err| ExecutionError::Custom(err.to_string()))?
         };
+        // TODO: complex error " method cannot be called due to unsatisfied trait bounds"
         #[cfg(not(feature = "compiler"))]
         let result_and_state = {
             use revm::ExecuteEvm;

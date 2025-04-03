@@ -34,9 +34,9 @@ use revm::{
 use smallvec::{SmallVec, smallvec};
 #[cfg(feature = "compiler")]
 use std::sync::Arc;
-
+use std::sync::Mutex;
 use crate::{
-    AccountBasic, BuildIdentityHasher, BuildSuffixHasher, EvmAccount, FinishExecFlags, MemoryEntry,
+    BuildIdentityHasher, BuildSuffixHasher, EvmAccount, FinishExecFlags, MemoryEntry,
     MemoryLocation, MemoryLocationHash, MemoryValue, ReadOrigin, ReadOrigins, ReadSet,
     TxIdx, TxVersion, WriteSet,
     chain::{Chain, RewardPolicy},
@@ -163,7 +163,7 @@ struct VmDb<'a, S: Storage, C: Chain> {
     is_lazy: bool,
     read_set: ReadSet,
     // TODO: Clearer type for [AccountBasic] plus code hash
-    read_accounts: HashMap<MemoryLocationHash, (AccountBasic, Option<B256>), BuildIdentityHasher>,
+    read_accounts: HashMap<MemoryLocationHash, (AccountInfo, Option<B256>), BuildIdentityHasher>,
 }
 
 impl<'a, S: Storage, C: Chain> VmDb<'a, S, C> {
@@ -260,7 +260,7 @@ impl<'a, S: Storage, C: Chain> VmDb<'a, S, C> {
         // Fallback to storage
         Self::push_origin(read_origins, ReadOrigin::Storage)?;
         self.vm
-            .storage
+            .storage.lock().unwrap()
             .code_hash(&address)
             .map_err(|err| ReadError::StorageError(err.to_string()))
     }
@@ -383,9 +383,9 @@ impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
             {
                 return Err(ReadError::InconsistentRead);
             }
-            final_account = match self.vm.storage.basic(address) {
+            final_account = match self.vm.storage.lock().unwrap().basic(address) {
                 Ok(Some(basic)) => Some(basic),
-                Ok(None) => (balance_addition > U256::ZERO).then(AccountBasic::default),
+                Ok(None) => (balance_addition > U256::ZERO).then_some(AccountInfo::default()),
                 Err(err) => return Err(ReadError::StorageError(err.to_string())),
             };
         }
@@ -424,15 +424,15 @@ impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
             };
             let code = if let Some(code_hash) = &code_hash {
                 if let Some(code) = self.vm.mv_memory.new_bytecodes.get(code_hash) {
-                    Some(code.clone())
+                    code.clone()
                 } else {
-                    match self.vm.storage.code_by_hash(code_hash) {
+                    match self.vm.storage.lock().unwrap().code_by_hash(*code_hash) {
                         Ok(code) => code,
                         Err(err) => return Err(ReadError::StorageError(err.to_string())),
                     }
                 }
             } else {
-                None
+                Bytecode::default()
             };
             self.read_accounts
                 .insert(location_hash, (account.clone(), code_hash));
@@ -441,7 +441,7 @@ impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
                 balance: account.balance,
                 nonce: account.nonce,
                 code_hash: code_hash.unwrap_or(KECCAK_EMPTY),
-                code,
+                code: Some(code),
             }));
         }
 
@@ -449,12 +449,11 @@ impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
     }
 
     fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error> {
-        Ok(self
+        self
             .vm
-            .storage
-            .code_by_hash(&code_hash)
-            .map_err(|err| ReadError::StorageError(err.to_string()))?
-            .unwrap_or_default())
+            .storage.lock().unwrap()
+            .code_by_hash(code_hash)
+            .map_err(|err| ReadError::StorageError(err.to_string()))
     }
 
     fn storage(&mut self, address: Address, index: U256) -> Result<U256, Self::Error> {
@@ -489,21 +488,21 @@ impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
         // Fall back to storage
         Self::push_origin(read_origins, ReadOrigin::Storage)?;
         self.vm
-            .storage
-            .storage(&address, &index)
+            .storage.lock().unwrap()
+            .storage(address, index)
             .map_err(|err| ReadError::StorageError(err.to_string()))
     }
 
     fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error> {
         self.vm
-            .storage
-            .block_hash(&number)
+            .storage.lock().unwrap()
+            .block_hash(number)
             .map_err(|err| ReadError::StorageError(err.to_string()))
     }
 }
 
 pub(crate) struct Vm<'a, S: Storage, C: Chain> {
-    storage: &'a S,
+    storage: &'a Mutex<S>,
     mv_memory: &'a MvMemory,
     chain: &'a C,
     block_env: &'a BlockEnv,
@@ -517,7 +516,7 @@ pub(crate) struct Vm<'a, S: Storage, C: Chain> {
 
 impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
     pub(crate) fn new(
-        storage: &'a S,
+        storage: &'a Mutex<S>,
         mv_memory: &'a MvMemory,
         chain: &'a C,
         block_env: &'a BlockEnv,
@@ -657,9 +656,11 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
                             {
                                 write_set.push((
                                     account_location_hash,
-                                    MemoryValue::Basic(AccountBasic {
+                                    MemoryValue::Basic(AccountInfo {
                                         balance: account.info.balance,
                                         nonce: account.info.nonce,
+                                        code_hash: account.info.code_hash,
+                                        code: account.info.code.clone(),
                                     }),
                                 ));
                             }

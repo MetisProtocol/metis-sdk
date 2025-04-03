@@ -8,6 +8,7 @@ use revm::context::{BlockEnv, TxEnv};
 use revm::primitives::hardfork::SpecId;
 use revm::primitives::{Address, U256, alloy_primitives::U160};
 use std::{num::NonZeroUsize, thread};
+use std::sync::Mutex;
 use revm::Database;
 
 /// Mock an account from an integer index that is used as the address.
@@ -26,7 +27,7 @@ pub fn mock_account(idx: usize) -> (Address, EvmAccount) {
 
 /// Execute an REVM block sequentially and parallelly with PEVM and assert that
 /// the execution results match.
-pub fn test_execute_revm<C, S>(chain: &C, storage: S, txs: Vec<TxEnv>)
+pub fn test_execute_revm<C, S>(chain: &C, storage: &mut S, txs: Vec<TxEnv>)
 where
     C: Chain + PartialEq + Send + Sync,
     S: Database + Send + Sync + std::fmt::Debug,
@@ -36,7 +37,7 @@ where
     assert_eq!(
         metis_pe::execute_revm_sequential(
             chain,
-            &storage,
+            Mutex::new(storage),
             SpecId::LATEST,
             BlockEnv::default(),
             txs.clone(),
@@ -45,7 +46,7 @@ where
         ),
         pe.execute_revm_parallel(
             chain,
-            storage,
+            Mutex::new(storage),
             SpecId::LATEST,
             BlockEnv::default(),
             txs,

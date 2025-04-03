@@ -17,14 +17,12 @@ use reth_evm_ethereum::{EthEvmConfig, RethReceiptBuilder};
 use reth_primitives::{
     NodePrimitives, Receipt, Recovered, RecoveredBlock, TransactionSigned,
 };
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use reth::api::{FullNodeTypes, NodeTypesWithEngine};
 use reth::builder::BuilderContext;
 use reth::builder::components::ExecutorBuilder;
-use reth::builder::rpc::EngineValidatorBuilder;
 use reth::primitives::EthPrimitives;
 use revm::Database;
-use crate::state::StateStorageAdapter;
 
 pub struct BlockParallelExecutorProvider {
     strategy_factory: EthEvmConfig,
@@ -44,21 +42,22 @@ impl Clone for BlockParallelExecutorProvider {
     }
 }
 
-impl BlockExecutorProvider for BlockParallelExecutorProvider {
+impl BlockExecutorProvider for BlockParallelExecutorProvider
+{
     type Primitives = <EthEvmConfig as ConfigureEvm>::Primitives;
 
-    type Executor<DB: Database + Send + Sync + 'static> = ParallelExecutor<DB>;
+    type Executor<DB: Database> = ParallelExecutor<DB>;
 
     fn executor<DB>(&self, db: DB) -> Self::Executor<DB>
     where
         DB: Database,
     {
-        let adapter = StateStorageAdapter::new(State::builder()
+        let state_db = State::builder()
             .with_database(db)
             .with_bundle_update()
             .without_state_clear()
-            .build());
-        ParallelExecutor::new(self.strategy_factory.clone(), adapter)
+            .build();
+        ParallelExecutor::new(self.strategy_factory.clone(), state_db)
     }
 }
 
@@ -70,16 +69,10 @@ pub struct ParallelExecutor<DB> {
 }
 
 impl<DB: Database> ParallelExecutor<DB> {
-    pub fn new(strategy_factory: EthEvmConfig, db: StateStorageAdapter<DB>) -> Self {
-        let db = State::builder()
-            .with_database(db)
-            .with_bundle_update()
-            .without_state_clear()
-            .build();
-        let adapter = StateStorageAdapter::new(db);
+    pub fn new(strategy_factory: EthEvmConfig, db: State<DB>) -> Self {
         Self {
             strategy_factory,
-            db: adapter,
+            db,
         }
     }
 }
@@ -161,7 +154,7 @@ where
 
         let results = executor.execute_revm_parallel(
             &chain_spec.as_ref(),
-            &mut self.db,
+            Mutex::new(&self.db),
             spec_id,
             block_env,
             tx_envs,
