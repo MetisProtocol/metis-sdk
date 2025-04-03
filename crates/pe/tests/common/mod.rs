@@ -36,14 +36,14 @@ pub fn for_each_block_from_disk(mut handler: impl FnMut(Block, InMemoryStorage))
     let bytecodes = bincode::deserialize_from(GzDecoder::new(BufReader::new(
         File::open(data_dir.join("bytecodes.bincode.gz")).unwrap(),
     )))
-        .map(Arc::new)
-        .unwrap();
+    .map(Arc::new)
+    .unwrap();
 
     let block_hashes = bincode::deserialize_from::<_, BlockHashes>(BufReader::new(
         File::open(data_dir.join("block_hashes.bincode")).unwrap(),
     ))
-        .map(Arc::new)
-        .unwrap();
+    .map(Arc::new)
+    .unwrap();
 
     for block_path in fs::read_dir(data_dir.join("blocks")).unwrap() {
         let block_dir = block_path.unwrap().path();
@@ -52,13 +52,13 @@ pub fn for_each_block_from_disk(mut handler: impl FnMut(Block, InMemoryStorage))
         let block = serde_json::from_reader(BufReader::new(
             File::open(block_dir.join("block.json")).unwrap(),
         ))
-            .unwrap();
+        .unwrap();
 
         // Parse state
         let accounts: HashMap<Address, EvmAccount, BuildSuffixHasher> = serde_json::from_reader(
             BufReader::new(File::open(block_dir.join("pre_state.json")).unwrap()),
         )
-            .unwrap();
+        .unwrap();
 
         handler(
             block,
@@ -101,7 +101,7 @@ where
                             PrimitiveSignature::new(U256::ZERO, U256::ZERO, false),
                             B256::default(),
                         )
-                            .into(),
+                        .into(),
                         *address,
                     )
                 })

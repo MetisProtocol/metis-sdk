@@ -1,8 +1,8 @@
-use reth::primitives::{NodePrimitives};
+use reth::primitives::NodePrimitives;
 
 pub fn convert_to_alloy_header<N>(header: N::BlockHeader) -> alloy_rpc_types_eth::Header
 where
-    N: NodePrimitives<BlockHeader = reth_primitives::Header>
+    N: NodePrimitives<BlockHeader = reth_primitives::Header>,
 {
     let inner = alloy_consensus::Header {
         parent_hash: header.parent_hash,
@@ -30,4 +30,3 @@ where
 
     alloy_rpc_types_eth::Header::new(inner)
 }
-

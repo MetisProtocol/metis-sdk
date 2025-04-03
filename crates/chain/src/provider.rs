@@ -1,5 +1,8 @@
-use std::num::NonZeroUsize;
+use crate::state::StateStorageAdapter;
 use alloy_evm::eth::EthBlockExecutor;
+use metis_pe::Storage;
+use metis_pe::chain::{Chain, Ethereum};
+use reth::builder::rpc::EngineValidatorBuilder;
 use reth::{
     api::{ConfigureEvm, NodeTypesWithEngine},
     builder::{BuilderContext, FullNodeTypes, components::ExecutorBuilder},
@@ -18,11 +21,8 @@ use reth_evm_ethereum::{EthEvmConfig, RethReceiptBuilder};
 use reth_primitives::{
     EthPrimitives, NodePrimitives, Receipt, Recovered, RecoveredBlock, TransactionSigned,
 };
+use std::num::NonZeroUsize;
 use std::sync::Arc;
-use reth::builder::rpc::EngineValidatorBuilder;
-use metis_pe::chain::{Chain, Ethereum};
-use metis_pe::Storage;
-use crate::state::StateStorageAdapter;
 
 pub struct BlockParallelExecutorProvider {
     strategy_factory: EthEvmConfig,
@@ -139,17 +139,15 @@ where
     fn execute_block(
         &mut self,
         block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
-    ) -> Result<u64, BlockExecutionError>
-    {
+    ) -> Result<u64, BlockExecutionError> {
         let mut executor = metis_pe::ParallelExecutor::default();
         let eth_chain = Ethereum::mainnet();
         let chain_spec = self.strategy_factory.chain_spec();
         let spec_id = eth_chain.get_block_spec(block.header()).unwrap();
         let block_env = metis_pe::compat::get_block_env(&block.header(), spec_id);
-        let tx_envs = block.transactions_with_sender()
-            .map(|(_, signed_tx)| {
-                signed_tx.tx_env(block_env.clone())
-            })
+        let tx_envs = block
+            .transactions_with_sender()
+            .map(|(_, signed_tx)| signed_tx.tx_env(block_env.clone()))
             .collect::<Result<Vec<_>, _>>()?;
 
         let results = executor.execute_revm_parallel(
@@ -193,43 +191,3 @@ where
         Ok((evm_config, executor))
     }
 }
-
-pub struct ParallelBlockExecutor<'a, Evm> {
-    /// Inner Ethereum execution strategy.
-    inner: EthBlockExecutor<'a, Evm, &'a Arc<ChainSpec>, &'a RethReceiptBuilder>,
-}
-
-impl<'db, DB, E> BlockExecutor for ParallelBlockExecutor<'_, E>
-where
-    DB: Database + 'db,
-    E: Evm<DB = &'db mut State<DB>, Tx = TxEnv>,
-{
-    type Transaction = TransactionSigned;
-    type Receipt = Receipt;
-    type Evm = E;
-
-    fn apply_pre_execution_changes(&mut self) -> Result<(), BlockExecutionError> {
-        self.inner.apply_pre_execution_changes()
-    }
-
-    fn execute_transaction_with_result_closure(
-        &mut self,
-        tx: Recovered<&TransactionSigned>,
-        f: impl FnOnce(&ExecutionResult<<Self::Evm as Evm>::HaltReason>),
-    ) -> Result<u64, BlockExecutionError> {
-        self.inner.execute_transaction_with_result_closure(tx, f)
-    }
-
-    fn finish(self) -> Result<(Self::Evm, BlockExecutionResult<Receipt>), BlockExecutionError> {
-        self.inner.finish()
-    }
-
-    fn set_state_hook(&mut self, _hook: Option<Box<dyn OnStateHook>>) {
-        self.inner.set_state_hook(_hook)
-    }
-
-    fn evm_mut(&mut self) -> &mut Self::Evm {
-        self.inner.evm_mut()
-    }
-}
-
