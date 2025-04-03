@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use alloy_primitives::{Address, B256, U256, keccak256};
 use metis_primitives::EVMBytecode;
-
-use super::{BlockHashes, Bytecodes, ChainState};
-use crate::{AccountBasic, Storage};
-
+use revm::Database;
+use super::{BlockHashes, Bytecodes, ChainState, StorageError};
+use crate::{AccountBasic};
+use crate::storage::Storage;
 /// A storage that stores chain data in memory.
 #[derive(Debug, Clone, Default)]
 pub struct InMemoryStorage {
@@ -31,40 +31,42 @@ impl InMemoryStorage {
 }
 
 impl Storage for InMemoryStorage {
-    // TODO: More proper error handling
-    type Error = u8;
-
-    fn basic(&self, address: &Address) -> Result<Option<AccountBasic>, Self::Error> {
-        Ok(self.accounts.get(address).map(|account| AccountBasic {
-            balance: account.balance,
-            nonce: account.nonce,
-        }))
-    }
-
-    fn code_hash(&self, address: &Address) -> Result<Option<B256>, Self::Error> {
+    fn code_hash(&self, address: &Address) -> Result<Option<B256>, StorageError> {
         Ok(self
             .accounts
             .get(address)
             .and_then(|account| account.code_hash))
     }
+}
 
-    fn code_by_hash(&self, code_hash: &B256) -> Result<Option<EVMBytecode>, Self::Error> {
-        Ok(self.bytecodes.get(code_hash).cloned())
+impl Database for InMemoryStorage {
+    // TODO: More proper error handling
+    type Error = StorageError;
+
+    fn basic(&mut self, address: Address) -> Result<Option<AccountBasic>, Self::Error> {
+        Ok(self.accounts.get(&address).map(|account| AccountBasic {
+            balance: account.balance,
+            nonce: account.nonce,
+        }))
     }
 
-    fn storage(&self, address: &Address, index: &U256) -> Result<U256, Self::Error> {
+    fn code_by_hash(&mut self, code_hash: B256) -> Result<Option<EVMBytecode>, Self::Error> {
+        Ok(self.bytecodes.get(&code_hash).cloned())
+    }
+
+    fn storage(&mut self, address: Address, index: U256) -> Result<U256, Self::Error> {
         Ok(self
             .accounts
-            .get(address)
-            .and_then(|account| account.storage.get(index))
+            .get(&address)
+            .and_then(|account| account.storage.get(&index))
             .copied()
             .unwrap_or_default())
     }
 
-    fn block_hash(&self, number: &u64) -> Result<B256, Self::Error> {
+    fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error> {
         Ok(self
             .block_hashes
-            .get(number)
+            .get(&number)
             .copied()
             // Matching REVM's [EmptyDB] for now
             .unwrap_or_else(|| keccak256(number.to_string().as_bytes())))

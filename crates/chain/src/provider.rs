@@ -10,7 +10,7 @@ use reth::{
 };
 use reth_chainspec::ChainSpec;
 use reth_evm::{
-    Database, Evm, OnStateHook,
+    Evm, OnStateHook,
     execute::{BlockExecutionError, BlockExecutor, BlockExecutorProvider, Executor},
 };
 use reth_evm_ethereum::{EthEvmConfig, RethReceiptBuilder};
@@ -23,7 +23,7 @@ use reth::builder::BuilderContext;
 use reth::builder::components::ExecutorBuilder;
 use reth::builder::rpc::EngineValidatorBuilder;
 use reth::primitives::EthPrimitives;
-use metis_pe::Storage;
+use revm::Database;
 use crate::state::StateStorageAdapter;
 
 pub struct BlockParallelExecutorProvider {
@@ -47,11 +47,11 @@ impl Clone for BlockParallelExecutorProvider {
 impl BlockExecutorProvider for BlockParallelExecutorProvider {
     type Primitives = <EthEvmConfig as ConfigureEvm>::Primitives;
 
-    type Executor<DB: Database + Storage + Send + Sync + 'static> = ParallelExecutor<DB>;
+    type Executor<DB: Database + Send + Sync + 'static> = ParallelExecutor<DB>;
 
     fn executor<DB>(&self, db: DB) -> Self::Executor<DB>
     where
-        DB: Database + Storage + Send + Sync + 'static,
+        DB: Database,
     {
         let adapter = StateStorageAdapter::new(State::builder()
             .with_database(db)
@@ -66,7 +66,7 @@ pub struct ParallelExecutor<DB> {
     /// Block execution strategy.
     pub(crate) strategy_factory: EthEvmConfig,
     /// Database.
-    pub(crate) db: StateStorageAdapter<DB>,
+    pub(crate) db: State<DB>,
 }
 
 impl<DB: Database> ParallelExecutor<DB> {
@@ -86,7 +86,7 @@ impl<DB: Database> ParallelExecutor<DB> {
 
 impl<DB> Executor<DB> for ParallelExecutor<DB>
 where
-    DB: Database<Error = BlockExecutionError> + Storage + Send + Sync + 'static,
+    DB: Database,
 {
     type Primitives = <EthEvmConfig as ConfigureEvm>::Primitives;
     type Error = BlockExecutionError;
@@ -94,10 +94,9 @@ where
     fn execute_one(
         &mut self,
         block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
-    ) -> Result<BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>,
-        Self::Error> {
+    ) -> Result<BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>, Self::Error> {
         let mut strategy = self.strategy_factory
-            .executor_for_block(&mut self.db.state.lock().unwrap(), block);
+            .executor_for_block(&mut self.db, block);
         strategy.apply_pre_execution_changes()?;
         self.execute_block(block)?;
         let result = strategy.apply_post_execution_changes()?;
@@ -131,17 +130,17 @@ where
     }
 
     fn into_state(self) -> State<DB> {
-        self.db.state.lock().into().unwrap()
+        self.db
     }
 
     fn size_hint(&self) -> usize {
-        self.db.state.lock().unwrap().bundle_state.size_hint()
+        self.db.bundle_state.size_hint()
     }
 }
 
 impl<DB> ParallelExecutor<DB>
 where
-    DB: Storage + Send + Sync + 'static,
+    DB: Database,
 {
     fn execute_block(
         &mut self,
@@ -162,7 +161,7 @@ where
 
         let results = executor.execute_revm_parallel(
             &chain_spec.as_ref(),
-            &self.db,
+            &mut self.db,
             spec_id,
             block_env,
             tx_envs,

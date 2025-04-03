@@ -1,14 +1,12 @@
-use std::fmt::{Debug, Display};
+#[cfg(feature = "rpc-storage")]
+use alloy_transport::TransportError;
 
+use std::fmt::Debug;
+use std::sync::Mutex;
 use alloy_primitives::{Address, B256, U256};
 use hashbrown::HashMap;
-use revm::{
-    DatabaseRef,
-    bytecode::Bytecode,
-    context::DBErrorMarker,
-    primitives::KECCAK_EMPTY,
-    state::{Account, AccountInfo},
-};
+use revm::{DatabaseRef, bytecode::Bytecode, context::DBErrorMarker, primitives::KECCAK_EMPTY, state::{Account, AccountInfo}, Database};
+use revm::interpreter::Host;
 use rustc_hash::FxBuildHasher;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -80,51 +78,74 @@ pub type Bytecodes = HashMap<B256, Bytecode, BuildSuffixHasher>;
 /// Mapping from block numbers to block hashes
 pub type BlockHashes = HashMap<u64, B256, BuildIdentityHasher>;
 
+#[derive(Debug, thiserror::Error)]
+pub enum StorageError {
+    #[cfg(feature = "rpc-storage")]
+    #[error("RPC transport error: {0}")]
+    Rpc(#[from] TransportError),
+
+    #[error("In-memory storage error: {0}")]
+    Memory(u8),
+
+    #[error("Account not found: {0:?}")]
+    AccountNotFound(Address),
+}
+
+impl From<u8> for StorageError {
+    fn from(code: u8) -> Self {
+        StorageError::Memory(code)
+    }
+}
+
+pub trait Storage: Database<Error = StorageError> {
+    fn code_hash(&self, address: &Address) -> Result<Option<B256>, StorageError>;
+}
+
 /// An interface to provide chain state for the transaction execution.
 /// Staying close to the underlying REVM's Database trait while not leaking
 /// its primitives to library users (favoring Alloy at the moment).
 /// TODO: Better API for third-party integration.
-pub trait Storage {
-    /// Errors when querying data from storage.
-    type Error: Display + Debug;
-
-    /// Get basic account information.
-    fn basic(&self, address: &Address) -> Result<Option<AccountBasic>, Self::Error>;
-
-    /// Get the code of an account.
-    fn code_hash(&self, address: &Address) -> Result<Option<B256>, Self::Error>;
-
-    /// Get account code by its hash.
-    fn code_by_hash(&self, code_hash: &B256) -> Result<Option<Bytecode>, Self::Error>;
-
-    /// Get storage value of address at index.
-    fn storage(&self, address: &Address, index: &U256) -> Result<U256, Self::Error>;
-
-    /// Get block hash by block number.
-    fn block_hash(&self, number: &u64) -> Result<B256, Self::Error>;
-}
-
+// pub trait Storage {
+//     /// Errors when querying data from storage.
+//     type Error: Display + Debug;
+//
+//     /// Get basic account information.
+//     fn basic(&self, address: &Address) -> Result<Option<AccountBasic>, Self::Error>;
+//
+//     /// Get the code of an account.
+//     fn code_hash(&self, address: &Address) -> Result<Option<B256>, Self::Error>;
+//
+//     /// Get account code by its hash.
+//     fn code_by_hash(&self, code_hash: &B256) -> Result<Option<Bytecode>, Self::Error>;
+//
+//     /// Get storage value of address at index.
+//     fn storage(&self, address: &Address, index: &U256) -> Result<U256, Self::Error>;
+//
+//     /// Get block hash by block number.
+//     fn block_hash(&self, number: &u64) -> Result<B256, Self::Error>;
+// }
+//
 /// revm [Database] errors when using [Storage] as the underlying provider.
 #[derive(Debug, Clone, PartialEq, Error)]
-pub enum StorageWrapperError<S: Storage> {
+pub enum StorageWrapperError<DB: Database> {
     #[error("storage error")]
-    StorageError(S::Error),
+    StorageError(DB::Error),
 }
 
-impl<S: Storage> DBErrorMarker for StorageWrapperError<S> {}
+impl<DB: Database> DBErrorMarker for StorageWrapperError<DB> {}
 
 /// A Storage wrapper that implements REVM's [`DatabaseRef`] for ease of
 /// integration.
 #[derive(Debug)]
-pub struct StorageWrapper<'a, S: Storage>(pub &'a S);
+pub struct StorageWrapper<'a, DB: Database>(pub &'a Mutex<DB>);
 
-impl<S: Storage + Debug> DatabaseRef for StorageWrapper<'_, S> {
-    type Error = StorageWrapperError<S>;
+impl<DB: Database + Debug> DatabaseRef for StorageWrapper<'_, DB> {
+    type Error = StorageWrapperError<DB>;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
         let Some(basic) = self
             .0
-            .basic(&address)
+            .basic(address)
             .map_err(StorageWrapperError::StorageError)?
         else {
             return Ok(None);
@@ -156,7 +177,7 @@ impl<S: Storage + Debug> DatabaseRef for StorageWrapper<'_, S> {
             .0
             .code_by_hash(&code_hash)
             .map_err(StorageWrapperError::StorageError)?
-            .unwrap_or_default())
+            .bytecode())
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {

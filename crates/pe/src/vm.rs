@@ -37,11 +37,12 @@ use std::sync::Arc;
 
 use crate::{
     AccountBasic, BuildIdentityHasher, BuildSuffixHasher, EvmAccount, FinishExecFlags, MemoryEntry,
-    MemoryLocation, MemoryLocationHash, MemoryValue, ReadOrigin, ReadOrigins, ReadSet, Storage,
+    MemoryLocation, MemoryLocationHash, MemoryValue, ReadOrigin, ReadOrigins, ReadSet,
     TxIdx, TxVersion, WriteSet,
     chain::{Chain, RewardPolicy},
     hash_deterministic,
     mv_memory::MvMemory,
+    storage::Storage,
 };
 
 /// The execution error from the underlying EVM executor.
@@ -382,7 +383,7 @@ impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
             {
                 return Err(ReadError::InconsistentRead);
             }
-            final_account = match self.vm.storage.basic(&address) {
+            final_account = match self.vm.storage.basic(address) {
                 Ok(Some(basic)) => Some(basic),
                 Ok(None) => (balance_addition > U256::ZERO).then(AccountBasic::default),
                 Err(err) => return Err(ReadError::StorageError(err.to_string())),

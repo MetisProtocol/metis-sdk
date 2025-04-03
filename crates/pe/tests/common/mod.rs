@@ -109,6 +109,6 @@ where
         ),
         ..Block::<C::Transaction>::default()
     };
-    let storage = InMemoryStorage::new(accounts, Default::default(), Default::default());
-    test_execute_alloy(chain, &storage, block, false);
+    let mut storage = InMemoryStorage::new(accounts, Default::default(), Default::default());
+    test_execute_alloy(chain, &mut storage, block, false);
 }

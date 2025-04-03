@@ -1,5 +1,6 @@
 //! Test with mainnet blocks
 
+use revm::primitives::hardfork::SpecId;
 use metis_pe::chain::Ethereum;
 
 pub mod common;
@@ -41,19 +42,19 @@ async fn mainnet_blocks_from_rpc() {
             .unwrap();
         let chain = Ethereum::mainnet();
         let spec_id = chain.get_block_spec(&block.header).unwrap();
-        let rpc_storage =
+        let mut rpc_storage =
             metis_pe::RpcStorage::new(provider, spec_id, BlockId::number(block_number - 1));
-        common::test_execute_alloy(&chain, &rpc_storage, block, true);
+        common::test_execute_alloy(&chain, &mut rpc_storage, block, true);
     }
 }
 
 #[test]
 fn mainnet_blocks_from_disk() {
-    common::for_each_block_from_disk(|block, storage| {
+    common::for_each_block_from_disk(|block, mut storage| {
         // Run several times to try catching a race condition if there is any.
         // 1000~2000 is a better choice for local testing after major changes.
         for _ in 0..3 {
-            common::test_execute_alloy(&Ethereum::mainnet(), &storage, block.clone(), true)
+            common::test_execute_alloy(&Ethereum::mainnet(), &mut storage, block.clone(), true)
         }
     });
 }
@@ -90,8 +91,8 @@ async fn optimism_mainnet_blocks_from_rpc() {
         let chain = Optimism::mainnet();
         let spec_id = chain.get_block_spec(&block.header).unwrap();
 
-        let rpc_storage =
-            metis_pe::RpcStorage::new(provider, spec_id, BlockId::number(block_number - 1));
-        common::test_execute_alloy(&chain, &rpc_storage, block, true);
+        let mut rpc_storage =
+            metis_pe::RpcStorage::new(provider, SpecId::from(spec_id), BlockId::number(block_number - 1));
+        common::test_execute_alloy(&chain, &mut rpc_storage, block, true);
     }
 }

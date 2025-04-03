@@ -15,15 +15,10 @@ use metis_primitives::Transaction;
 use metis_vm::ExtCompileWorker;
 #[cfg(feature = "compiler")]
 use revm::ExecuteEvm;
-use revm::{
-    DatabaseCommit,
-    context::{BlockEnv, ContextTr, TxEnv, result::InvalidTransaction},
-    database::CacheDB,
-    primitives::hardfork::SpecId,
-};
+use revm::{DatabaseCommit, context::{BlockEnv, ContextTr, TxEnv, result::InvalidTransaction}, database::CacheDB, primitives::hardfork::SpecId, Database};
 
 use crate::{
-    EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, Storage, Task, TxIdx, TxVersion,
+    EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, Task, TxIdx, TxVersion,
     chain::Chain,
     compat::get_block_env,
     hash_deterministic,
@@ -146,7 +141,7 @@ impl ParallelExecutor {
     pub fn execute<S, C>(
         &mut self,
         chain: &C,
-        storage: &S,
+        storage: &mut S,
         // We assume the block is still needed afterwards like in most Reth cases
         // so take in a reference and only copy values when needed. We may want
         // to use a [`std::borrow::Cow`] to build [`BlockEnv`] and [`TxEnv`] without
@@ -159,7 +154,7 @@ impl ParallelExecutor {
     ) -> ParallelExecutorResult<C>
     where
         C: Chain + Send + Sync,
-        S: Storage + Debug + Send + Sync,
+        S: Database + Debug + Send + Sync,
     {
         let spec_id = chain.spec();
         let block_env = get_block_env(&block.header, spec_id);
@@ -203,7 +198,7 @@ impl ParallelExecutor {
     pub fn execute_revm_parallel<S, C>(
         &mut self,
         chain: &C,
-        storage: &S,
+        storage: &mut S,
         spec_id: SpecId,
         block_env: BlockEnv,
         txs: Vec<TxEnv>,
@@ -211,7 +206,7 @@ impl ParallelExecutor {
     ) -> ParallelExecutorResult<C>
     where
         C: Chain + Send + Sync,
-        S: Storage + Debug + Send + Sync,
+        S: Database + Debug + Send + Sync,
     {
         if txs.is_empty() {
             return Ok(Vec::new());
@@ -316,7 +311,7 @@ impl ParallelExecutor {
                     write_history.first_key_value(),
                     Some((_, MemoryEntry::Data(_, MemoryValue::Basic(_))))
                 ) {
-                    if let Ok(Some(account)) = storage.basic(&address) {
+                    if let Ok(Some(account)) = storage.basic(address) {
                         balance = account.balance;
                         nonce = account.nonce;
                     }
@@ -431,9 +426,9 @@ impl ParallelExecutor {
         Ok(fully_evaluated_results)
     }
 
-    fn try_execute<S: Storage, C: Chain>(
+    fn try_execute<DB: Database, C: Chain>(
         &self,
-        vm: &Vm<'_, S, C>,
+        vm: &Vm<'_, DB, C>,
         scheduler: &Scheduler,
         tx_version: TxVersion,
     ) -> Option<Task> {
@@ -496,9 +491,9 @@ fn try_validate(
 /// Execute REVM transactions sequentially.
 // Useful for falling back for (small) blocks with many dependencies.
 // TODO: Use this for a long chain of sequential transactions even in parallel mode.
-pub fn execute_revm_sequential<S: Storage + Debug, C: Chain>(
+pub fn execute_revm_sequential<DB: Database + Debug, C: Chain>(
     chain: &C,
-    storage: &S,
+    storage: &DB,
     spec_id: SpecId,
     block_env: BlockEnv,
     txs: Vec<TxEnv>,

@@ -16,18 +16,14 @@ use alloy_transport_http::Http;
 use hashbrown::HashMap;
 
 use reqwest::Client;
-use revm::{
-    bytecode::Bytecode,
-    precompile::{PrecompileSpecId, Precompiles},
-    primitives::hardfork::SpecId,
-};
+use revm::{bytecode::Bytecode, precompile::{PrecompileSpecId, Precompiles}, primitives::hardfork::SpecId, Database};
 use tokio::{
     runtime::{Handle, Runtime},
     task,
 };
 
-use super::{BlockHashes, Bytecodes, ChainState};
-use crate::{AccountBasic, EvmAccount, Storage};
+use super::{BlockHashes, Bytecodes, ChainState, Storage};
+use crate::{AccountBasic, EvmAccount};
 
 type RpcProvider<N> = RootProvider<Http<Client>, N>;
 
@@ -122,10 +118,28 @@ impl<N: Network> RpcStorage<N> {
 }
 
 impl<N: Network> Storage for RpcStorage<N> {
+
+    fn code_hash(&self, address: &Address) -> Result<Option<B256>, TransportError> {
+        self.basic(address)?;
+        Ok(self
+            .cache_accounts
+            .lock()
+            .unwrap()
+            .get(address)
+            .and_then(|account| account.code_hash))
+    }
+}
+
+impl<N: Network> Database for RpcStorage<N> {
     type Error = TransportError;
 
-    fn basic(&self, address: &Address) -> Result<Option<AccountBasic>, Self::Error> {
-        if let Some(account) = self.cache_accounts.lock().unwrap().get(address) {
+    fn basic(&self, address: Address) -> Result<Option<AccountBasic>, Self::Error> {
+        if let Some(account) = self
+            .cache_accounts
+            .lock()
+            .unwrap()
+            .get(&address)
+        {
             return Ok(Some(AccountBasic {
                 balance: account.balance,
                 nonce: account.nonce,
@@ -136,11 +150,11 @@ impl<N: Network> Storage for RpcStorage<N> {
             tokio::join!(
                 self.fetch(|| {
                     self.provider
-                        .get_transaction_count(*address)
+                        .get_transaction_count(address)
                         .block_id(self.block_id)
                 }),
-                self.fetch(|| self.provider.get_balance(*address).block_id(self.block_id)),
-                self.fetch(|| self.provider.get_code_at(*address).block_id(self.block_id)),
+                self.fetch(|| self.provider.get_balance(address).block_id(self.block_id)),
+                self.fetch(|| self.provider.get_code_at(address).block_id(self.block_id)),
             )
         });
         let nonce = nonce?;
@@ -168,7 +182,7 @@ impl<N: Network> Storage for RpcStorage<N> {
             Some(code_hash)
         };
         self.cache_accounts.lock().unwrap().insert(
-            *address,
+            address,
             EvmAccount {
                 balance,
                 nonce,
@@ -180,29 +194,19 @@ impl<N: Network> Storage for RpcStorage<N> {
         Ok(Some(AccountBasic { balance, nonce }))
     }
 
-    fn code_hash(&self, address: &Address) -> Result<Option<B256>, Self::Error> {
-        self.basic(address)?;
-        Ok(self
-            .cache_accounts
-            .lock()
-            .unwrap()
-            .get(address)
-            .and_then(|account| account.code_hash))
+    fn code_by_hash(&self, code_hash: B256) -> Result<Option<Bytecode>, Self::Error> {
+        Ok(self.cache_bytecodes.lock().unwrap().get(&code_hash).cloned())
     }
 
-    fn code_by_hash(&self, code_hash: &B256) -> Result<Option<Bytecode>, Self::Error> {
-        Ok(self.cache_bytecodes.lock().unwrap().get(code_hash).cloned())
-    }
-
-    fn storage(&self, address: &Address, index: &U256) -> Result<U256, Self::Error> {
-        if let Some(account) = self.cache_accounts.lock().unwrap().get(address) {
-            if let Some(value) = account.storage.get(index) {
+    fn storage(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
+        if let Some(account) = self.cache_accounts.lock().unwrap().get(&address) {
+            if let Some(value) = account.storage.get(&index) {
                 return Ok(*value);
             }
         }
         let value = self.block_on(self.fetch(|| {
             self.provider
-                .get_storage_at(*address, *index)
+                .get_storage_at(address, index)
                 .block_id(self.block_id)
         }))?;
         // We only cache if the pre-state account is non-empty. Else this
@@ -210,15 +214,15 @@ impl<N: Network> Storage for RpcStorage<N> {
         // that would make this account non-empty and may fail a tx that
         // deploys a contract here (EIP-7610).
         self.basic(address)?;
-        if let Some(account) = self.cache_accounts.lock().unwrap().get_mut(address) {
+        if let Some(account) = self.cache_accounts.lock().unwrap().get_mut(&address) {
             account.storage.insert(*index, value);
         }
 
         Ok(value)
     }
 
-    fn block_hash(&self, number: &u64) -> Result<B256, Self::Error> {
-        if let Some(&block_hash) = self.cache_block_hashes.lock().unwrap().get(number) {
+    fn block_hash(&self, number: u64) -> Result<B256, Self::Error> {
+        if let Some(&block_hash) = self.cache_block_hashes.lock().unwrap().get(&number) {
             return Ok(block_hash);
         }
 
