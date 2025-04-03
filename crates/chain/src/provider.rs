@@ -141,17 +141,17 @@ where
         block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
     ) -> Result<u64, BlockExecutionError> {
         let mut executor = metis_pe::ParallelExecutor::default();
-        let eth_chain = Ethereum::mainnet();
-        let chain_spec = self.strategy_factory.chain_spec();
-        let spec_id = eth_chain.get_block_spec(block.header()).unwrap();
-        let block_env = metis_pe::compat::get_block_env(&block.header(), spec_id);
+        let env = self.strategy_factory.evm_env(block.header());
+        let spec_id = *env.spec_id();
+        let block_env = env.block_env;
         let tx_envs = block
             .transactions_with_sender()
             .map(|(_, signed_tx)| signed_tx.tx_env(block_env.clone()))
             .collect::<Result<Vec<_>, _>>()?;
 
+        let eth_chain = Ethereum::custom(env.cfg_env.chain_id);
         let results = executor.execute_revm_parallel(
-            &chain_spec.as_ref(),
+            &eth_chain,
             &self.db,
             spec_id,
             block_env,
