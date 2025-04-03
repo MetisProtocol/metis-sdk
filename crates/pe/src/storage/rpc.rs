@@ -17,15 +17,15 @@ use reqwest::Client;
 use revm::{
     bytecode::Bytecode,
     precompile::{PrecompileSpecId, Precompiles},
-    primitives::{hardfork::SpecId}
+    primitives::hardfork::SpecId,
 };
 use tokio::{
     runtime::{Handle, Runtime},
     task,
 };
 
-use crate::{AccountBasic, EvmAccount, Storage};
 use super::{BlockHashes, Bytecodes, ChainState};
+use crate::{AccountBasic, EvmAccount, Storage};
 
 type RpcProvider<N> = RootProvider<Http<Client>, N>;
 

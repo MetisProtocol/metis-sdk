@@ -38,7 +38,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 #[cfg(not(target_arch = "aarch64"))]
                 8,
             )
-                .unwrap(),
+            .unwrap(),
         );
     let mut pe = ParallelExecutor::default();
 

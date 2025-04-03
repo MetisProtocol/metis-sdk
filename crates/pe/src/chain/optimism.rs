@@ -2,10 +2,10 @@
 
 use super::{CalculateReceiptRootError, Chain, RewardPolicy};
 use crate::{
-    hash_deterministic, mv_memory::MvMemory, BuildIdentityHasher, MemoryLocation, TxExecutionResult,
+    BuildIdentityHasher, MemoryLocation, TxExecutionResult, hash_deterministic, mv_memory::MvMemory,
 };
 use alloy_consensus::Transaction;
-use alloy_primitives::{Address, ChainId, B256, U256};
+use alloy_primitives::{Address, B256, ChainId, U256};
 use alloy_rpc_types_eth::{BlockTransactions, Header};
 use hashbrown::HashMap;
 use op_alloy_consensus::{OpDepositReceipt, OpReceiptEnvelope, OpTxEnvelope, OpTxType};
@@ -119,8 +119,10 @@ impl Chain for Optimism {
     fn build_mv_memory(&self, block_env: &BlockEnv, txs: &[TxEnv]) -> MvMemory {
         let beneficiary_location_hash =
             hash_deterministic(MemoryLocation::Basic(block_env.beneficiary));
-        let l1_fee_recipient_location_hash = hash_deterministic(op_revm::constants::L1_FEE_RECIPIENT);
-        let base_fee_recipient_location_hash = hash_deterministic(op_revm::constants::BASE_FEE_RECIPIENT);
+        let l1_fee_recipient_location_hash =
+            hash_deterministic(op_revm::constants::L1_FEE_RECIPIENT);
+        let base_fee_recipient_location_hash =
+            hash_deterministic(op_revm::constants::BASE_FEE_RECIPIENT);
 
         // TODO: Estimate more locations based on sender, to, etc.
         let mut estimated_locations = HashMap::with_hasher(BuildIdentityHasher::default());
@@ -186,8 +188,10 @@ impl Chain for Optimism {
                             .ok_or(CalculateReceiptRootError::OpDepositMissingSender)?;
                         let receipt = OpDepositReceipt {
                             inner: receipt,
-                            deposit_nonce: (spec_id >= SpecId::from(OpSpecId::CANYON)).then_some(account.nonce - 1),
-                            deposit_receipt_version: (spec_id >= SpecId::from(OpSpecId::CANYON)).then_some(1),
+                            deposit_nonce: (spec_id >= SpecId::from(OpSpecId::CANYON))
+                                .then_some(account.nonce - 1),
+                            deposit_receipt_version: (spec_id >= SpecId::from(OpSpecId::CANYON))
+                                .then_some(1),
                         };
                         OpReceiptEnvelope::Deposit(receipt.with_bloom())
                     }

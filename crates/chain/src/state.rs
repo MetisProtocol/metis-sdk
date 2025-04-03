@@ -1,18 +1,13 @@
-use reth::{
-    api::{ConfigureEvm},
-    revm::{
-        db::{State},
-    },
-};
+use alloy_primitives::{Address, B256, U256};
+use metis_pe::{AccountBasic, Storage};
+use reth::revm::Database;
+use reth::{api::ConfigureEvm, revm::db::State};
 use reth_evm::{
     Evm,
     execute::{BlockExecutionError, BlockExecutor, BlockExecutorProvider, Executor},
 };
-use std::sync::{Arc, Mutex};
-use alloy_primitives::{Address, B256, U256};
-use reth::revm::Database;
-use metis_pe::{AccountBasic, Storage};
 use revm::bytecode::Bytecode;
+use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 pub struct StateStorageAdapter<DB> {
@@ -40,13 +35,16 @@ impl<DB: Database + Send + Sync + 'static> Storage for StateStorageAdapter<DB> {
 
     fn code_hash(&self, address: &Address) -> Result<Option<B256>, Self::Error> {
         Ok(self
-            .state.lock().unwrap().cache.accounts
+            .state
+            .lock()
+            .unwrap()
+            .cache
+            .accounts
             .get(address)
             .and_then(|cache| {
-                let acc =  cache.clone().account;
+                let acc = cache.clone().account;
                 acc.map(|x| x.info.code_hash)
-            })
-        )
+            }))
     }
 
     fn code_by_hash(&self, code_hash: &B256) -> Result<Option<Bytecode>, Self::Error> {

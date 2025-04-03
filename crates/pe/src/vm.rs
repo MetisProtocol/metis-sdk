@@ -188,7 +188,7 @@ impl<'a, S: Storage, C: Chain> VmDb<'a, S, C> {
             db.to_code_hash = db.get_code_hash(to)?;
             db.is_lazy = db.to_code_hash.is_none()
                 && (vm.mv_memory.data.contains_key(&from_hash)
-                || vm.mv_memory.data.contains_key(&to_hash.unwrap()));
+                    || vm.mv_memory.data.contains_key(&to_hash.unwrap()));
         }
         Ok(db)
     }
@@ -317,7 +317,7 @@ impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
                             // Inconsistent: new origin is different from the previous!
                             if has_prev_origins
                                 && unsafe { read_origins.get_unchecked(new_origins.len()) }
-                                != &origin
+                                    != &origin
                             {
                                 return Err(ReadError::InconsistentRead);
                             }
@@ -604,9 +604,9 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
                         if is_new_code
                             || read_account.is_none()
                             || read_account.is_some_and(|(basic, _)| {
-                            basic.nonce != account.info.nonce
-                                || basic.balance != account.info.balance
-                        })
+                                basic.nonce != account.info.nonce
+                                    || basic.balance != account.info.balance
+                            })
                         {
                             if evm.db().is_lazy {
                                 if account_location_hash == from_hash {
