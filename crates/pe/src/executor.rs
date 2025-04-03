@@ -143,8 +143,6 @@ impl ParallelExecutor {
 }
 
 impl ParallelExecutor {
-    /// Execute an Alloy block, which is becoming the "standard" format in Rust.
-    /// TODO: Better error handling.
     pub fn execute<S, C>(
         &mut self,
         chain: &C,
@@ -163,9 +161,7 @@ impl ParallelExecutor {
         C: Chain + Send + Sync,
         S: Storage + Debug + Send + Sync,
     {
-        let spec_id = chain
-            .get_block_spec(&block.header)
-            .map_err(ParallelExecutorError::BlockSpecError)?;
+        let spec_id = chain.spec();
         let block_env = get_block_env(&block.header, spec_id);
         let tx_envs = match &block.transactions {
             BlockTransactions::Full(txs) => txs

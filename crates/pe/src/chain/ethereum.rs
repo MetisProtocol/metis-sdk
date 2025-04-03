@@ -1,7 +1,7 @@
 //! Ethereum
 
 use alloy_consensus::{ReceiptEnvelope, Transaction, TxEnvelope, TxType, Typed2718};
-use alloy_primitives::{Address, B256};
+use alloy_primitives::{Address, B256, ChainId};
 use alloy_provider::network::eip2718::Encodable2718;
 use alloy_rpc_types_eth::{BlockTransactions, Header};
 use hashbrown::HashMap;
@@ -19,16 +19,26 @@ use crate::{
 /// Implementation of [`Chain`] for Ethereum
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ethereum {
-    id: u64,
+    id: ChainId,
+    spec: SpecId,
 }
 
 impl Ethereum {
     /// Ethereum Mainnet
     pub const fn mainnet() -> Self {
-        Self { id: 1 }
+        Self {
+            id: 1,
+            spec: SpecId::PRAGUE,
+        }
     }
 
-    // TODO: support Ethereum Sepolia and other testnets
+    /// Custom network
+    pub const fn custom(id: ChainId) -> Self {
+        Self {
+            id,
+            spec: SpecId::PRAGUE,
+        }
+    }
 }
 
 /// Represents errors that can occur when parsing transactions
@@ -53,9 +63,14 @@ impl Chain for Ethereum {
     type Envelope = TxEnvelope;
     type BlockSpecError = std::convert::Infallible;
     type TransactionParsingError = EthereumTransactionParsingError;
+    type SpecId = SpecId;
 
     fn id(&self) -> u64 {
         self.id
+    }
+
+    fn spec(&self) -> SpecId {
+        self.spec
     }
 
     fn mock_tx(&self, envelope: Self::Envelope, from: Address) -> Self::Transaction {

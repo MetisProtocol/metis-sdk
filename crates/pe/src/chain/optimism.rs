@@ -18,17 +18,24 @@ use revm::primitives::hardfork::SpecId;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Optimism {
     id: ChainId,
+    spec: OpSpecId,
 }
 
 impl Optimism {
     /// Optimism Mainnet
     pub const fn mainnet() -> Self {
-        Self { id: 10 }
+        Self {
+            id: 10,
+            spec: OpSpecId::ISTHMUS,
+        }
     }
 
     /// Custom network
     pub const fn custom(id: ChainId) -> Self {
-        Self { id }
+        Self {
+            id,
+            spec: OpSpecId::ISTHMUS,
+        }
     }
 }
 
@@ -81,9 +88,14 @@ impl Chain for Optimism {
     type Envelope = OpTxEnvelope;
     type BlockSpecError = OptimismBlockSpecError;
     type TransactionParsingError = OptimismTransactionParsingError;
+    type SpecId = OpSpecId;
 
-    fn id(&self) -> ChainId {
+    fn id(&self) -> u64 {
         self.id
+    }
+
+    fn spec(&self) -> SpecId {
+        self.spec.into_eth_spec()
     }
 
     // TODO: allow to construct deposit transactions
@@ -95,20 +107,20 @@ impl Chain for Optimism {
         }
     }
 
-    fn get_block_spec(&self, header: &Header) -> Result<SpecId, Self::BlockSpecError> {
+    fn get_block_spec(&self, header: &Header) -> Result<OpSpecId, Self::BlockSpecError> {
         // TODO: The implementation below is only true for Optimism Mainnet.
         // When supporting other networks (e.g. Optimism Sepolia), remember to adjust the code here.
         if header.timestamp >= 1720627201 {
-            Ok(SpecId::from(OpSpecId::FJORD))
+            Ok(OpSpecId::FJORD)
         } else if header.timestamp >= 1710374401 {
-            Ok(SpecId::from(OpSpecId::ECOTONE))
+            Ok(OpSpecId::ECOTONE)
         } else if header.timestamp >= 1704992401 {
-            Ok(SpecId::from(OpSpecId::CANYON))
+            Ok(OpSpecId::CANYON)
         } else if header.number >= 105235063 {
             // On Optimism Mainnet, Bedrock and Regolith are activated at the same time.
             // Therefore, this function never returns SpecId::BEDROCK.
             // The statement above might not be true for other networks, e.g. Optimism Goerli.
-            Ok(SpecId::from(OpSpecId::REGOLITH))
+            Ok(OpSpecId::REGOLITH)
         } else {
             // TODO: revm does not support pre-Bedrock blocks.
             // https://docs.optimism.io/builders/node-operators/architecture#legacy-geth

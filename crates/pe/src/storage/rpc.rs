@@ -6,12 +6,14 @@ use std::{
 };
 
 use alloy_primitives::{Address, B256, U256};
-use alloy_provider::{Network, Provider, RootProvider, network::BlockResponse};
+use alloy_provider::{
+    Network, Provider, RootProvider,
+    network::{BlockResponse, primitives::HeaderResponse},
+};
 use alloy_rpc_types_eth::{BlockId, BlockNumberOrTag, BlockTransactionsKind};
 use alloy_transport::TransportError;
 use alloy_transport_http::Http;
 use hashbrown::HashMap;
-use op_alloy_network::primitives::HeaderResponse;
 
 use reqwest::Client;
 use revm::{
@@ -162,10 +164,7 @@ impl<N: Network> Storage for RpcStorage<N> {
             None
         } else {
             let code_hash = code.hash_slow();
-            self.cache_bytecodes
-                .lock()
-                .unwrap()
-                .insert(code_hash, code.into());
+            self.cache_bytecodes.lock().unwrap().insert(code_hash, code);
             Some(code_hash)
         };
         self.cache_accounts.lock().unwrap().insert(

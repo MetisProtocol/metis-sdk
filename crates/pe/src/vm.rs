@@ -1,8 +1,16 @@
 use alloy_primitives::TxKind;
 use alloy_rpc_types_eth::Receipt;
 use hashbrown::HashMap;
+#[cfg(feature = "optimism")]
+use metis_primitives::Transaction;
 #[cfg(feature = "compiler")]
 use metis_vm::ExtCompileWorker;
+#[cfg(feature = "optimism")]
+use op_revm::OpTransaction;
+#[cfg(feature = "optimism")]
+use op_revm::{DefaultOp, OpBuilder, OpContext, OpEvm, OpSpecId};
+#[cfg(feature = "optimism")]
+use revm::context::Cfg;
 use revm::context::JournalOutput;
 use revm::context_interface::{JournalTr, result::HaltReason};
 #[cfg(feature = "compiler")]
@@ -563,11 +571,17 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
         // Execute
         let mut db = VmDb::new(self, tx_version.tx_idx, tx, from_hash, to_hash)
             .map_err(VmExecutionError::from)?;
-        // TODO: Share as much [Evm], [Context], [Handler], etc. among threads as possible
-        // as creating them is very expensive.
+
+        #[cfg(not(feature = "optimism"))]
         let mut evm = build_evm(&mut db, self.spec_id, self.block_env.clone());
+        #[cfg(feature = "optimism")]
+        let mut evm = build_op_evm(&mut db, Default::default());
+
         let result_and_state = {
+            #[cfg(not(feature = "optimism"))]
             evm.set_tx(tx.clone());
+            #[cfg(feature = "optimism")]
+            evm.set_tx(OpTransaction::new(tx.clone()));
             #[cfg(feature = "compiler")]
             let mut t = WithoutRewardBeneficiaryHandler::new(self.worker.clone());
             #[cfg(not(feature = "compiler"))]
@@ -594,7 +608,11 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
                     if account.is_touched() {
                         let account_location_hash =
                             hash_deterministic(MemoryLocation::Basic(*address));
+
+                        #[cfg(not(feature = "optimism"))]
                         let read_account = evm.db().read_accounts.get(&account_location_hash);
+                        #[cfg(feature = "optimism")]
+                        let read_account = evm.0.db().read_accounts.get(&account_location_hash);
 
                         let has_code = !account.info.is_empty_code_hash();
                         let is_new_code = has_code
@@ -608,7 +626,11 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
                                     || basic.balance != account.info.balance
                             })
                         {
-                            if evm.db().is_lazy {
+                            #[cfg(not(feature = "optimism"))]
+                            let is_lazy = evm.db().is_lazy;
+                            #[cfg(feature = "optimism")]
+                            let is_lazy = evm.0.db().is_lazy;
+                            if is_lazy {
                                 if account_location_hash == from_hash {
                                     write_set.push((
                                         account_location_hash,
@@ -669,7 +691,7 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
                     tx,
                     U256::from(result_and_state.result.gas_used()),
                     #[cfg(feature = "optimism")]
-                    &mut evm.context.evm,
+                    &mut evm.ctx(),
                 )?;
 
                 drop(evm); // release db
@@ -729,7 +751,7 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
         write_set: &mut WriteSet,
         tx: &TxEnv,
         gas_used: U256,
-        #[cfg(feature = "optimism")] evm_context: &mut revm::EvmContext<DB>,
+        #[cfg(feature = "optimism")] op_ctx: &mut op_revm::OpContext<DB>,
     ) -> Result<(), VmExecutionError> {
         let mut gas_price = if let Some(priority_fee) = tx.gas_priority_fee {
             std::cmp::min(
@@ -755,19 +777,21 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
                 l1_fee_recipient_location_hash,
                 base_fee_vault_location_hash,
             } => {
-                let is_deposit = tx.optimism.source_hash.is_some();
+                use op_revm::transaction::OpTxTr;
+                use op_revm::transaction::deposit::DEPOSIT_TRANSACTION_TYPE;
+
+                let is_deposit = op_ctx.tx().tx_type() == DEPOSIT_TRANSACTION_TYPE;
                 if is_deposit {
                     SmallVec::new()
                 } else {
-                    // TODO: Better error handling
-                    // https://github.com/bluealloy/revm/blob/16e1ecb9a71544d9f205a51a22d81e2658202fde/crates/revm/src/optimism/handler_register.rs#L267
-                    let Some(enveloped_tx) = &tx.optimism.enveloped_tx else {
+                    let enveloped = op_ctx.tx().enveloped_tx().cloned();
+                    let spec = op_ctx.cfg().spec();
+                    let l1_block_info = op_ctx.chain();
+
+                    let Some(enveloped_tx) = &enveloped else {
                         panic!("[OPTIMISM] Failed to load enveloped transaction.");
                     };
-                    let Some(l1_block_info) = &mut evm_context.l1_block_info else {
-                        panic!("[OPTIMISM] Missing l1_block_info.");
-                    };
-                    let l1_cost = l1_block_info.calculate_tx_l1_cost(enveloped_tx, self.spec_id);
+                    let l1_cost = l1_block_info.calculate_tx_l1_cost(&enveloped_tx, spec);
 
                     smallvec![
                         (
@@ -777,7 +801,7 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
                         (l1_fee_recipient_location_hash, l1_cost),
                         (
                             base_fee_vault_location_hash,
-                            self.block_env.basefee.saturating_mul(gas_used),
+                            U256::from(self.block_env.basefee).saturating_mul(gas_used),
                         ),
                     ]
                 }
@@ -819,6 +843,17 @@ pub(crate) fn build_evm<DB: Database>(
     let mut evm = MainnetContext::new(db, spec_id).build_mainnet();
     evm.set_block(block_env);
     evm
+}
+
+#[cfg(feature = "optimism")]
+#[inline]
+pub(crate) fn build_op_evm<DB: Database>(db: DB, spec_id: OpSpecId) -> OpEvm<OpContext<DB>, ()> {
+    use revm::Context;
+
+    let op_ctx = Context::op().with_db(db).modify_cfg_chained(|cfg| {
+        cfg.spec = spec_id;
+    });
+    op_ctx.build_op()
 }
 
 pub struct WithoutRewardBeneficiaryHandler<EVM> {
