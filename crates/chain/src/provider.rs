@@ -1,25 +1,28 @@
 use std::num::NonZeroUsize;
 use alloy_evm::eth::EthBlockExecutor;
 use reth::{
-    api::{ConfigureEvm, NodeTypesWithEngine},
-    builder::{BuilderContext, FullNodeTypes, components::ExecutorBuilder},
+    api::{ConfigureEvm},
     providers::BlockExecutionResult,
     revm::{
         context::{TxEnv, result::ExecutionResult},
         db::{State, states::bundle_state::BundleRetention},
     },
 };
-use reth_chainspec::{ChainSpec, EthChainSpec};
+use reth_chainspec::ChainSpec;
 use reth_evm::{
     Database, Evm, OnStateHook,
     execute::{BlockExecutionError, BlockExecutor, BlockExecutorProvider, Executor},
 };
 use reth_evm_ethereum::{EthEvmConfig, RethReceiptBuilder};
 use reth_primitives::{
-    EthPrimitives, NodePrimitives, Receipt, Recovered, RecoveredBlock, TransactionSigned,
+    NodePrimitives, Receipt, Recovered, RecoveredBlock, TransactionSigned,
 };
 use std::sync::Arc;
+use reth::api::{FullNodeTypes, NodeTypesWithEngine};
+use reth::builder::BuilderContext;
+use reth::builder::components::ExecutorBuilder;
 use reth::builder::rpc::EngineValidatorBuilder;
+use reth::primitives::EthPrimitives;
 use metis_pe::chain::{Chain, Ethereum};
 use metis_pe::Storage;
 use crate::state::StateStorageAdapter;
@@ -45,13 +48,18 @@ impl Clone for BlockParallelExecutorProvider {
 impl BlockExecutorProvider for BlockParallelExecutorProvider {
     type Primitives = <EthEvmConfig as ConfigureEvm>::Primitives;
 
-    type Executor<DB: Database> = ParallelExecutor<DB>;
+    type Executor<DB: Database + Storage + Send + Sync + 'static> = ParallelExecutor<DB>;
 
     fn executor<DB>(&self, db: DB) -> Self::Executor<DB>
     where
-        DB: Database,
+        DB: Database + Storage + Send + Sync + 'static,
     {
-        ParallelExecutor::new(self.strategy_factory.clone(), db)
+        let adapter = StateStorageAdapter::new(State::builder()
+            .with_database(db)
+            .with_bundle_update()
+            .without_state_clear()
+            .build());
+        ParallelExecutor::new(self.strategy_factory.clone(), adapter)
     }
 }
 
@@ -79,15 +87,15 @@ impl<DB: Database> ParallelExecutor<DB> {
 
 impl<DB> Executor<DB> for ParallelExecutor<DB>
 where
-    DB: Database + Storage + Send + Sync,
+    DB: Database + Storage + Send + Sync + 'static,
 {
     type Primitives = <EthEvmConfig as ConfigureEvm>::Primitives;
     type Error = BlockExecutionError;
 
     fn execute_one(
         &mut self,
-        block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
-    ) -> Result<BlockExecutionResult<<Self::Primitives as NodePrimitives>::Receipt>, Self::Error>
+        block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
+    ) -> Result<BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>, Self::Error>
     {
         let db = &mut self.db;
         let mut strategy = self.strategy_factory.executor_for_block(db, block);
@@ -100,25 +108,24 @@ where
         Ok(result)
     }
 
-    fn execute_one_with_state_hook<H>(
-        &mut self,
-        block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
-        state_hook: H,
-    ) -> Result<BlockExecutionResult<<Self::Primitives as NodePrimitives>::Receipt>, Self::Error>
-    where
-        H: OnStateHook + 'static,
-    {
-        let db = &mut self.db;
-        let mut strategy = self
-            .strategy_factory
-            .executor_for_block(db, block)
-            .with_state_hook(Some(Box::new(state_hook)));
+        fn execute_one_with_state_hook<F>(
+            &mut self,
+            block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
+            state_hook: F) -> Result<BlockExecutionResult<<Self::Primitives as NodePrimitives>::Receipt>, Self::Error>
+        where
+            F: OnStateHook + 'static,
+        {
+            let db = &mut self.db;
+            let mut strategy = self
+                .strategy_factory
+                .executor_for_block(db, block)
+                .with_state_hook(Some(Box::new(state_hook)));
 
-        strategy.apply_pre_execution_changes()?;
-        self.execute_block(block)?;
-        let result = strategy.apply_post_execution_changes()?;
+            strategy.apply_pre_execution_changes()?;
+            self.execute_block(block)?;
+            let result = strategy.apply_post_execution_changes()?;
 
-        self.db.merge_transitions(BundleRetention::Reverts);
+            self.db.merge_transitions(BundleRetention::Reverts);
 
         Ok(result)
     }
@@ -134,7 +141,7 @@ where
 
 impl<DB> ParallelExecutor<DB>
 where
-    DB: Database + Storage + Send + Sync,
+    DB: Storage + Send + Sync + 'static,
 {
     fn execute_block(
         &mut self,
@@ -167,30 +174,6 @@ where
         }
 
         Ok(cumulative_gas_used)
-    }
-}
-
-/// A custom executor builder
-#[derive(Debug, Default, Clone, Copy)]
-#[non_exhaustive]
-pub struct ParallelExecutorBuilder;
-
-impl<Types, Node> ExecutorBuilder<Node> for ParallelExecutorBuilder
-where
-    Types: NodeTypesWithEngine<ChainSpec = ChainSpec, Primitives = EthPrimitives>,
-    Node: FullNodeTypes<Types = Types>,
-{
-    type EVM = EthEvmConfig;
-    type Executor = BlockParallelExecutorProvider;
-
-    async fn build_evm(
-        self,
-        ctx: &BuilderContext<Node>,
-    ) -> eyre::Result<(Self::EVM, Self::Executor)> {
-        let evm_config = EthEvmConfig::new(ctx.chain_spec());
-        let executor = BlockParallelExecutorProvider::new(evm_config.clone());
-
-        Ok((evm_config, executor))
     }
 }
 
@@ -233,3 +216,26 @@ where
     }
 }
 
+// A custom executor builder
+#[derive(Debug, Default, Clone, Copy)]
+#[non_exhaustive]
+pub struct ParallelExecutorBuilder;
+
+impl<Types, Node> ExecutorBuilder<Node> for ParallelExecutorBuilder
+where
+    Types: NodeTypesWithEngine<ChainSpec = ChainSpec, Primitives = EthPrimitives>,
+    Node: FullNodeTypes<Types = Types>,
+{
+    type EVM = EthEvmConfig;
+    type Executor = BlockParallelExecutorProvider;
+
+    async fn build_evm(
+        self,
+        ctx: &BuilderContext<Node>,
+    ) -> eyre::Result<(Self::EVM, Self::Executor)> {
+        let evm_config = EthEvmConfig::new(ctx.chain_spec());
+        let executor = BlockParallelExecutorProvider::new(evm_config.clone());
+
+        Ok((evm_config, executor))
+    }
+}
