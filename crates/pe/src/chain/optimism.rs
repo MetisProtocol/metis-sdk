@@ -2,10 +2,10 @@
 
 use super::{CalculateReceiptRootError, Chain, RewardPolicy};
 use crate::{
-    hash_deterministic, mv_memory::MvMemory, BuildIdentityHasher, MemoryLocation, TxExecutionResult,
+    BuildIdentityHasher, MemoryLocation, TxExecutionResult, hash_deterministic, mv_memory::MvMemory,
 };
 use alloy_consensus::Transaction;
-use alloy_primitives::{Address, ChainId, B256, U256};
+use alloy_primitives::{Address, B256, ChainId, U256};
 use alloy_rpc_types_eth::{BlockTransactions, Header};
 use hashbrown::HashMap;
 use op_alloy_consensus::{OpDepositReceipt, OpReceiptEnvelope, OpTxEnvelope, OpTxType};
@@ -18,17 +18,24 @@ use revm::primitives::hardfork::SpecId;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Optimism {
     id: ChainId,
+    spec: OpSpecId,
 }
 
 impl Optimism {
     /// Optimism Mainnet
     pub const fn mainnet() -> Self {
-        Self { id: 10 }
+        Self {
+            id: 10,
+            spec: OpSpecId::ISTHMUS,
+        }
     }
 
     /// Custom network
     pub const fn custom(id: ChainId) -> Self {
-        Self { id }
+        Self {
+            id,
+            spec: OpSpecId::ISTHMUS,
+        }
     }
 }
 
@@ -81,9 +88,14 @@ impl Chain for Optimism {
     type Envelope = OpTxEnvelope;
     type BlockSpecError = OptimismBlockSpecError;
     type TransactionParsingError = OptimismTransactionParsingError;
+    type SpecId = OpSpecId;
 
-    fn id(&self) -> ChainId {
+    fn id(&self) -> u64 {
         self.id
+    }
+
+    fn spec(&self) -> SpecId {
+        self.spec.into_eth_spec()
     }
 
     // TODO: allow to construct deposit transactions
@@ -95,20 +107,20 @@ impl Chain for Optimism {
         }
     }
 
-    fn get_block_spec(&self, header: &Header) -> Result<SpecId, Self::BlockSpecError> {
+    fn get_block_spec(&self, header: &Header) -> Result<OpSpecId, Self::BlockSpecError> {
         // TODO: The implementation below is only true for Optimism Mainnet.
         // When supporting other networks (e.g. Optimism Sepolia), remember to adjust the code here.
         if header.timestamp >= 1720627201 {
-            Ok(SpecId::from(OpSpecId::FJORD))
+            Ok(OpSpecId::FJORD)
         } else if header.timestamp >= 1710374401 {
-            Ok(SpecId::from(OpSpecId::ECOTONE))
+            Ok(OpSpecId::ECOTONE)
         } else if header.timestamp >= 1704992401 {
-            Ok(SpecId::from(OpSpecId::CANYON))
+            Ok(OpSpecId::CANYON)
         } else if header.number >= 105235063 {
             // On Optimism Mainnet, Bedrock and Regolith are activated at the same time.
             // Therefore, this function never returns SpecId::BEDROCK.
             // The statement above might not be true for other networks, e.g. Optimism Goerli.
-            Ok(SpecId::from(OpSpecId::REGOLITH))
+            Ok(OpSpecId::REGOLITH)
         } else {
             // TODO: revm does not support pre-Bedrock blocks.
             // https://docs.optimism.io/builders/node-operators/architecture#legacy-geth
@@ -119,8 +131,10 @@ impl Chain for Optimism {
     fn build_mv_memory(&self, block_env: &BlockEnv, txs: &[TxEnv]) -> MvMemory {
         let beneficiary_location_hash =
             hash_deterministic(MemoryLocation::Basic(block_env.beneficiary));
-        let l1_fee_recipient_location_hash = hash_deterministic(op_revm::constants::L1_FEE_RECIPIENT);
-        let base_fee_recipient_location_hash = hash_deterministic(op_revm::constants::BASE_FEE_RECIPIENT);
+        let l1_fee_recipient_location_hash =
+            hash_deterministic(op_revm::constants::L1_FEE_RECIPIENT);
+        let base_fee_recipient_location_hash =
+            hash_deterministic(op_revm::constants::BASE_FEE_RECIPIENT);
 
         // TODO: Estimate more locations based on sender, to, etc.
         let mut estimated_locations = HashMap::with_hasher(BuildIdentityHasher::default());
@@ -186,8 +200,10 @@ impl Chain for Optimism {
                             .ok_or(CalculateReceiptRootError::OpDepositMissingSender)?;
                         let receipt = OpDepositReceipt {
                             inner: receipt,
-                            deposit_nonce: (spec_id >= SpecId::from(OpSpecId::CANYON)).then_some(account.nonce - 1),
-                            deposit_receipt_version: (spec_id >= SpecId::from(OpSpecId::CANYON)).then_some(1),
+                            deposit_nonce: (spec_id >= SpecId::from(OpSpecId::CANYON))
+                                .then_some(account.nonce - 1),
+                            deposit_receipt_version: (spec_id >= SpecId::from(OpSpecId::CANYON))
+                                .then_some(1),
                         };
                         OpReceiptEnvelope::Deposit(receipt.with_bloom())
                     }

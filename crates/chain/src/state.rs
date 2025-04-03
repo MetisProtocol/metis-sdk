@@ -40,13 +40,16 @@ where
 
     fn code_hash(&self, address: &Address) -> Result<Option<B256>, Self::Error> {
         Ok(self
-            .state.lock().unwrap().cache.accounts
+            .state
+            .lock()
+            .unwrap()
+            .cache
+            .accounts
             .get(address)
             .and_then(|cache| {
-                let acc =  cache.clone().account;
+                let acc = cache.clone().account;
                 acc.map(|x| x.info.code_hash)
-            })
-        )
+            }))
     }
 
     fn code_by_hash(&self, code_hash: &B256) -> Result<Option<Bytecode>, Self::Error> {

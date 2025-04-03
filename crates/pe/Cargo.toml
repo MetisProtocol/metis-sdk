@@ -6,12 +6,13 @@ version.workspace = true
 [features]
 defaults = []
 
-full = []
+full = ["rpc-storage"]
 
 optimism = [
   "dep:op-alloy-consensus",
   "dep:op-alloy-network",
   "dep:op-alloy-rpc-types",
+  "dep:op-revm"
 ]
 
 rpc-storage = [
@@ -45,12 +46,12 @@ serde.workspace = true
 smallvec.workspace = true
 thiserror.workspace = true
 revm.workspace = true
-op-revm.workspace = true
 
 # OP dependencies
-op-alloy-consensus = { workspace = true, optional = true }
-op-alloy-network = { workspace = true, optional = true }
-op-alloy-rpc-types = { workspace = true, optional = true }
+op-alloy-consensus = { version = "0.9.6", optional = true }
+op-alloy-network = { version = "0.9.2", optional = true }
+op-alloy-rpc-types = { version = "0.9.2", optional = true}
+op-revm = { version = "1.0.0", optional = true }
 
 # Storage RPC feature dependencies
 alloy-transport = { workspace = true, optional = true }

@@ -59,8 +59,13 @@ pub trait Chain: Debug {
     /// The error type for [`Self::get_tx_env`].
     type TransactionParsingError: StdError + Debug + Clone + PartialEq + 'static;
 
+    /// The chain spec id
+    type SpecId;
+
     /// Get chain id.
     fn id(&self) -> u64;
+
+    fn spec(&self) -> SpecId;
 
     /// Mock RPC transaction for testing.
     fn mock_rpc_tx(envelope: Self::Envelope, from: Address) -> Transaction<Self::Envelope> {
@@ -78,7 +83,7 @@ pub trait Chain: Debug {
     fn mock_tx(&self, envelope: Self::Envelope, from: Address) -> Self::Transaction;
 
     /// Get block's [`SpecId`]
-    fn get_block_spec(&self, header: &Header) -> Result<SpecId, Self::BlockSpecError>;
+    fn get_block_spec(&self, header: &Header) -> Result<Self::SpecId, Self::BlockSpecError>;
 
     /// Get [`TxEnv`]
     fn get_tx_env(&self, tx: &Self::Transaction) -> Result<TxEnv, Self::TransactionParsingError>;
