@@ -23,7 +23,6 @@ use reth::builder::BuilderContext;
 use reth::builder::components::ExecutorBuilder;
 use reth::builder::rpc::EngineValidatorBuilder;
 use reth::primitives::EthPrimitives;
-use metis_pe::chain::{Chain, Ethereum};
 use metis_pe::Storage;
 use crate::state::StateStorageAdapter;
 
@@ -87,7 +86,7 @@ impl<DB: Database> ParallelExecutor<DB> {
 
 impl<DB> Executor<DB> for ParallelExecutor<DB>
 where
-    DB: Database + Storage + Send + Sync + 'static,
+    DB: Database<Error = BlockExecutionError> + Storage + Send + Sync + 'static,
 {
     type Primitives = <EthEvmConfig as ConfigureEvm>::Primitives;
     type Error = BlockExecutionError;
@@ -95,10 +94,10 @@ where
     fn execute_one(
         &mut self,
         block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
-    ) -> Result<BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>, Self::Error>
-    {
-        let db = &mut self.db;
-        let mut strategy = self.strategy_factory.executor_for_block(db, block);
+    ) -> Result<BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>,
+        Self::Error> {
+        let mut strategy = self.strategy_factory
+            .executor_for_block(&mut self.db.state.lock().unwrap(), block);
         strategy.apply_pre_execution_changes()?;
         self.execute_block(block)?;
         let result = strategy.apply_post_execution_changes()?;
@@ -110,8 +109,9 @@ where
 
         fn execute_one_with_state_hook<F>(
             &mut self,
-            block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
-            state_hook: F) -> Result<BlockExecutionResult<<Self::Primitives as NodePrimitives>::Receipt>, Self::Error>
+            block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
+            state_hook: F) -> Result<BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>,
+    Self::Error>
         where
             F: OnStateHook + 'static,
         {
@@ -131,7 +131,7 @@ where
     }
 
     fn into_state(self) -> State<DB> {
-        self.db.state.into_inner().unwrap()
+        self.db.state.lock().into().unwrap()
     }
 
     fn size_hint(&self) -> usize {
@@ -145,14 +145,15 @@ where
 {
     fn execute_block(
         &mut self,
-        block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
+        block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
     ) -> Result<u64, BlockExecutionError>
     {
         let mut executor = metis_pe::ParallelExecutor::default();
-        let eth_chain = Ethereum::mainnet();
+        let env = self.strategy_factory.evm_env(block.header());
         let chain_spec = self.strategy_factory.chain_spec();
-        let spec_id = eth_chain.get_block_spec(block.header()).unwrap();
-        let block_env = metis_pe::compat::get_block_env(&block.header(), spec_id);
+        let spec_id = *env.spec_id();
+        let block_env = env.block_env;
+
         let tx_envs = block.transactions_with_sender()
             .map(|(_, signed_tx)| {
                 signed_tx.tx_env(block_env.clone())
@@ -168,12 +169,7 @@ where
             NonZeroUsize::new(num_cpus::get()).unwrap_or(NonZeroUsize::new(1).unwrap()),
         );
 
-        let mut cumulative_gas_used = 0;
-        for result in results.unwrap() {
-            cumulative_gas_used += result.receipt.cumulative_gas_used
-        }
-
-        Ok(cumulative_gas_used)
+        Ok(results.unwrap().into_iter().map(|r| r.receipt.cumulative_gas_used).sum())
     }
 }
 
