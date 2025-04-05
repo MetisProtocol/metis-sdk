@@ -145,6 +145,7 @@ impl From<ReadError> for VmExecutionError {
 pub(crate) struct VmExecutionResult {
     pub(crate) execution_result: TxExecutionResult,
     pub(crate) flags: FinishExecFlags,
+    pub(crate) affected_txs: Vec<TxIdx>,
 }
 
 // A database interface that intercepts reads while executing a specific
@@ -701,15 +702,13 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
                         .add_lazy_addresses([tx.caller, tx.kind.into_to().unwrap_or_default()]);
                 }
 
-                let mut flags = if tx_version.tx_idx > 0 && !db.is_lazy {
+                let flags = if tx_version.tx_idx > 0 && !db.is_lazy {
                     FinishExecFlags::NeedValidation
                 } else {
                     FinishExecFlags::empty()
                 };
 
-                if self.mv_memory.record(tx_version, db.read_set, write_set) {
-                    flags |= FinishExecFlags::WroteNewLocation;
-                }
+                let affected_txs = self.mv_memory.record(tx_version, db.read_set, write_set);
 
                 Ok(VmExecutionResult {
                     execution_result: TxExecutionResult::from_revm(
@@ -718,6 +717,7 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
                         result_and_state,
                     ),
                     flags,
+                    affected_txs,
                 })
             }
             Err(EVMError::Database(read_error)) => Err(read_error.into()),

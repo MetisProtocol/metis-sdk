@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     sync::Mutex,
 };
 
@@ -33,6 +33,8 @@ pub struct MvMemory {
     // (that skips hashing for [u64] keys) would make our code cleaner and "faster".
     // Nevertheless, the compiler should be good enough to optimize these cases anyway.
     pub(crate) data: DashMap<MemoryLocationHash, BTreeMap<TxIdx, MemoryEntry>, BuildIdentityHasher>,
+    //
+    pub(crate) location_reads: DashMap<MemoryLocationHash, BTreeSet<TxIdx>, BuildIdentityHasher>,
     /// Last read & written locations of each transaction
     last_locations: Vec<Mutex<LastLocations>>,
     /// Lazy addresses that need full evaluation at the end of the block
@@ -65,6 +67,7 @@ impl MvMemory {
         }
         Self {
             data,
+            location_reads: DashMap::default(),
             last_locations: (0..block_size).map(|_| Mutex::default()).collect(),
             lazy_addresses: Mutex::new(LazyAddresses::from_iter(lazy_addresses)),
             // TODO: Fine-tune the number of shards, like to the next number of two from the
@@ -89,12 +92,24 @@ impl MvMemory {
         tx_version: &TxVersion,
         read_set: ReadSet,
         write_set: WriteSet,
-    ) -> bool {
+    ) -> Vec<TxIdx> {
+        //
+        for location in read_set.keys() {
+            self.location_reads
+                .entry(*location)
+                .or_default()
+                .insert(tx_version.tx_idx);
+        }
+
         let mut last_locations = index_mutex!(self.last_locations, tx_version.tx_idx);
         last_locations.read = read_set;
 
+        // TODO2: DOCs
+        let mut changed_locations = Vec::new();
+
         // TODO: Group updates by shard to avoid locking operations.
         // Remove old locations that aren't written to anymore.
+        // TODO2: USE hashset for write_set
         let mut last_location_idx = 0;
         while last_location_idx < last_locations.write.len() {
             let prev_location = unsafe { last_locations.write.get_unchecked(last_location_idx) };
@@ -102,27 +117,52 @@ impl MvMemory {
                 if let Some(mut written_transactions) = self.data.get_mut(prev_location) {
                     written_transactions.remove(&tx_version.tx_idx);
                 }
+                // add removed locations
+                changed_locations.push(*prev_location);
+                // remove location
                 last_locations.write.swap_remove(last_location_idx);
             } else {
                 last_location_idx += 1;
             }
         }
 
-        // Register new writes.
-        let mut wrote_new_location = false;
-
         for (location, value) in write_set {
-            self.data.entry(location).or_default().insert(
+            if let Some(old_entry) = self.data.entry(location).or_default().insert(
                 tx_version.tx_idx,
-                MemoryEntry::Data(tx_version.tx_incarnation, value),
-            );
-            if !last_locations.write.contains(&location) {
-                last_locations.write.push(location);
-                wrote_new_location = true;
+                MemoryEntry::Data(tx_version.tx_incarnation, value.clone()),
+            ) {
+                if let MemoryEntry::Data(_, old_value) = old_entry {
+                    if old_value == value {
+                        continue;
+                    }
+                }
             }
+            changed_locations.push(location);
         }
 
-        wrote_new_location
+        let affected_txs: HashSet<TxIdx> = changed_locations
+            .iter()
+            .map(|l| {
+                if let Some(txid_set) = self.location_reads.get(l) {
+                    if let Some(written_transactions) = self.data.get(l) {
+                        if let Some((txid, _)) =
+                            written_transactions.range(tx_version.tx_idx + 1..).next()
+                        {
+                            return txid_set
+                                .range(tx_version.tx_idx + 1..txid + 1)
+                                .cloned()
+                                .collect();
+                        }
+                    }
+                    txid_set.range(tx_version.tx_idx + 1..).cloned().collect()
+                } else {
+                    Vec::new()
+                }
+            })
+            .flatten()
+            .collect();
+
+        affected_txs.into_iter().collect()
     }
 
     // Obtain the last read set recorded by an execution of [tx_idx] and check
@@ -173,17 +213,6 @@ impl MvMemory {
             }
         }
         true
-    }
-
-    // Replace the write set of the aborted version in the shared memory data
-    // structure with special ESTIMATE markers to quickly abort higher transactions
-    // that read them.
-    pub(crate) fn convert_writes_to_estimates(&self, tx_idx: TxIdx) {
-        for location in &index_mutex!(self.last_locations, tx_idx).write {
-            if let Some(mut written_transactions) = self.data.get_mut(location) {
-                written_transactions.insert(tx_idx, MemoryEntry::Estimate);
-            }
-        }
     }
 
     pub(crate) fn consume_lazy_addresses(&self) -> impl IntoIterator<Item = Address> {

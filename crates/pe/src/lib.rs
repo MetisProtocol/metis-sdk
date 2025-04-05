@@ -75,7 +75,7 @@ fn hash_deterministic<T: Hash>(x: T) -> u64 {
 // TODO: It would be nice if we could tie the different cases of
 // memory locations & values at the type level, to prevent lots of
 // matches & potentially dangerous mismatch mistakes.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum MemoryValue {
     Basic(AccountBasic),
     CodeHash(B256),
@@ -142,6 +142,13 @@ struct TxStatus {
     status: IncarnationStatus,
 }
 
+#[derive(PartialEq, Debug)]
+enum ValidationStatus {
+    NotReady,
+    Waiting,
+    Validated,
+}
+
 // We maintain an in-memory multi-version data structure that stores for
 // each memory location the latest value written per transaction, along
 // with the associated transaction incarnation. When a transaction reads
@@ -177,16 +184,6 @@ type ReadSet = HashMap<MemoryLocationHash, ReadOrigins, BuildIdentityHasher>;
 // to the multi-version data structure at the end of execution.
 type WriteSet = Vec<(MemoryLocationHash, MemoryValue)>;
 
-// A scheduled worker task
-// TODO: Add more useful work when there are idle workers like near
-// the end of block execution, while waiting for a huge blocking
-// transaction to resolve, etc.
-#[derive(Debug)]
-enum Task {
-    Execution(TxVersion),
-    Validation(TxVersion),
-}
-
 bitflags! {
     struct FinishExecFlags: u8 {
         // Do we need to validate from this transaction?
@@ -218,10 +215,11 @@ pub mod chain;
 pub mod compat;
 mod executor;
 mod mv_memory;
+mod new_scheduler;
 pub use executor::{
     ParallelExecutor, ParallelExecutorError, ParallelExecutorResult, execute_revm_sequential,
 };
-mod scheduler;
+// mod scheduler;
 mod storage;
 pub use storage::{
     AccountBasic, BlockHashes, Bytecodes, ChainState, EvmAccount, InMemoryStorage, Storage,
