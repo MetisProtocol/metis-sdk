@@ -215,7 +215,7 @@ pub mod chain;
 pub mod compat;
 mod executor;
 mod mv_memory;
-mod new_scheduler;
+mod schedulers;
 pub use executor::{
     ParallelExecutor, ParallelExecutorError, ParallelExecutorResult, execute_revm_sequential,
 };

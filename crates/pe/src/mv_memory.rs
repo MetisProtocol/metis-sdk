@@ -127,14 +127,14 @@ impl MvMemory {
         }
 
         for (location, value) in write_set {
-            if let Some(old_entry) = self.data.entry(location).or_default().insert(
-                tx_version.tx_idx,
-                MemoryEntry::Data(tx_version.tx_incarnation, value.clone()),
-            ) {
-                if let MemoryEntry::Data(_, old_value) = old_entry {
-                    if old_value == value {
-                        continue;
-                    }
+            if let Some(MemoryEntry::Data(_, old_value)) =
+                self.data.entry(location).or_default().insert(
+                    tx_version.tx_idx,
+                    MemoryEntry::Data(tx_version.tx_incarnation, value.clone()),
+                )
+            {
+                if old_value == value {
+                    continue;
                 }
             }
             changed_locations.push(location);
@@ -142,7 +142,7 @@ impl MvMemory {
 
         let affected_txs: HashSet<TxIdx> = changed_locations
             .iter()
-            .map(|l| {
+            .flat_map(|l| {
                 if let Some(txid_set) = self.location_reads.get(l) {
                     if let Some(written_transactions) = self.data.get(l) {
                         if let Some((txid, _)) =
@@ -159,7 +159,6 @@ impl MvMemory {
                     Vec::new()
                 }
             })
-            .flatten()
             .collect();
 
         affected_txs.into_iter().collect()

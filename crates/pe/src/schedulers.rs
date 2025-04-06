@@ -6,9 +6,78 @@ use std::sync::{
 
 use smallvec::SmallVec;
 
-use crate::{
-    FinishExecFlags, IncarnationStatus, TxIdx, TxStatus, TxVersion, ValidationStatus,
-};
+use crate::{FinishExecFlags, IncarnationStatus, TxIdx, TxStatus, TxVersion, ValidationStatus};
+
+#[derive(Debug)]
+pub(crate) struct TransactionsGraph {
+    // The number of transactions in this block.
+    block_size: usize,
+    //
+    num_done: AtomicUsize,
+    //
+    transactions_queue: SegQueue<TxIdx>,
+    transactions_degree: Vec<AtomicUsize>,
+    // The list of dependent transactions to resume when the
+    // key transaction is re-executed.
+    // TODO2: USE Graph or other data structure to store the dependencies
+    transactions_dependents: Vec<Mutex<Vec<TxIdx>>>,
+}
+
+impl TransactionsGraph {
+    pub(crate) fn new(block_size: usize) -> Self {
+        Self {
+            block_size,
+            num_done: AtomicUsize::new(0),
+            transactions_queue: SegQueue::new(),
+            transactions_degree: (0..block_size).map(|_| AtomicUsize::new(0)).collect(),
+            transactions_dependents: (0..block_size).map(|_| Mutex::default()).collect()
+        }
+    }
+
+    pub(crate) fn init(&self) {
+        for i in 0..self.block_size {
+            if self.transactions_degree[i].load(Ordering::Relaxed) == 0 {
+                self.transactions_queue.push(i);
+            }
+        }
+    }
+
+    pub(crate) fn add_dependency(&self, tx_idx: TxIdx, blocking_tx_idx: TxIdx) {
+        let mut blocking_dependents = index_mutex!(self.transactions_dependents, blocking_tx_idx);
+        blocking_dependents.push(tx_idx);
+        self.transactions_degree[tx_idx].fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub(crate) fn remove_dependency(&self, blocking_tx_idx: TxIdx) {
+        let mut blocking_dependents = index_mutex!(self.transactions_dependents, blocking_tx_idx);
+        for txid in blocking_dependents.iter() {
+            let degree = self.transactions_degree[*txid].fetch_sub(1, Ordering::Relaxed);
+            if degree == 0 {
+                self.transactions_queue.push(*txid);
+            }
+        }
+
+        blocking_dependents.clear();
+    }
+
+    pub(crate) fn pop(&self) -> Option<TxIdx> {
+        if let Some(txid) = self.transactions_queue.pop() {
+            self.num_done.fetch_sub(1, Ordering::Relaxed);
+            Some(txid)
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn block_size(&self) -> usize {
+        self.block_size
+    }
+
+    pub(crate) fn size(&self) -> usize {
+        self.block_size - self.num_done.load(Ordering::Relaxed)
+    }
+
+}
 
 pub trait TaskProvider {
     /// Returns the task ID of the next task to execute, or None if no tasks remain.
@@ -21,6 +90,37 @@ pub trait TaskProvider {
     fn num_tasks(&self) -> usize;
 }
 
+#[derive(Debug)]
+pub struct DAGProvider {
+    graph: TransactionsGraph,
+}
+
+impl DAGProvider {
+    pub(crate) fn new(block_size: usize) -> Self {
+        let graph = TransactionsGraph::new(block_size);
+        graph.init();
+        
+        Self {
+            graph,
+        }
+    }
+}
+
+impl TaskProvider for DAGProvider {
+    fn next_task(&self) -> Option<usize> {
+        self.graph.pop()
+    }
+
+    fn finish_task(&self, id: usize) {
+        self.graph.remove_dependency(id);
+    }
+
+    fn num_tasks(&self) -> usize {
+        self.graph.block_size()
+    }
+}
+
+#[derive(Debug)]
 pub struct NormalProvider {
     // The number of transactions in this block.
     block_size: usize,
@@ -113,9 +213,7 @@ impl<T: TaskProvider> ExeScheduler<T> {
                     })
                 })
                 .collect(),
-            transactions_dependents: (0..block_size)
-                .map(|_| Mutex::default())
-                .collect(),
+            transactions_dependents: (0..block_size).map(|_| Mutex::default()).collect(),
             num_validated: AtomicUsize::new(0),
         }
     }
@@ -236,11 +334,9 @@ impl<T: TaskProvider> ExeScheduler<T> {
             tx.status = IncarnationStatus::ReadyToExecute;
             tx.incarnation += 1;
             self.reexecution_queue.push(tx_idx);
-        } else {
-            if tx.status == IncarnationStatus::Executed {
-                tx.status = IncarnationStatus::Validated;
-                self.num_validated.fetch_add(1, Ordering::Relaxed);
-            }
+        } else if tx.status == IncarnationStatus::Executed {
+            tx.status = IncarnationStatus::Validated;
+            self.num_validated.fetch_add(1, Ordering::Relaxed);
         }
     }
 }

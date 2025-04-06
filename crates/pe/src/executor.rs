@@ -28,7 +28,7 @@ use crate::{
     compat::get_block_env,
     hash_deterministic,
     mv_memory::MvMemory,
-    new_scheduler::{ExeScheduler, NormalProvider, TaskProvider, ValidationScheduler},
+    schedulers::{ExeScheduler, NormalProvider, TaskProvider, ValidationScheduler},
     storage::StorageWrapper,
     vm::{ExecutionError, TxExecutionResult, Vm, VmExecutionError, VmExecutionResult, build_evm},
 };
@@ -114,7 +114,7 @@ impl<T> AsyncDropper<T> {
 pub struct ParallelExecutor {
     execution_results: Vec<Mutex<Option<TxExecutionResult>>>,
     abort_reason: OnceLock<AbortReason>,
-    dropper: AsyncDropper<(MvMemory, ValidationScheduler, Vec<TxEnv>)>,
+    dropper: AsyncDropper<(MvMemory, ExeScheduler<NormalProvider>, ValidationScheduler, Vec<TxEnv>)>,
     /// The compile work shared with different vm instance.
     #[cfg(feature = "compiler")]
     pub worker: Arc<ExtCompileWorker>,
@@ -275,7 +275,8 @@ impl ParallelExecutor {
         if let Some(abort_reason) = self.abort_reason.take() {
             match abort_reason {
                 AbortReason::FallbackToSequential => {
-                    self.dropper.drop((mv_memory, validation_scheduler, Vec::new()));
+                    self.dropper
+                        .drop((mv_memory, exe_scheduler, validation_scheduler, Vec::new()));
                     return execute_revm_sequential(
                         chain,
                         storage,
@@ -287,7 +288,7 @@ impl ParallelExecutor {
                     );
                 }
                 AbortReason::ExecutionError(err) => {
-                    self.dropper.drop((mv_memory, validation_scheduler, txs));
+                    self.dropper.drop((mv_memory, exe_scheduler, validation_scheduler, txs));
                     return Err(ParallelExecutorError::ExecutionError(err));
                 }
             }
@@ -425,7 +426,7 @@ impl ParallelExecutor {
             }
         }
 
-        self.dropper.drop((mv_memory, validation_scheduler, txs));
+        self.dropper.drop((mv_memory, exe_scheduler, validation_scheduler, txs));
 
         Ok(fully_evaluated_results)
     }
