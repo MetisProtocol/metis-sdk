@@ -1,28 +1,27 @@
 use std::num::NonZeroUsize;
-use alloy_evm::eth::EthBlockExecutor;
 use reth::{
-    api::{ConfigureEvm},
+    api::ConfigureEvm,
     providers::BlockExecutionResult,
     revm::{
-        context::{TxEnv, result::ExecutionResult},
         db::{State, states::bundle_state::BundleRetention},
     },
 };
-use reth_chainspec::ChainSpec;
+use reth_chainspec::{ChainSpec, EthChainSpec};
 use reth_evm::{
     Evm, OnStateHook,
-    execute::{BlockExecutionError, BlockExecutor, BlockExecutorProvider, Executor},
+    execute::{BlockExecutor, BlockExecutorProvider, Executor},
 };
-use reth_evm_ethereum::{EthEvmConfig, RethReceiptBuilder};
+use alloy_evm::block::BlockExecutionError;
+use alloy_evm::{Database, IntoTxEnv};
+use reth_evm_ethereum::{EthEvmConfig};
 use reth_primitives::{
-    NodePrimitives, Receipt, Recovered, RecoveredBlock, TransactionSigned,
+    NodePrimitives, RecoveredBlock
 };
-use std::sync::{Arc, Mutex};
+use std::sync::{Mutex};
 use reth::api::{FullNodeTypes, NodeTypesWithEngine};
 use reth::builder::BuilderContext;
 use reth::builder::components::ExecutorBuilder;
 use reth::primitives::EthPrimitives;
-use revm::Database;
 
 pub struct BlockParallelExecutorProvider {
     strategy_factory: EthEvmConfig,
@@ -42,8 +41,7 @@ impl Clone for BlockParallelExecutorProvider {
     }
 }
 
-impl BlockExecutorProvider for BlockParallelExecutorProvider
-{
+impl BlockExecutorProvider for BlockParallelExecutorProvider {
     type Primitives = <EthEvmConfig as ConfigureEvm>::Primitives;
 
     type Executor<DB: Database> = ParallelExecutor<DB>;
@@ -62,13 +60,12 @@ impl BlockExecutorProvider for BlockParallelExecutorProvider
 }
 
 pub struct ParallelExecutor<DB> {
-    /// Block execution strategy.
-    pub(crate) strategy_factory: EthEvmConfig,
-    /// Database.
-    pub(crate) db: State<DB>,
+    strategy_factory: EthEvmConfig,
+    db: State<DB>,
 }
 
-impl<DB: Database> ParallelExecutor<DB> {
+impl<DB> ParallelExecutor<DB>
+{
     pub fn new(strategy_factory: EthEvmConfig, db: State<DB>) -> Self {
         Self {
             strategy_factory,
@@ -99,25 +96,25 @@ where
         Ok(result)
     }
 
-        fn execute_one_with_state_hook<F>(
-            &mut self,
-            block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
-            state_hook: F) -> Result<BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>,
-    Self::Error>
-        where
-            F: OnStateHook + 'static,
-        {
-            let db = &mut self.db;
-            let mut strategy = self
-                .strategy_factory
-                .executor_for_block(db, block)
-                .with_state_hook(Some(Box::new(state_hook)));
+    fn execute_one_with_state_hook<F>(
+        &mut self,
+        block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
+        state_hook: F,
+    ) -> Result<BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>, Self::Error>
+    where
+        F: OnStateHook + 'static,
+    {
+        let db = &mut self.db;
+        let mut strategy = self
+            .strategy_factory
+            .executor_for_block(db, block)
+            .with_state_hook(Some(Box::new(state_hook)));
 
-            strategy.apply_pre_execution_changes()?;
-            self.execute_block(block)?;
-            let result = strategy.apply_post_execution_changes()?;
+        strategy.apply_pre_execution_changes()?;
+        self.execute_block(block)?;
+        let result = strategy.apply_post_execution_changes()?;
 
-            self.db.merge_transitions(BundleRetention::Reverts);
+        self.db.merge_transitions(BundleRetention::Reverts);
 
         Ok(result)
     }
@@ -138,22 +135,19 @@ where
     fn execute_block(
         &mut self,
         block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
-    ) -> Result<u64, BlockExecutionError>
-    {
+    ) -> Result<u64, BlockExecutionError> {
         let mut executor = metis_pe::ParallelExecutor::default();
         let env = self.strategy_factory.evm_env(block.header());
         let chain_spec = self.strategy_factory.chain_spec();
         let spec_id = *env.spec_id();
         let block_env = env.block_env;
 
-        let tx_envs = block.transactions_with_sender()
-            .map(|(_, signed_tx)| {
-                signed_tx.tx_env(block_env.clone())
-            })
+        let tx_envs = block.transactions_recovered()
+            .map(|(recover_tx)| recover_tx.into_tx_env())
             .collect::<Result<Vec<_>, _>>()?;
 
         let results = executor.execute_revm_parallel(
-            &chain_spec.as_ref(),
+            &chain_spec.chain(),
             Mutex::new(&self.db),
             spec_id,
             block_env,
@@ -165,46 +159,6 @@ where
     }
 }
 
-pub struct ParallelBlockExecutor<'a, Evm> {
-    /// Inner Ethereum execution strategy.
-    inner: EthBlockExecutor<'a, Evm, &'a Arc<ChainSpec>, &'a RethReceiptBuilder>,
-}
-
-impl<'db, DB, E> BlockExecutor for ParallelBlockExecutor<'_, E>
-where
-    DB: Database + 'db,
-    E: Evm<DB = &'db mut State<DB>, Tx = TxEnv>,
-{
-    type Transaction = TransactionSigned;
-    type Receipt = Receipt;
-    type Evm = E;
-
-    fn apply_pre_execution_changes(&mut self) -> Result<(), BlockExecutionError> {
-        self.inner.apply_pre_execution_changes()
-    }
-
-    fn execute_transaction_with_result_closure(
-        &mut self,
-        tx: Recovered<&TransactionSigned>,
-        f: impl FnOnce(&ExecutionResult<<Self::Evm as Evm>::HaltReason>),
-    ) -> Result<u64, BlockExecutionError> {
-        self.inner.execute_transaction_with_result_closure(tx, f)
-    }
-
-    fn finish(self) -> Result<(Self::Evm, BlockExecutionResult<Receipt>), BlockExecutionError> {
-        self.inner.finish()
-    }
-
-    fn set_state_hook(&mut self, _hook: Option<Box<dyn OnStateHook>>) {
-        self.inner.set_state_hook(_hook)
-    }
-
-    fn evm_mut(&mut self) -> &mut Self::Evm {
-        self.inner.evm_mut()
-    }
-}
-
-// A custom executor builder
 #[derive(Debug, Default, Clone, Copy)]
 #[non_exhaustive]
 pub struct ParallelExecutorBuilder;
