@@ -114,7 +114,12 @@ impl<T> AsyncDropper<T> {
 pub struct ParallelExecutor {
     execution_results: Vec<Mutex<Option<TxExecutionResult>>>,
     abort_reason: OnceLock<AbortReason>,
-    dropper: AsyncDropper<(MvMemory, ExeScheduler<NormalProvider>, ValidationScheduler, Vec<TxEnv>)>,
+    dropper: AsyncDropper<(
+        MvMemory,
+        ExeScheduler<NormalProvider>,
+        ValidationScheduler,
+        Vec<TxEnv>,
+    )>,
     /// The compile work shared with different vm instance.
     #[cfg(feature = "compiler")]
     pub worker: Arc<ExtCompileWorker>,
@@ -288,7 +293,8 @@ impl ParallelExecutor {
                     );
                 }
                 AbortReason::ExecutionError(err) => {
-                    self.dropper.drop((mv_memory, exe_scheduler, validation_scheduler, txs));
+                    self.dropper
+                        .drop((mv_memory, exe_scheduler, validation_scheduler, txs));
                     return Err(ParallelExecutorError::ExecutionError(err));
                 }
             }
@@ -426,7 +432,8 @@ impl ParallelExecutor {
             }
         }
 
-        self.dropper.drop((mv_memory, exe_scheduler, validation_scheduler, txs));
+        self.dropper
+            .drop((mv_memory, exe_scheduler, validation_scheduler, txs));
 
         Ok(fully_evaluated_results)
     }

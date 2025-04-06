@@ -30,7 +30,7 @@ impl TransactionsGraph {
             num_done: AtomicUsize::new(0),
             transactions_queue: SegQueue::new(),
             transactions_degree: (0..block_size).map(|_| AtomicUsize::new(0)).collect(),
-            transactions_dependents: (0..block_size).map(|_| Mutex::default()).collect()
+            transactions_dependents: (0..block_size).map(|_| Mutex::default()).collect(),
         }
     }
 
@@ -76,7 +76,6 @@ impl TransactionsGraph {
     pub(crate) fn size(&self) -> usize {
         self.block_size - self.num_done.load(Ordering::Relaxed)
     }
-
 }
 
 pub trait TaskProvider {
@@ -99,10 +98,8 @@ impl DAGProvider {
     pub(crate) fn new(block_size: usize) -> Self {
         let graph = TransactionsGraph::new(block_size);
         graph.init();
-        
-        Self {
-            graph,
-        }
+
+        Self { graph }
     }
 }
 

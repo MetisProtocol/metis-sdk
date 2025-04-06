@@ -99,7 +99,7 @@ pub trait Chain: Debug {
     /// Calculate receipt root
     fn calculate_receipt_root(
         &self,
-        spec_id: SpecId,
+        spec_id: Self::SpecId,
         txs: &BlockTransactions<Self::Transaction>,
         tx_results: &[TxExecutionResult],
     ) -> Result<B256, CalculateReceiptRootError>;
