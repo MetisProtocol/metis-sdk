@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/pe","crates/primitives","crates/vm"]
+members = ["crates/pe","crates/primitives","crates/vm", "crates/chain"]
 resolver = "2"
 
 [workspace.lints]
