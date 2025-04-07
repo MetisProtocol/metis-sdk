@@ -1,12 +1,14 @@
 use alloy_primitives::Bloom;
 use alloy_rpc_types_eth::Block;
 use metis_pe::{
-    EvmAccount, ParallelExecutor, Storage,
+    EvmAccount, ParallelExecutor,
     chain::{CalculateReceiptRootError, Chain},
 };
+use revm::Database;
 use revm::context::{BlockEnv, TxEnv};
 use revm::primitives::hardfork::SpecId;
 use revm::primitives::{Address, U256, alloy_primitives::U160};
+use std::sync::Mutex;
 use std::{num::NonZeroUsize, thread};
 
 /// Mock an account from an integer index that is used as the address.
@@ -25,17 +27,17 @@ pub fn mock_account(idx: usize) -> (Address, EvmAccount) {
 
 /// Execute an REVM block sequentially and parallelly with PEVM and assert that
 /// the execution results match.
-pub fn test_execute_revm<C, S>(chain: &C, storage: S, txs: Vec<TxEnv>)
+pub fn test_execute_revm<C, S>(chain: &C, storage: &mut S, txs: Vec<TxEnv>)
 where
     C: Chain + PartialEq + Send + Sync,
-    S: Storage + Send + Sync + std::fmt::Debug,
+    S: Database + Send + Sync + std::fmt::Debug,
 {
     let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
     let mut pe = ParallelExecutor::default();
     assert_eq!(
         metis_pe::execute_revm_sequential(
             chain,
-            &storage,
+            Mutex::new(storage),
             SpecId::LATEST,
             BlockEnv::default(),
             txs.clone(),
@@ -44,7 +46,7 @@ where
         ),
         pe.execute_revm_parallel(
             chain,
-            &storage,
+            Mutex::new(storage),
             SpecId::LATEST,
             BlockEnv::default(),
             txs,
@@ -57,12 +59,12 @@ where
 /// the execution results match.
 pub fn test_execute_alloy<C, S>(
     chain: &C,
-    storage: &S,
+    storage: &mut S,
     block: Block<C::Transaction>,
     must_match_block_header: bool,
 ) where
     C: Chain + PartialEq + Send + Sync,
-    S: Storage + Send + Sync + std::fmt::Debug,
+    S: Database + Send + Sync + std::fmt::Debug,
 {
     let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
     let mut pe = ParallelExecutor::default();

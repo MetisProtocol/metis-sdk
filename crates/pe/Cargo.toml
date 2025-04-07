@@ -6,20 +6,13 @@ version.workspace = true
 [features]
 defaults = []
 
-full = ["rpc-storage"]
+full = []
 
 optimism = [
   "dep:op-alloy-consensus",
   "dep:op-alloy-network",
   "dep:op-alloy-rpc-types",
   "dep:op-revm"
-]
-
-rpc-storage = [
-  "dep:alloy-transport",
-  "dep:alloy-transport-http",
-  "dep:reqwest",
-  "dep:tokio",
 ]
 
 compiler = ["metis-vm/compiler", "dep:revmc-build"]

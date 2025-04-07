@@ -1,61 +1,41 @@
 use alloy_primitives::{Address, B256, U256};
-use metis_pe::{AccountBasic, Storage};
-use reth::revm::Database;
-use reth::{api::ConfigureEvm, revm::db::State};
-use reth_evm::{
-    Evm,
-    execute::{BlockExecutionError, BlockExecutor, BlockExecutorProvider, Executor},
-};
+use reth::revm::db::State;
 use revm::bytecode::Bytecode;
-use std::sync::{Arc, Mutex};
+use revm::state::AccountInfo;
+use revm::{Database, DatabaseRef};
+use std::sync::RwLock;
 
-#[derive(Clone)]
-pub struct StateStorageAdapter<DB> {
-    pub(crate) state: Mutex<State<DB>>,
+pub struct StateStorageAdapter<'a, DB> {
+    pub(crate) state: RwLock<&'a mut State<DB>>,
 }
 
-impl<DB> StateStorageAdapter<DB> {
-    pub fn new(state: State<DB>) -> Self {
+unsafe impl<DB> Send for StateStorageAdapter<'_, DB> {}
+unsafe impl<DB> Sync for StateStorageAdapter<'_, DB> {}
+
+impl<'a, DB> StateStorageAdapter<'a, DB> {
+    pub fn new(state: &'a mut State<DB>) -> Self {
         Self {
-            state: Mutex::new(state),
+            state: RwLock::new(state),
         }
     }
 }
 
-impl<DB: Database + Send + Sync + 'static> Storage for StateStorageAdapter<DB> {
-    type Error = BlockExecutionError;
+impl<DB: Database> DatabaseRef for StateStorageAdapter<'_, DB> {
+    type Error = DB::Error;
 
-    fn basic(&self, address: &Address) -> Result<Option<AccountBasic>, Self::Error> {
-        let account = self.state.lock().unwrap().basic(*address)?;
-        Ok(account.map(|account| AccountBasic {
-            balance: account.balance,
-            nonce: account.nonce,
-        }))
+    fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
+        self.state.write().unwrap().basic(address)
     }
 
-    fn code_hash(&self, address: &Address) -> Result<Option<B256>, Self::Error> {
-        Ok(self
-            .state
-            .lock()
-            .unwrap()
-            .cache
-            .accounts
-            .get(address)
-            .and_then(|cache| {
-                let acc = cache.clone().account;
-                acc.map(|x| x.info.code_hash)
-            }))
+    fn code_by_hash_ref(&self, code_hash: B256) -> Result<Bytecode, Self::Error> {
+        self.state.write().unwrap().code_by_hash(code_hash)
     }
 
-    fn code_by_hash(&self, code_hash: &B256) -> Result<Option<Bytecode>, Self::Error> {
-        self.state.lock().unwrap().code_by_hash(*code_hash)
+    fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
+        self.state.write().unwrap().storage(address, index)
     }
 
-    fn storage(&self, address: &Address, index: &U256) -> Result<U256, Self::Error> {
-        self.state.lock().unwrap().storage(*address, *index)
-    }
-
-    fn block_hash(&self, number: &u64) -> Result<B256, Self::Error> {
-        self.state.lock().unwrap().block_hash(*number)
+    fn block_hash_ref(&self, number: u64) -> Result<B256, Self::Error> {
+        self.state.write().unwrap().block_hash(number)
     }
 }

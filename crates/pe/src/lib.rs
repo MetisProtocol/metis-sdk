@@ -7,6 +7,7 @@ use std::hash::{BuildHasher, BuildHasherDefault, Hash, Hasher};
 use alloy_primitives::{Address, B256, U256};
 use bitflags::bitflags;
 use hashbrown::HashMap;
+use revm::state::AccountInfo;
 use rustc_hash::FxBuildHasher;
 use smallvec::SmallVec;
 
@@ -77,7 +78,7 @@ fn hash_deterministic<T: Hash>(x: T) -> u64 {
 // matches & potentially dangerous mismatch mistakes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum MemoryValue {
-    Basic(AccountBasic),
+    Basic(AccountInfo),
     CodeHash(B256),
     Storage(U256),
     // We lazily update the beneficiary balance to avoid continuous
@@ -215,18 +216,13 @@ pub mod chain;
 pub mod compat;
 mod executor;
 mod mv_memory;
-mod schedulers;
+pub mod schedulers;
 pub use executor::{
     ParallelExecutor, ParallelExecutorError, ParallelExecutorResult, execute_revm_sequential,
 };
-// mod scheduler;
 mod storage;
 pub use storage::{
-    AccountBasic, BlockHashes, Bytecodes, ChainState, EvmAccount, InMemoryStorage, Storage,
-    StorageWrapper,
+    AccountBasic, BlockHashes, Bytecodes, ChainState, EvmAccount, InMemoryStorage, StorageError,
 };
 mod vm;
 pub use vm::{ExecutionError, TxExecutionResult};
-
-#[cfg(feature = "rpc-storage")]
-pub use storage::RpcStorage;

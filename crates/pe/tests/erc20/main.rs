@@ -23,7 +23,7 @@ fn erc20_independent() {
     state.insert(Address::ZERO, EvmAccount::default()); // Beneficiary
     test_execute_revm(
         &Ethereum::mainnet(),
-        InMemoryStorage::new(state, Arc::new(bytecodes), Default::default()),
+        &mut InMemoryStorage::new(state, Arc::new(bytecodes), Default::default()),
         txs,
     );
 }
@@ -51,7 +51,7 @@ fn erc20_clusters() {
     }
     common::test_execute_revm(
         &Ethereum::mainnet(),
-        InMemoryStorage::new(final_state, Arc::new(final_bytecodes), Default::default()),
+        &mut InMemoryStorage::new(final_state, Arc::new(final_bytecodes), Default::default()),
         final_txs,
     )
 }

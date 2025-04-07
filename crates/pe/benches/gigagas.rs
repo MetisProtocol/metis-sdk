@@ -2,8 +2,6 @@
 
 // TODO: More fancy benchmarks & plots.
 
-use std::{num::NonZeroUsize, sync::Arc, thread};
-
 use alloy_primitives::{Address, U160, U256};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use metis_pe::{
@@ -12,6 +10,8 @@ use metis_pe::{
 };
 use revm::context::{BlockEnv, TransactTo, TxEnv};
 use revm::primitives::hardfork::SpecId;
+use std::sync::Mutex;
+use std::{num::NonZeroUsize, sync::Arc, thread};
 
 // Better project structure
 
@@ -35,7 +35,7 @@ const GIGA_GAS: u64 = 1_000_000_000;
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 /// Runs a benchmark for executing a set of transactions on a given blockchain state.
-pub fn bench(c: &mut Criterion, name: &str, storage: InMemoryStorage, txs: Vec<TxEnv>) {
+pub fn bench(c: &mut Criterion, name: &str, mut storage: InMemoryStorage, txs: Vec<TxEnv>) {
     let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
     let chain = Ethereum::mainnet();
     let spec_id = SpecId::LATEST;
@@ -46,7 +46,7 @@ pub fn bench(c: &mut Criterion, name: &str, storage: InMemoryStorage, txs: Vec<T
         b.iter(|| {
             execute_revm_sequential(
                 black_box(&chain),
-                black_box(&storage),
+                black_box(Mutex::new(storage)),
                 black_box(spec_id),
                 black_box(block_env.clone()),
                 black_box(txs.clone()),
@@ -59,7 +59,7 @@ pub fn bench(c: &mut Criterion, name: &str, storage: InMemoryStorage, txs: Vec<T
         b.iter(|| {
             pe.execute_revm_parallel(
                 black_box(&chain),
-                black_box(&storage),
+                black_box(Mutex::new(storage.clone())),
                 black_box(spec_id),
                 black_box(block_env.clone()),
                 black_box(txs.clone()),
@@ -74,7 +74,7 @@ pub fn bench(c: &mut Criterion, name: &str, storage: InMemoryStorage, txs: Vec<T
             b.iter(|| {
                 execute_revm_sequential(
                     black_box(&chain),
-                    black_box(&storage),
+                    black_box(Mutex::new(&storage)),
                     black_box(spec_id),
                     black_box(block_env.clone()),
                     black_box(txs.clone()),
@@ -86,7 +86,7 @@ pub fn bench(c: &mut Criterion, name: &str, storage: InMemoryStorage, txs: Vec<T
             b.iter(|| {
                 pe.execute_revm_parallel(
                     black_box(&chain),
-                    black_box(&storage),
+                    black_box(Mutex::new(storage.clone())),
                     black_box(spec_id),
                     black_box(block_env.clone()),
                     black_box(txs.clone()),

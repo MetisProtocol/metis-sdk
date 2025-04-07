@@ -9,7 +9,7 @@ use smallvec::SmallVec;
 use crate::{FinishExecFlags, IncarnationStatus, TxIdx, TxStatus, TxVersion, ValidationStatus};
 
 #[derive(Debug)]
-pub(crate) struct TransactionsGraph {
+pub struct TransactionsGraph {
     /// The number of transactions in this block.
     block_size: usize,
     /// The number of transactions that have been executed.
@@ -25,7 +25,7 @@ pub(crate) struct TransactionsGraph {
 }
 
 impl TransactionsGraph {
-    pub(crate) fn new(block_size: usize) -> Self {
+    pub fn new(block_size: usize) -> Self {
         Self {
             block_size,
             num_done: AtomicUsize::new(0),
@@ -35,7 +35,7 @@ impl TransactionsGraph {
         }
     }
 
-    pub(crate) fn init(&self) {
+    pub fn init(&self) {
         for i in 0..self.block_size {
             if self.transactions_degree[i].load(Ordering::Relaxed) == 0 {
                 self.transactions_queue.push(i);
@@ -43,13 +43,13 @@ impl TransactionsGraph {
         }
     }
 
-    pub(crate) fn add_dependency(&self, tx_idx: TxIdx, blocking_tx_idx: TxIdx) {
+    pub fn add_dependency(&self, tx_idx: TxIdx, blocking_tx_idx: TxIdx) {
         let mut blocking_dependents = index_mutex!(self.transactions_dependents, blocking_tx_idx);
         blocking_dependents.push(tx_idx);
         self.transactions_degree[tx_idx].fetch_add(1, Ordering::Relaxed);
     }
 
-    pub(crate) fn remove_dependency(&self, blocking_tx_idx: TxIdx) {
+    pub fn remove_dependency(&self, blocking_tx_idx: TxIdx) {
         let mut blocking_dependents = index_mutex!(self.transactions_dependents, blocking_tx_idx);
         for txid in blocking_dependents.iter() {
             let degree = self.transactions_degree[*txid].fetch_sub(1, Ordering::Relaxed);
@@ -61,7 +61,7 @@ impl TransactionsGraph {
         blocking_dependents.clear();
     }
 
-    pub(crate) fn pop(&self) -> Option<TxIdx> {
+    pub fn pop(&self) -> Option<TxIdx> {
         if let Some(txid) = self.transactions_queue.pop() {
             self.num_done.fetch_sub(1, Ordering::Relaxed);
             Some(txid)
@@ -70,11 +70,11 @@ impl TransactionsGraph {
         }
     }
 
-    pub(crate) fn block_size(&self) -> usize {
+    pub fn block_size(&self) -> usize {
         self.block_size
     }
 
-    pub(crate) fn size(&self) -> usize {
+    pub fn size(&self) -> usize {
         self.block_size - self.num_done.load(Ordering::Relaxed)
     }
 }
@@ -96,7 +96,7 @@ pub struct DAGProvider {
 }
 
 impl DAGProvider {
-    pub(crate) fn new(block_size: usize) -> Self {
+    pub fn new(block_size: usize) -> Self {
         let graph = TransactionsGraph::new(block_size);
         graph.init();
 

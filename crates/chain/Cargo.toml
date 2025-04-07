@@ -10,13 +10,13 @@ revm.workspace = true
 alloy-rpc-types-eth.workspace = true
 alloy-consensus.workspace = true
 alloy-primitives.workspace = true
+alloy-evm.workspace = true
 
 reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.4", version = "1.3.4" }
 reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.4", version = "1.3.4" }
 reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.4", version = "1.3.4" }
 reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.4", version = "1.3.4" }
 reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.4", version = "1.3.4" }
-alloy-evm = { version = "0.1.0-alpha.3" }
 eyre = "0.6"
 
 num_cpus = "1.16.0"

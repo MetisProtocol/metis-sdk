@@ -11,9 +11,11 @@ use alloy_primitives::{Address, B256, Bytes, PrimitiveSignature, TxKind, U256};
 use alloy_rpc_types_eth::{Block, BlockTransactions, Header};
 use flate2::bufread::GzDecoder;
 use hashbrown::HashMap;
+use metis_pe::chain::Ethereum;
 use metis_pe::{
     BlockHashes, BuildSuffixHasher, ChainState, EvmAccount, InMemoryStorage, chain::Chain,
 };
+use metis_primitives::TxEnv;
 
 /// runner module
 pub mod runner;
@@ -109,6 +111,6 @@ where
         ),
         ..Block::<C::Transaction>::default()
     };
-    let storage = InMemoryStorage::new(accounts, Default::default(), Default::default());
-    test_execute_alloy(chain, &storage, block, false);
+    let mut storage = InMemoryStorage::new(accounts, Default::default(), Default::default());
+    test_execute_alloy(chain, &mut storage, block, false);
 }

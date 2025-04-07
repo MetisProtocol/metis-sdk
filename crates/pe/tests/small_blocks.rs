@@ -5,19 +5,24 @@ use alloy_primitives::{Address, U256};
 use metis_pe::InMemoryStorage;
 use metis_pe::chain::Ethereum;
 use revm::context::{TransactTo, TxEnv};
+use std::sync::Mutex;
 
 pub mod common;
 
 #[test]
 fn empty_revm_block() {
-    common::test_execute_revm(&Ethereum::mainnet(), InMemoryStorage::default(), Vec::new());
+    common::test_execute_revm(
+        &Ethereum::mainnet(),
+        &mut InMemoryStorage::default(),
+        Vec::new(),
+    );
 }
 
 #[test]
 fn one_tx_revm_block() {
-    common::test_execute_revm(
+    common::test_execute_alloy(
         &Ethereum::mainnet(),
-        InMemoryStorage::new(
+        &mut InMemoryStorage::new(
             [common::mock_account(0)].into_iter().collect(),
             Default::default(),
             Default::default(),

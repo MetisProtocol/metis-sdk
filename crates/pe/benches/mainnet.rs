@@ -42,7 +42,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         );
     let mut pe = ParallelExecutor::default();
 
-    common::for_each_block_from_disk(|block, storage| {
+    common::for_each_block_from_disk(|block, mut storage| {
         let mut group = c.benchmark_group(format!(
             "Block {}({} txs, {} gas)",
             block.header.number,
@@ -53,7 +53,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             b.iter(|| {
                 pe.execute(
                     black_box(&chain),
-                    black_box(&storage),
+                    black_box(&mut storage),
                     black_box(&block),
                     black_box(concurrency_level),
                     black_box(true),
@@ -64,7 +64,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             b.iter(|| {
                 pe.execute(
                     black_box(&chain),
-                    black_box(&storage),
+                    black_box(&mut storage),
                     black_box(&block),
                     black_box(concurrency_level),
                     black_box(false),
