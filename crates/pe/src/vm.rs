@@ -1,3 +1,12 @@
+use crate::{
+    BuildIdentityHasher, BuildSuffixHasher, EvmAccount, FinishExecFlags, MemoryEntry,
+    MemoryLocation, MemoryLocationHash, MemoryValue, ReadOrigin, ReadOrigins, ReadSet, TxIdx,
+    TxVersion, WriteSet,
+    chain::{Chain, RewardPolicy},
+    hash_deterministic,
+    mv_memory::MvMemory,
+    storage::Storage,
+};
 use alloy_primitives::TxKind;
 use alloy_rpc_types_eth::Receipt;
 use hashbrown::HashMap;
@@ -35,15 +44,6 @@ use smallvec::{SmallVec, smallvec};
 #[cfg(feature = "compiler")]
 use std::sync::Arc;
 use std::sync::Mutex;
-use crate::{
-    BuildIdentityHasher, BuildSuffixHasher, EvmAccount, FinishExecFlags, MemoryEntry,
-    MemoryLocation, MemoryLocationHash, MemoryValue, ReadOrigin, ReadOrigins, ReadSet,
-    TxIdx, TxVersion, WriteSet,
-    chain::{Chain, RewardPolicy},
-    hash_deterministic,
-    mv_memory::MvMemory,
-    storage::Storage,
-};
 
 /// The execution error from the underlying EVM executor.
 // Will there be DB errors outside of read?
@@ -146,6 +146,7 @@ impl From<ReadError> for VmExecutionError {
 pub(crate) struct VmExecutionResult {
     pub(crate) execution_result: TxExecutionResult,
     pub(crate) flags: FinishExecFlags,
+    pub(crate) affected_txs: Vec<TxIdx>,
 }
 
 // A database interface that intercepts reads while executing a specific
@@ -260,7 +261,9 @@ impl<'a, S: Storage, C: Chain> VmDb<'a, S, C> {
         // Fallback to storage
         Self::push_origin(read_origins, ReadOrigin::Storage)?;
         self.vm
-            .storage.lock().unwrap()
+            .storage
+            .lock()
+            .unwrap()
             .code_hash(&address)
             .map_err(|err| ReadError::StorageError(err.to_string()))
     }
@@ -449,9 +452,10 @@ impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
     }
 
     fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error> {
-        self
-            .vm
-            .storage.lock().unwrap()
+        self.vm
+            .storage
+            .lock()
+            .unwrap()
             .code_by_hash(code_hash)
             .map_err(|err| ReadError::StorageError(err.to_string()))
     }
@@ -488,14 +492,18 @@ impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
         // Fall back to storage
         Self::push_origin(read_origins, ReadOrigin::Storage)?;
         self.vm
-            .storage.lock().unwrap()
+            .storage
+            .lock()
+            .unwrap()
             .storage(address, index)
             .map_err(|err| ReadError::StorageError(err.to_string()))
     }
 
     fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error> {
         self.vm
-            .storage.lock().unwrap()
+            .storage
+            .lock()
+            .unwrap()
             .block_hash(number)
             .map_err(|err| ReadError::StorageError(err.to_string()))
     }
@@ -703,15 +711,13 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
                         .add_lazy_addresses([tx.caller, tx.kind.into_to().unwrap_or_default()]);
                 }
 
-                let mut flags = if tx_version.tx_idx > 0 && !db.is_lazy {
+                let flags = if tx_version.tx_idx > 0 && !db.is_lazy {
                     FinishExecFlags::NeedValidation
                 } else {
                     FinishExecFlags::empty()
                 };
 
-                if self.mv_memory.record(tx_version, db.read_set, write_set) {
-                    flags |= FinishExecFlags::WroteNewLocation;
-                }
+                let affected_txs = self.mv_memory.record(tx_version, db.read_set, write_set);
 
                 Ok(VmExecutionResult {
                     execution_result: TxExecutionResult::from_revm(
@@ -720,6 +726,7 @@ impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
                         result_and_state,
                     ),
                     flags,
+                    affected_txs,
                 })
             }
             Err(EVMError::Database(read_error)) => Err(read_error.into()),

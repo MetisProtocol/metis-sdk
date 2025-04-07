@@ -1,12 +1,12 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use super::{BlockHashes, Bytecodes, ChainState, StorageError};
+use crate::storage::Storage;
 use alloy_primitives::{Address, B256, U256, keccak256};
 use metis_primitives::EVMBytecode;
 use revm::Database;
 use revm::state::AccountInfo;
-use super::{BlockHashes, Bytecodes, ChainState, StorageError};
-use crate::storage::Storage;
 /// A storage that stores chain data in memory.
 #[derive(Debug, Clone, Default)]
 pub struct InMemoryStorage {
@@ -53,7 +53,9 @@ impl Database for InMemoryStorage {
     }
 
     fn code_by_hash(&mut self, code_hash: B256) -> Result<EVMBytecode, Self::Error> {
-        self.bytecodes.get(&code_hash).cloned()
+        self.bytecodes
+            .get(&code_hash)
+            .cloned()
             .ok_or_else(|| StorageError::StorageNotFound("code_hash_not_found".to_owned()))
     }
 

@@ -2,8 +2,6 @@
 
 // TODO: More fancy benchmarks & plots.
 
-use std::{num::NonZeroUsize, sync::Arc, thread};
-use std::sync::Mutex;
 use alloy_primitives::{Address, U160, U256};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use metis_pe::{
@@ -12,6 +10,8 @@ use metis_pe::{
 };
 use revm::context::{BlockEnv, TransactTo, TxEnv};
 use revm::primitives::hardfork::SpecId;
+use std::sync::Mutex;
+use std::{num::NonZeroUsize, sync::Arc, thread};
 
 // Better project structure
 

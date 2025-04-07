@@ -16,7 +16,12 @@ use alloy_transport_http::Http;
 use hashbrown::HashMap;
 
 use reqwest::Client;
-use revm::{bytecode::Bytecode, precompile::{PrecompileSpecId, Precompiles}, primitives::hardfork::SpecId, Database};
+use revm::{
+    Database,
+    bytecode::Bytecode,
+    precompile::{PrecompileSpecId, Precompiles},
+    primitives::hardfork::SpecId,
+};
 use tokio::{
     runtime::{Handle, Runtime},
     task,
@@ -118,7 +123,6 @@ impl<N: Network> RpcStorage<N> {
 }
 
 impl<N: Network> Storage for RpcStorage<N> {
-
     fn code_hash(&mut self, address: &Address) -> Result<Option<B256>, TransportError> {
         self.basic(*address)?;
         Ok(self
@@ -134,12 +138,7 @@ impl<N: Network> Database for RpcStorage<N> {
     type Error = TransportError;
 
     fn basic(&self, address: Address) -> Result<Option<AccountBasic>, Self::Error> {
-        if let Some(account) = self
-            .cache_accounts
-            .lock()
-            .unwrap()
-            .get(&address)
-        {
+        if let Some(account) = self.cache_accounts.lock().unwrap().get(&address) {
             return Ok(Some(AccountBasic {
                 balance: account.balance,
                 nonce: account.nonce,
@@ -195,7 +194,12 @@ impl<N: Network> Database for RpcStorage<N> {
     }
 
     fn code_by_hash(&self, code_hash: B256) -> Result<Option<Bytecode>, Self::Error> {
-        Ok(self.cache_bytecodes.lock().unwrap().get(&code_hash).cloned())
+        Ok(self
+            .cache_bytecodes
+            .lock()
+            .unwrap()
+            .get(&code_hash)
+            .cloned())
     }
 
     fn storage(&self, address: Address, index: U256) -> Result<U256, Self::Error> {

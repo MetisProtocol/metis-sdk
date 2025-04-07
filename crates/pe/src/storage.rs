@@ -1,13 +1,19 @@
 #[cfg(feature = "rpc-storage")]
 use alloy_transport::TransportError;
 
-use std::fmt::Debug;
-use std::sync::Mutex;
 use alloy_primitives::{Address, B256, U256};
 use hashbrown::HashMap;
-use revm::{DatabaseRef, bytecode::Bytecode, context::DBErrorMarker, primitives::KECCAK_EMPTY, state::{Account, AccountInfo}, Database};
+use revm::{
+    Database, DatabaseRef,
+    bytecode::Bytecode,
+    context::DBErrorMarker,
+    primitives::KECCAK_EMPTY,
+    state::{Account, AccountInfo},
+};
 use rustc_hash::FxBuildHasher;
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
+use std::sync::Mutex;
 use thiserror::Error;
 
 use crate::{BuildIdentityHasher, BuildSuffixHasher};
@@ -148,19 +154,26 @@ impl<DB: Storage + Database + Debug> DatabaseRef for StorageWrapper<'_, DB> {
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
         let Some(basic) = self
-            .0.lock().unwrap()
+            .0
+            .lock()
+            .unwrap()
             .basic(address)
             .map_err(StorageWrapperError::StorageError)?
         else {
             return Ok(None);
         };
 
-        let code_hash = self.0.lock().unwrap()
+        let code_hash = self
+            .0
+            .lock()
+            .unwrap()
             .code_hash(&address)
             .map_err(StorageWrapperError::StorageError)?;
 
         let code = if let Some(hash) = &code_hash {
-            self.0.lock().unwrap()
+            self.0
+                .lock()
+                .unwrap()
                 .code_by_hash(*hash)
                 .map_err(StorageWrapperError::StorageError)?
         } else {
@@ -176,19 +189,25 @@ impl<DB: Storage + Database + Debug> DatabaseRef for StorageWrapper<'_, DB> {
     }
 
     fn code_by_hash_ref(&self, code_hash: B256) -> Result<Bytecode, Self::Error> {
-        self.0.lock().unwrap()
+        self.0
+            .lock()
+            .unwrap()
             .code_by_hash(code_hash)
             .map_err(StorageWrapperError::StorageError)
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
-        self.0.lock().unwrap()
+        self.0
+            .lock()
+            .unwrap()
             .storage(address, index)
             .map_err(StorageWrapperError::StorageError)
     }
 
     fn block_hash_ref(&self, number: u64) -> Result<B256, Self::Error> {
-        self.0.lock().unwrap()
+        self.0
+            .lock()
+            .unwrap()
             .block_hash(number)
             .map_err(StorageWrapperError::StorageError)
     }

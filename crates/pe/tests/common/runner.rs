@@ -4,12 +4,12 @@ use metis_pe::{
     EvmAccount, ParallelExecutor,
     chain::{CalculateReceiptRootError, Chain},
 };
+use revm::Database;
 use revm::context::{BlockEnv, TxEnv};
 use revm::primitives::hardfork::SpecId;
 use revm::primitives::{Address, U256, alloy_primitives::U160};
-use std::{num::NonZeroUsize, thread};
 use std::sync::Mutex;
-use revm::Database;
+use std::{num::NonZeroUsize, thread};
 
 /// Mock an account from an integer index that is used as the address.
 /// Useful for mock iterations.

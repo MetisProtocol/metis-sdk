@@ -1,7 +1,7 @@
 //! Test with mainnet blocks
 
-use revm::primitives::hardfork::SpecId;
 use metis_pe::chain::Ethereum;
+use revm::primitives::hardfork::SpecId;
 
 pub mod common;
 
@@ -91,8 +91,11 @@ async fn optimism_mainnet_blocks_from_rpc() {
         let chain = Optimism::mainnet();
         let spec_id = chain.get_block_spec(&block.header).unwrap();
 
-        let mut rpc_storage =
-            metis_pe::RpcStorage::new(provider, SpecId::from(spec_id), BlockId::number(block_number - 1));
+        let mut rpc_storage = metis_pe::RpcStorage::new(
+            provider,
+            SpecId::from(spec_id),
+            BlockId::number(block_number - 1),
+        );
         common::test_execute_alloy(&chain, &mut rpc_storage, block, true);
     }
 }

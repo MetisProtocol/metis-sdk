@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*"]
+members = ["crates/pe","crates/primitives","crates/vm"]
 resolver = "2"
 
 [workspace.lints]
@@ -75,6 +75,7 @@ smallvec = "1.13.2"
 thiserror = "2.0.12"
 tokio = { version = "1.44.1", features = ["full"] }
 walkdir = "2.5.0"
+crossbeam = "0.8.4"
 
 [workspace.package]
 version = "0.1.0"

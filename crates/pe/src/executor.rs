@@ -7,6 +7,16 @@ use std::{
     thread,
 };
 
+use crate::{
+    EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, Storage, TxIdx, TxVersion,
+    chain::Chain,
+    compat::get_block_env,
+    hash_deterministic,
+    mv_memory::MvMemory,
+    schedulers::{ExeScheduler, NormalProvider, TaskProvider, ValidationScheduler},
+    storage::StorageWrapper,
+    vm::{ExecutionError, TxExecutionResult, Vm, VmExecutionError, VmExecutionResult, build_evm},
+};
 use alloy_primitives::{TxNonce, U256};
 use alloy_rpc_types_eth::{Block, BlockTransactions};
 use hashbrown::HashMap;
@@ -15,19 +25,13 @@ use metis_primitives::Transaction;
 use metis_vm::ExtCompileWorker;
 #[cfg(feature = "compiler")]
 use revm::ExecuteEvm;
-use revm::{DatabaseCommit, context::{BlockEnv, ContextTr, TxEnv, result::InvalidTransaction}, database::CacheDB, primitives::hardfork::SpecId, Database};
 use revm::state::Bytecode;
-use crate::{
-    EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, Task, TxIdx, TxVersion,
-    chain::Chain,
-    compat::get_block_env,
-    hash_deterministic,
-    mv_memory::MvMemory,
-    scheduler::Scheduler,
-    storage::StorageWrapper,
-    vm::{ExecutionError, TxExecutionResult, Vm, VmExecutionError, VmExecutionResult, build_evm},
+use revm::{
+    Database, DatabaseCommit,
+    context::{BlockEnv, ContextTr, TxEnv, result::InvalidTransaction},
+    database::CacheDB,
+    primitives::hardfork::SpecId,
 };
-use crate::storage::Storage;
 
 /// Errors when executing a block with the parallel executor.
 // TODO: implement traits explicitly due to trait bounds on `C` instead of types of `Chain`
@@ -102,6 +106,7 @@ impl<T> AsyncDropper<T> {
     }
 }
 
+// TODO2: Add ExeScheduler to the dropper
 // TODO: Port more recyclable resources into here.
 /// The main executor struct that executes blocks.
 #[derive(Debug)]
@@ -109,7 +114,12 @@ impl<T> AsyncDropper<T> {
 pub struct ParallelExecutor {
     execution_results: Vec<Mutex<Option<TxExecutionResult>>>,
     abort_reason: OnceLock<AbortReason>,
-    dropper: AsyncDropper<(MvMemory, Scheduler, Vec<TxEnv>)>,
+    dropper: AsyncDropper<(
+        MvMemory,
+        ExeScheduler<NormalProvider>,
+        ValidationScheduler,
+        Vec<TxEnv>,
+    )>,
     /// The compile work shared with different vm instance.
     #[cfg(feature = "compiler")]
     pub worker: Arc<ExtCompileWorker>,
@@ -142,7 +152,7 @@ impl ParallelExecutor {
     pub fn execute<S, C>(
         &mut self,
         chain: &C,
-        storage: Mutex<S> ,
+        storage: Mutex<S>,
         // We assume the block is still needed afterwards like in most Reth cases
         // so take in a reference and only copy values when needed. We may want
         // to use a [`std::borrow::Cow`] to build [`BlockEnv`] and [`TxEnv`] without
@@ -214,7 +224,9 @@ impl ParallelExecutor {
         }
 
         let block_size = txs.len();
-        let scheduler = Scheduler::new(block_size);
+        let task_provider = NormalProvider::new(block_size);
+        let exe_scheduler = ExeScheduler::new(task_provider);
+        let validation_scheduler = ValidationScheduler::new(block_size);
 
         let mv_memory = chain.build_mv_memory(&block_env, &txs);
         let vm = Vm::new(
@@ -240,30 +252,26 @@ impl ParallelExecutor {
         thread::scope(|scope| {
             for _ in 0..concurrency_level.into() {
                 scope.spawn(|| {
-                    let mut task = scheduler.next_task();
-                    while task.is_some() {
-                        task = match task.unwrap() {
-                            Task::Execution(tx_version) => {
-                                self.try_execute(&vm, &scheduler, tx_version)
-                            }
-                            Task::Validation(tx_version) => {
-                                try_validate(&mv_memory, &scheduler, &tx_version)
-                            }
-                        };
+                    while self.abort_reason.get().is_none() {
+                        if let Some(tx_idx) = validation_scheduler.next_task() {
+                            try_validate(&mv_memory, &exe_scheduler, tx_idx);
+                            continue;
+                        }
+                        if let Some(tx_version) = exe_scheduler.next_task() {
+                            self.try_execute(
+                                &vm,
+                                &exe_scheduler,
+                                &validation_scheduler,
+                                tx_version,
+                            );
+                            continue;
+                        }
 
-                        // TODO: Have different functions or an enum for the caller to choose
-                        // the handling behaviour when a transaction's EVM execution fails.
-                        // Parallel block builders would like to exclude such transaction,
-                        // verifiers may want to exit early to save CPU cycles, while testers
-                        // may want to collect all execution results. We are exiting early as
-                        // the default behaviour for now.
-                        if self.abort_reason.get().is_some() {
+                        if exe_scheduler.is_finish() {
                             break;
                         }
 
-                        if task.is_none() {
-                            task = scheduler.next_task();
-                        }
+                        thread::yield_now();
                     }
                 });
             }
@@ -272,7 +280,8 @@ impl ParallelExecutor {
         if let Some(abort_reason) = self.abort_reason.take() {
             match abort_reason {
                 AbortReason::FallbackToSequential => {
-                    self.dropper.drop((mv_memory, scheduler, Vec::new()));
+                    self.dropper
+                        .drop((mv_memory, exe_scheduler, validation_scheduler, Vec::new()));
                     return execute_revm_sequential(
                         chain,
                         storage,
@@ -284,7 +293,8 @@ impl ParallelExecutor {
                     );
                 }
                 AbortReason::ExecutionError(err) => {
-                    self.dropper.drop((mv_memory, scheduler, txs));
+                    self.dropper
+                        .drop((mv_memory, exe_scheduler, validation_scheduler, txs));
                     return Err(ParallelExecutorError::ExecutionError(err));
                 }
             }
@@ -422,71 +432,63 @@ impl ParallelExecutor {
             }
         }
 
-        self.dropper.drop((mv_memory, scheduler, txs));
+        self.dropper
+            .drop((mv_memory, exe_scheduler, validation_scheduler, txs));
 
         Ok(fully_evaluated_results)
     }
 
-    fn try_execute<DB: Database + Storage, C: Chain>(
+    fn try_execute<S: Storage, C: Chain, T: TaskProvider>(
         &self,
-        vm: &Vm<'_, DB, C>,
-        scheduler: &Scheduler,
+        vm: &Vm<'_, S, C>,
+        exe_scheduler: &ExeScheduler<T>,
+        validation_scheduler: &ValidationScheduler,
         tx_version: TxVersion,
-    ) -> Option<Task> {
+    ) {
         loop {
             return match vm.execute(&tx_version) {
                 Err(VmExecutionError::Retry) => {
                     if self.abort_reason.get().is_none() {
                         continue;
                     }
-                    None
                 }
                 Err(VmExecutionError::FallbackToSequential) => {
-                    scheduler.abort();
                     self.abort_reason
                         .get_or_init(|| AbortReason::FallbackToSequential);
-                    None
                 }
                 Err(VmExecutionError::Blocking(blocking_tx_idx)) => {
-                    if !scheduler.add_dependency(tx_version.tx_idx, blocking_tx_idx)
+                    if !exe_scheduler.add_dependency(tx_version.tx_idx, blocking_tx_idx)
                         && self.abort_reason.get().is_none()
                     {
                         // Retry the execution immediately if the blocking transaction was
                         // re-executed by the time we can add it as a dependency.
                         continue;
                     }
-                    None
                 }
                 Err(VmExecutionError::ExecutionError(err)) => {
-                    scheduler.abort();
                     self.abort_reason
                         .get_or_init(|| AbortReason::ExecutionError(err));
-                    None
                 }
                 Ok(VmExecutionResult {
                     execution_result,
                     flags,
+                    mut affected_txs,
                 }) => {
                     *index_mutex!(self.execution_results, tx_version.tx_idx) =
                         Some(execution_result);
-                    scheduler.finish_execution(tx_version, flags)
+                    if let Some(txid) = exe_scheduler.finish_execution(tx_version, flags) {
+                        affected_txs.push(txid);
+                    }
+                    validation_scheduler.add_tasks(affected_txs);
                 }
             };
         }
     }
 }
 
-fn try_validate(
-    mv_memory: &MvMemory,
-    scheduler: &Scheduler,
-    tx_version: &TxVersion,
-) -> Option<Task> {
-    let read_set_valid = mv_memory.validate_read_locations(tx_version.tx_idx);
-    let aborted = !read_set_valid && scheduler.try_validation_abort(tx_version);
-    if aborted {
-        mv_memory.convert_writes_to_estimates(tx_version.tx_idx);
-    }
-    scheduler.finish_validation(tx_version, aborted)
+fn try_validate<T: TaskProvider>(mv_memory: &MvMemory, scheduler: &ExeScheduler<T>, tx_idx: TxIdx) {
+    let read_set_valid = mv_memory.validate_read_locations(tx_idx);
+    scheduler.finish_validation(tx_idx, !read_set_valid);
 }
 
 /// Execute REVM transactions sequentially.
