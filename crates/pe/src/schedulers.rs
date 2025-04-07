@@ -10,15 +10,16 @@ use crate::{FinishExecFlags, IncarnationStatus, TxIdx, TxStatus, TxVersion, Vali
 
 #[derive(Debug)]
 pub(crate) struct TransactionsGraph {
-    // The number of transactions in this block.
+    /// The number of transactions in this block.
     block_size: usize,
-    //
+    /// The number of transactions that have been executed.
     num_done: AtomicUsize,
-    //
+    /// The queue of transactions to execute.
     transactions_queue: SegQueue<TxIdx>,
+    /// The number of transactions each transaction depends on.
     transactions_degree: Vec<AtomicUsize>,
-    // The list of dependent transactions to resume when the
-    // key transaction is re-executed.
+    /// The list of dependent transactions to resume when the
+    /// key transaction is re-executed.
     // TODO2: USE Graph or other data structure to store the dependencies
     transactions_dependents: Vec<Mutex<Vec<TxIdx>>>,
 }
@@ -119,9 +120,9 @@ impl TaskProvider for DAGProvider {
 
 #[derive(Debug)]
 pub struct NormalProvider {
-    // The number of transactions in this block.
+    /// The number of transactions in this block.
     block_size: usize,
-    // The next transaction to try and execute.
+    /// The next transaction to try and execute.
     execution_idx: AtomicUsize,
 }
 
@@ -151,7 +152,7 @@ impl TaskProvider for NormalProvider {
     }
 }
 
-// TODO：考虑将两个Scheduler合并成一个
+// TODO2：use one scheduler for both execution and validation
 // The parallel executor collaborative scheduler coordinates execution & validation
 // tasks among work threads.
 //
@@ -179,20 +180,20 @@ impl TaskProvider for NormalProvider {
 // for a subsequent incarnation to finish.
 #[derive(Debug)]
 pub(crate) struct ExeScheduler<T: TaskProvider> {
-    // The provider of transactions.
+    /// The provider of transactions.
     provider: T,
-    // the queue of reexecution tasks
+    /// the queue of reexecution tasks
     reexecution_queue: SegQueue<TxIdx>,
-    // The most up-to-date incarnation number (initially 0) and
-    // the status of this incarnation.
+    /// The most up-to-date incarnation number (initially 0) and
+    /// the status of this incarnation.
     // TODO: Consider packing [TxStatus]s into atomics instead of
     // [Mutex] given how small they are.
     transactions_status: Vec<Mutex<TxStatus>>,
-    // The list of dependent transactions to resume when the
-    // key transaction is re-executed.
+    /// The list of dependent transactions to resume when the
+    /// key transaction is re-executed.
     // TODO2: USE Graph or other data structure to store the dependencies
     transactions_dependents: Vec<Mutex<SmallVec<[TxIdx; 1]>>>,
-    // The number of validated transactions
+    /// The number of validated transactions
     num_validated: AtomicUsize,
 }
 
@@ -227,7 +228,7 @@ impl<T: TaskProvider> ExeScheduler<T> {
         None
     }
 
-    //TODO: 加结束验证
+    // next_task returns the next task to execute.
     pub(crate) fn next_task(&self) -> Option<TxVersion> {
         while let Some(tx_idx) = self.reexecution_queue.pop() {
             if let Some(tx_version) = self.try_execute(tx_idx) {
@@ -277,7 +278,7 @@ impl<T: TaskProvider> ExeScheduler<T> {
         self.reexecution_queue.push(tx_idx);
     }
 
-    // TODO: 无读集的交易加标志
+    // TODO: add new transaction status: NoReading
     pub(crate) fn finish_execution(
         &self,
         tx_version: TxVersion,
@@ -340,11 +341,9 @@ impl<T: TaskProvider> ExeScheduler<T> {
 
 #[derive(Debug)]
 pub(crate) struct ValidationScheduler {
-    // the queue of reexecution tasks
+    /// the queue of reexecution tasks
     task_queue: SegQueue<TxIdx>,
-    // True if the scheduler has been aborted, likely due to fatal execution
-    // errors.
-    // The number of validated transactions
+    /// The number of validated transactions
     transactions_status: Vec<Mutex<ValidationStatus>>,
 }
 

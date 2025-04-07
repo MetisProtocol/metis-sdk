@@ -33,7 +33,7 @@ pub struct MvMemory {
     // (that skips hashing for [u64] keys) would make our code cleaner and "faster".
     // Nevertheless, the compiler should be good enough to optimize these cases anyway.
     pub(crate) data: DashMap<MemoryLocationHash, BTreeMap<TxIdx, MemoryEntry>, BuildIdentityHasher>,
-    //
+    // list of transactions that reaad the memory location
     pub(crate) location_reads: DashMap<MemoryLocationHash, BTreeSet<TxIdx>, BuildIdentityHasher>,
     /// Last read & written locations of each transaction
     last_locations: Vec<Mutex<LastLocations>>,
@@ -93,7 +93,7 @@ impl MvMemory {
         read_set: ReadSet,
         write_set: WriteSet,
     ) -> Vec<TxIdx> {
-        //
+        // update location_reads
         for location in read_set.keys() {
             self.location_reads
                 .entry(*location)
