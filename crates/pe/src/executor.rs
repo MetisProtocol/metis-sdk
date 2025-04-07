@@ -23,7 +23,7 @@ use revm::{
 };
 
 use crate::{
-    EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, Storage, TxIdx, TxVersion,
+    EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, Storage, TxIdx, TxVersion, Task,
     chain::Chain,
     compat::get_block_env,
     hash_deterministic,
@@ -253,17 +253,21 @@ impl ParallelExecutor {
             for _ in 0..concurrency_level.into() {
                 scope.spawn(|| {
                     while self.abort_reason.get().is_none() {
-                        if let Some(tx_idx) = validation_scheduler.next_task() {
-                            try_validate(&mv_memory, &exe_scheduler, tx_idx);
-                            continue;
-                        }
-                        if let Some(tx_version) = exe_scheduler.next_task() {
-                            self.try_execute(
-                                &vm,
-                                &exe_scheduler,
-                                &validation_scheduler,
-                                tx_version,
-                            );
+                        if let Some(task) = exe_scheduler.next_task() {
+                            match task {
+                                Task::Execution(tx_version) => {
+                                    self.try_execute(
+                                        &vm,
+                                        &exe_scheduler,
+                                        &validation_scheduler,
+                                        tx_version,
+                                    );
+                                }
+                                Task::Validation(tx_idx) => {
+                                    try_validate(&mv_memory, &exe_scheduler, tx_idx);
+                                }
+                                
+                            }
                             continue;
                         }
 

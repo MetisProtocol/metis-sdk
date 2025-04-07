@@ -129,11 +129,13 @@ type TxIncarnation = usize;
 //   - Aborting(i) --resume--> ReadyToExecute(i+1)
 #[derive(PartialEq, Debug)]
 enum IncarnationStatus {
+    NeedValidation,
     ReadyToExecute,
     Executing,
     Executed,
     Validated,
     Aborting,
+    Blocking,
 }
 
 #[derive(PartialEq, Debug)]
@@ -169,6 +171,16 @@ struct TxVersion {
 enum ReadOrigin {
     MvMemory(TxVersion),
     Storage,
+}
+
+// A scheduled worker task
+// TODO: Add more useful work when there are idle workers like near
+// the end of block execution, while waiting for a huge blocking
+// transaction to resolve, etc.
+#[derive(Debug)]
+enum Task {
+    Execution(TxVersion),
+    Validation(TxIdx),
 }
 
 // Most memory locations only have one read origin. Lazy updated ones like
