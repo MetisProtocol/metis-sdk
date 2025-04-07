@@ -216,18 +216,13 @@ pub mod chain;
 pub mod compat;
 mod executor;
 mod mv_memory;
-mod schedulers;
+pub mod schedulers;
 pub use executor::{
     ParallelExecutor, ParallelExecutorError, ParallelExecutorResult, execute_revm_sequential,
 };
-// mod scheduler;
 mod storage;
 pub use storage::{
-    AccountBasic, BlockHashes, Bytecodes, ChainState, EvmAccount, InMemoryStorage, Storage,
-    StorageWrapper,
+    AccountBasic, BlockHashes, Bytecodes, ChainState, EvmAccount, InMemoryStorage, StorageError,
 };
 mod vm;
 pub use vm::{ExecutionError, TxExecutionResult};
-
-#[cfg(feature = "rpc-storage")]
-pub use storage::RpcStorage;

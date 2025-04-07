@@ -2,11 +2,11 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use super::{BlockHashes, Bytecodes, ChainState, StorageError};
-use crate::storage::Storage;
 use alloy_primitives::{Address, B256, U256, keccak256};
 use metis_primitives::EVMBytecode;
 use revm::Database;
 use revm::state::AccountInfo;
+
 /// A storage that stores chain data in memory.
 #[derive(Debug, Clone, Default)]
 pub struct InMemoryStorage {
@@ -30,17 +30,7 @@ impl InMemoryStorage {
     }
 }
 
-impl Storage for InMemoryStorage {
-    fn code_hash(&mut self, address: &Address) -> Result<Option<B256>, StorageError> {
-        Ok(self
-            .accounts
-            .get(address)
-            .and_then(|account| account.code_hash))
-    }
-}
-
 impl Database for InMemoryStorage {
-    // TODO: More proper error handling
     type Error = StorageError;
 
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
@@ -73,7 +63,6 @@ impl Database for InMemoryStorage {
             .block_hashes
             .get(&number)
             .copied()
-            // Matching REVM's [EmptyDB] for now
             .unwrap_or_else(|| keccak256(number.to_string().as_bytes())))
     }
 }

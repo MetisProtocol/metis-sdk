@@ -1,20 +1,9 @@
-#[cfg(feature = "rpc-storage")]
-use alloy_transport::TransportError;
-
 use alloy_primitives::{Address, B256, U256};
 use hashbrown::HashMap;
-use revm::{
-    Database, DatabaseRef,
-    bytecode::Bytecode,
-    context::DBErrorMarker,
-    primitives::KECCAK_EMPTY,
-    state::{Account, AccountInfo},
-};
+use revm::{bytecode::Bytecode, context::DBErrorMarker, state::Account};
 use rustc_hash::FxBuildHasher;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-use std::sync::Mutex;
-use thiserror::Error;
 
 use crate::{BuildIdentityHasher, BuildSuffixHasher};
 
@@ -85,10 +74,6 @@ pub type BlockHashes = HashMap<u64, B256, BuildIdentityHasher>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StorageError {
-    #[cfg(feature = "rpc-storage")]
-    #[error("RPC transport error: {0}")]
-    Rpc(#[from] TransportError),
-
     #[error("In-memory storage error: {0}")]
     Memory(u8),
 
@@ -107,115 +92,5 @@ impl From<u8> for StorageError {
 
 impl DBErrorMarker for StorageError {}
 
-pub trait Storage: Database<Error = StorageError> {
-    fn code_hash(&mut self, address: &Address) -> Result<Option<B256>, StorageError>;
-}
-
-/// An interface to provide chain state for the transaction execution.
-/// Staying close to the underlying REVM's Database trait while not leaking
-/// its primitives to library users (favoring Alloy at the moment).
-/// TODO: Better API for third-party integration.
-// pub trait Storage {
-//     /// Errors when querying data from storage.
-//     type Error: Display + Debug;
-//
-//     /// Get basic account information.
-//     fn basic(&self, address: &Address) -> Result<Option<AccountBasic>, Self::Error>;
-//
-//     /// Get the code of an account.
-//     fn code_hash(&self, address: &Address) -> Result<Option<B256>, Self::Error>;
-//
-//     /// Get account code by its hash.
-//     fn code_by_hash(&self, code_hash: &B256) -> Result<Option<Bytecode>, Self::Error>;
-//
-//     /// Get storage value of address at index.
-//     fn storage(&self, address: &Address, index: &U256) -> Result<U256, Self::Error>;
-//
-//     /// Get block hash by block number.
-//     fn block_hash(&self, number: &u64) -> Result<B256, Self::Error>;
-// }
-//
-/// revm [Database] errors when using [Storage] as the underlying provider.
-#[derive(Debug, Clone, PartialEq, Error)]
-pub enum StorageWrapperError<DB: Database> {
-    #[error("storage error")]
-    StorageError(DB::Error),
-}
-
-impl<DB: Database> DBErrorMarker for StorageWrapperError<DB> {}
-
-/// A Storage wrapper that implements REVM's [`DatabaseRef`] for ease of
-/// integration.
-#[derive(Debug)]
-pub struct StorageWrapper<'a, DB: Database>(pub &'a Mutex<DB>);
-
-impl<DB: Storage + Database + Debug> DatabaseRef for StorageWrapper<'_, DB> {
-    type Error = StorageWrapperError<DB>;
-
-    fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
-        let Some(basic) = self
-            .0
-            .lock()
-            .unwrap()
-            .basic(address)
-            .map_err(StorageWrapperError::StorageError)?
-        else {
-            return Ok(None);
-        };
-
-        let code_hash = self
-            .0
-            .lock()
-            .unwrap()
-            .code_hash(&address)
-            .map_err(StorageWrapperError::StorageError)?;
-
-        let code = if let Some(hash) = &code_hash {
-            self.0
-                .lock()
-                .unwrap()
-                .code_by_hash(*hash)
-                .map_err(StorageWrapperError::StorageError)?
-        } else {
-            Bytecode::default()
-        };
-
-        Ok(Some(AccountInfo {
-            balance: basic.balance,
-            nonce: basic.nonce,
-            code_hash: code_hash.unwrap_or(KECCAK_EMPTY),
-            code: Some(code),
-        }))
-    }
-
-    fn code_by_hash_ref(&self, code_hash: B256) -> Result<Bytecode, Self::Error> {
-        self.0
-            .lock()
-            .unwrap()
-            .code_by_hash(code_hash)
-            .map_err(StorageWrapperError::StorageError)
-    }
-
-    fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
-        self.0
-            .lock()
-            .unwrap()
-            .storage(address, index)
-            .map_err(StorageWrapperError::StorageError)
-    }
-
-    fn block_hash_ref(&self, number: u64) -> Result<B256, Self::Error> {
-        self.0
-            .lock()
-            .unwrap()
-            .block_hash(number)
-            .map_err(StorageWrapperError::StorageError)
-    }
-}
-
 mod in_memory;
 pub use in_memory::InMemoryStorage;
-#[cfg(feature = "rpc-storage")]
-mod rpc;
-#[cfg(feature = "rpc-storage")]
-pub use rpc::RpcStorage;

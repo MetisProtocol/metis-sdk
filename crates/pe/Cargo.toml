@@ -15,13 +15,6 @@ optimism = [
   "dep:op-revm"
 ]
 
-rpc-storage = [
-  "dep:alloy-transport",
-  "dep:alloy-transport-http",
-  "dep:reqwest",
-  "dep:tokio",
-]
-
 compiler = ["metis-vm/compiler", "dep:revmc-build"]
 
 global-alloc = ["dep:rpmalloc", "dep:snmalloc-rs", "dep:tikv-jemallocator"]

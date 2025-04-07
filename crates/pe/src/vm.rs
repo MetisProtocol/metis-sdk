@@ -5,7 +5,6 @@ use crate::{
     chain::{Chain, RewardPolicy},
     hash_deterministic,
     mv_memory::MvMemory,
-    storage::Storage,
 };
 use alloy_primitives::TxKind;
 use alloy_rpc_types_eth::Receipt;
@@ -20,7 +19,6 @@ use op_revm::OpTransaction;
 use op_revm::{DefaultOp, OpBuilder, OpContext, OpEvm, OpSpecId};
 #[cfg(feature = "optimism")]
 use revm::context::Cfg;
-use revm::context::JournalOutput;
 use revm::context_interface::{JournalTr, result::HaltReason};
 #[cfg(feature = "compiler")]
 use revm::handler::FrameInitOrResult;
@@ -40,10 +38,10 @@ use revm::{
     primitives::{Address, B256, KECCAK_EMPTY, U256, hardfork::SpecId},
     state::AccountInfo,
 };
+use revm::{DatabaseRef, context::JournalOutput};
 use smallvec::{SmallVec, smallvec};
 #[cfg(feature = "compiler")]
 use std::sync::Arc;
-use std::sync::Mutex;
 
 /// The execution error from the underlying EVM executor.
 // Will there be DB errors outside of read?
@@ -152,7 +150,7 @@ pub(crate) struct VmExecutionResult {
 // A database interface that intercepts reads while executing a specific
 // transaction with Revm. It provides values from the multi-version data
 // structure & storage, and tracks the read set of the current execution.
-struct VmDb<'a, S: Storage, C: Chain> {
+struct VmDb<'a, S: DatabaseRef, C: Chain> {
     vm: &'a Vm<'a, S, C>,
     tx_idx: TxIdx,
     tx: &'a TxEnv,
@@ -167,7 +165,7 @@ struct VmDb<'a, S: Storage, C: Chain> {
     read_accounts: HashMap<MemoryLocationHash, (AccountInfo, Option<B256>), BuildIdentityHasher>,
 }
 
-impl<'a, S: Storage, C: Chain> VmDb<'a, S, C> {
+impl<'a, S: DatabaseRef, C: Chain> VmDb<'a, S, C> {
     fn new(
         vm: &'a Vm<'a, S, C>,
         tx_idx: TxIdx,
@@ -260,18 +258,18 @@ impl<'a, S: Storage, C: Chain> VmDb<'a, S, C> {
 
         // Fallback to storage
         Self::push_origin(read_origins, ReadOrigin::Storage)?;
-        self.vm
+        Ok(self
+            .vm
             .storage
-            .lock()
-            .unwrap()
-            .code_hash(&address)
-            .map_err(|err| ReadError::StorageError(err.to_string()))
+            .basic_ref(address)
+            .map_err(|err| ReadError::StorageError(err.to_string()))?
+            .map(|a| a.code_hash))
     }
 }
 
 impl DBErrorMarker for ReadError {}
 
-impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
+impl<S: DatabaseRef, C: Chain> Database for VmDb<'_, S, C> {
     type Error = ReadError;
 
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
@@ -386,7 +384,7 @@ impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
             {
                 return Err(ReadError::InconsistentRead);
             }
-            final_account = match self.vm.storage.lock().unwrap().basic(address) {
+            final_account = match self.vm.storage.basic_ref(address) {
                 Ok(Some(basic)) => Some(basic),
                 Ok(None) => (balance_addition > U256::ZERO).then_some(AccountInfo::default()),
                 Err(err) => return Err(ReadError::StorageError(err.to_string())),
@@ -429,7 +427,7 @@ impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
                 if let Some(code) = self.vm.mv_memory.new_bytecodes.get(code_hash) {
                     code.clone()
                 } else {
-                    match self.vm.storage.lock().unwrap().code_by_hash(*code_hash) {
+                    match self.vm.storage.code_by_hash_ref(*code_hash) {
                         Ok(code) => code,
                         Err(err) => return Err(ReadError::StorageError(err.to_string())),
                     }
@@ -454,9 +452,7 @@ impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
     fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error> {
         self.vm
             .storage
-            .lock()
-            .unwrap()
-            .code_by_hash(code_hash)
+            .code_by_hash_ref(code_hash)
             .map_err(|err| ReadError::StorageError(err.to_string()))
     }
 
@@ -493,24 +489,20 @@ impl<S: Storage, C: Chain> Database for VmDb<'_, S, C> {
         Self::push_origin(read_origins, ReadOrigin::Storage)?;
         self.vm
             .storage
-            .lock()
-            .unwrap()
-            .storage(address, index)
+            .storage_ref(address, index)
             .map_err(|err| ReadError::StorageError(err.to_string()))
     }
 
     fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error> {
         self.vm
             .storage
-            .lock()
-            .unwrap()
-            .block_hash(number)
+            .block_hash_ref(number)
             .map_err(|err| ReadError::StorageError(err.to_string()))
     }
 }
 
-pub(crate) struct Vm<'a, S: Storage, C: Chain> {
-    storage: &'a Mutex<S>,
+pub(crate) struct Vm<'a, S: DatabaseRef, C: Chain> {
+    storage: &'a S,
     mv_memory: &'a MvMemory,
     chain: &'a C,
     block_env: &'a BlockEnv,
@@ -522,9 +514,9 @@ pub(crate) struct Vm<'a, S: Storage, C: Chain> {
     worker: Arc<ExtCompileWorker>,
 }
 
-impl<'a, S: Storage, C: Chain> Vm<'a, S, C> {
+impl<'a, S: DatabaseRef, C: Chain> Vm<'a, S, C> {
     pub(crate) fn new(
-        storage: &'a Mutex<S>,
+        storage: &'a S,
         mv_memory: &'a MvMemory,
         chain: &'a C,
         block_env: &'a BlockEnv,

@@ -1,28 +1,25 @@
-use std::fmt::Debug;
-use std::num::NonZeroUsize;
+use alloy_evm::block::BlockExecutionError;
+use alloy_evm::{Database, IntoTxEnv};
+use metis_primitives::TxEnv;
+use reth::api::{FullNodeTypes, NodeTypesWithEngine};
+use reth::builder::BuilderContext;
+use reth::builder::components::ExecutorBuilder;
+use reth::primitives::EthPrimitives;
 use reth::{
     api::ConfigureEvm,
     providers::BlockExecutionResult,
-    revm::{
-        db::{State, states::bundle_state::BundleRetention},
-    },
+    revm::db::{State, states::bundle_state::BundleRetention},
 };
 use reth_chainspec::{ChainSpec, EthChainSpec};
 use reth_evm::{
     OnStateHook,
     execute::{BlockExecutor, BlockExecutorProvider, Executor},
 };
-use alloy_evm::block::BlockExecutionError;
-use alloy_evm::{Database, IntoTxEnv};
-use reth_evm_ethereum::{EthEvmConfig};
-use reth_primitives::{
-    NodePrimitives, RecoveredBlock
-};
-use std::sync::Mutex;
-use reth::api::{FullNodeTypes, NodeTypesWithEngine};
-use reth::builder::BuilderContext;
-use reth::builder::components::ExecutorBuilder;
-use reth::primitives::EthPrimitives;
+use reth_evm_ethereum::EthEvmConfig;
+use reth_primitives::{NodePrimitives, RecoveredBlock};
+use std::fmt::Debug;
+use std::num::NonZeroUsize;
+
 use crate::state::StateStorageAdapter;
 
 pub struct BlockParallelExecutorProvider {
@@ -63,11 +60,10 @@ impl BlockExecutorProvider for BlockParallelExecutorProvider {
 
 pub struct ParallelExecutor<DB> {
     strategy_factory: EthEvmConfig,
-    db: State<DB>
+    db: State<DB>,
 }
 
-impl<DB> ParallelExecutor<DB>
-{
+impl<DB> ParallelExecutor<DB> {
     pub fn new(strategy_factory: EthEvmConfig, db: State<DB>) -> Self {
         Self {
             strategy_factory,
@@ -86,16 +82,14 @@ where
     fn execute_one(
         &mut self,
         block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
-    ) -> Result<BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>, Self::Error> {
-        let db = &mut self.db;
-        let mut strategy = self.strategy_factory
-            .executor_for_block(db, block);
-        strategy.apply_pre_execution_changes()?;
+    ) -> Result<
+        BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>,
+        Self::Error,
+    > {
         self.execute_block(block)?;
-        let result = strategy.apply_post_execution_changes()?;
-
-        db.merge_transitions(BundleRetention::Reverts);
-
+        // TODO(fk): use the parallel executor result instead of the strategy EthBlockExecutor result.
+        let result = BlockExecutionResult::default();
+        self.db.merge_transitions(BundleRetention::Reverts);
         Ok(result)
     }
 
@@ -103,22 +97,24 @@ where
         &mut self,
         block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
         state_hook: F,
-    ) -> Result<BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>, Self::Error>
+    ) -> Result<
+        BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>,
+        Self::Error,
+    >
     where
         F: OnStateHook + 'static,
     {
-        let db = &mut self.db;
-        let mut strategy = self
-            .strategy_factory
-            .executor_for_block(db, block)
-            .with_state_hook(Some(Box::new(state_hook)));
-
-        strategy.apply_pre_execution_changes()?;
+        {
+            let mut strategy = self
+                .strategy_factory
+                .executor_for_block(&mut self.db, block)
+                .with_state_hook(Some(Box::new(state_hook)));
+            strategy.apply_pre_execution_changes()?;
+        }
         self.execute_block(block)?;
-        let result = strategy.apply_post_execution_changes()?;
-
-        db.merge_transitions(BundleRetention::Reverts);
-
+        // TODO(fk): use the parallel executor result instead of the strategy EthBlockExecutor result.
+        let result = BlockExecutionResult::default();
+        self.db.merge_transitions(BundleRetention::Reverts);
         Ok(result)
     }
 
@@ -145,23 +141,26 @@ where
         let spec_id = *env.spec_id();
         let block_env = env.block_env;
 
-        let tx_envs = block.transactions_recovered()
-            .map(|recover_tx| Ok(recover_tx.into_tx_env()))
-            .collect::<Result<Vec<_>, _>>()?;
+        let tx_envs = block
+            .transactions_recovered()
+            .map(|recover_tx| recover_tx.into_tx_env())
+            .collect::<Vec<TxEnv>>();
 
         let chain_id = chain_spec.chain_id();
         let chain = metis_pe::chain::Ethereum::custom(chain_id);
-        let db_adapter = StateStorageAdapter(&mut self.db);
         let results = executor.execute_revm_parallel(
             &chain,
-            Mutex::new(db_adapter),
+            StateStorageAdapter::new(&mut self.db),
             spec_id,
             block_env,
             tx_envs,
             NonZeroUsize::new(num_cpus::get()).unwrap_or(NonZeroUsize::new(1).unwrap()),
         );
-
-        Ok(results.unwrap().into_iter().map(|r| r.receipt.cumulative_gas_used).sum())
+        Ok(results
+            .unwrap()
+            .into_iter()
+            .map(|r| r.receipt.cumulative_gas_used)
+            .sum())
     }
 }
 

@@ -1,50 +1,41 @@
-use std::fmt::Debug;
-use reth::{
-    revm::{
-        db::{State},
-    },
-};
-use revm::Database;
 use alloy_primitives::{Address, B256, U256};
-use reth::revm::bytecode::Bytecode;
-use reth::revm::state::AccountInfo;
-use metis_pe::Storage;
-use metis_pe::storage::StorageError;
+use reth::revm::db::State;
+use revm::bytecode::Bytecode;
+use revm::state::AccountInfo;
+use revm::{Database, DatabaseRef};
+use std::sync::RwLock;
 
-#[derive(Debug)]
-pub struct StateStorageAdapter<'a, DB>(pub &'a mut State<DB>);
+pub struct StateStorageAdapter<'a, DB> {
+    pub(crate) state: RwLock<&'a mut State<DB>>,
+}
 
-impl<'a, DB> Database for StateStorageAdapter<'a, DB>
-where
-    DB: Database + Debug + 'static,
-    DB::Error: Into<StorageError> + Send + Sync + Debug + 'static,
-{
-    type Error = StorageError;
+unsafe impl<DB> Send for StateStorageAdapter<'_, DB> {}
+unsafe impl<DB> Sync for StateStorageAdapter<'_, DB> {}
 
-    fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
-        self.0.basic(address).map_err(Into::into)
-    }
-
-    fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error> {
-        self.0.code_by_hash(code_hash).map_err(Into::into)
-    }
-
-    fn storage(&mut self, address: Address, index: U256) -> Result<U256, Self::Error> {
-        self.0.storage(address, index).map_err(Into::into)
-    }
-
-    fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error> {
-        self.0.block_hash(number).map_err(Into::into)
+impl<'a, DB> StateStorageAdapter<'a, DB> {
+    pub fn new(state: &'a mut State<DB>) -> Self {
+        Self {
+            state: RwLock::new(state),
+        }
     }
 }
 
-impl<'a, DB> Storage for StateStorageAdapter<'a, DB>
-where
-    DB: Database + Send + Sync + 'static,
-    DB::Error: Into<StorageError> + Send + Sync,
-{
-    fn code_hash(&mut self, address: &Address) -> Result<Option<B256>, StorageError> {
-        let account_info = self.0.basic(*address).map_err(Into::into)?;
-        Ok(account_info.map(|info| info.code_hash))
+impl<DB: Database> DatabaseRef for StateStorageAdapter<'_, DB> {
+    type Error = DB::Error;
+
+    fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
+        self.state.write().unwrap().basic(address)
+    }
+
+    fn code_by_hash_ref(&self, code_hash: B256) -> Result<Bytecode, Self::Error> {
+        self.state.write().unwrap().code_by_hash(code_hash)
+    }
+
+    fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
+        self.state.write().unwrap().storage(address, index)
+    }
+
+    fn block_hash_ref(&self, number: u64) -> Result<B256, Self::Error> {
+        self.state.write().unwrap().block_hash(number)
     }
 }
