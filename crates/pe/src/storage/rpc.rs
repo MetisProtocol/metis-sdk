@@ -119,8 +119,8 @@ impl<N: Network> RpcStorage<N> {
 
 impl<N: Network> Storage for RpcStorage<N> {
 
-    fn code_hash(&self, address: &Address) -> Result<Option<B256>, TransportError> {
-        self.basic(address)?;
+    fn code_hash(&mut self, address: &Address) -> Result<Option<B256>, TransportError> {
+        self.basic(*address)?;
         Ok(self
             .cache_accounts
             .lock()

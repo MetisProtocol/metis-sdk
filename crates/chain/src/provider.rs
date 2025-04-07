@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::num::NonZeroUsize;
 use reth::{
     api::ConfigureEvm,
@@ -8,7 +9,7 @@ use reth::{
 };
 use reth_chainspec::{ChainSpec, EthChainSpec};
 use reth_evm::{
-    Evm, OnStateHook,
+    OnStateHook,
     execute::{BlockExecutor, BlockExecutorProvider, Executor},
 };
 use alloy_evm::block::BlockExecutionError;
@@ -17,11 +18,12 @@ use reth_evm_ethereum::{EthEvmConfig};
 use reth_primitives::{
     NodePrimitives, RecoveredBlock
 };
-use std::sync::{Mutex};
+use std::sync::Mutex;
 use reth::api::{FullNodeTypes, NodeTypesWithEngine};
 use reth::builder::BuilderContext;
 use reth::builder::components::ExecutorBuilder;
 use reth::primitives::EthPrimitives;
+use crate::state::StateStorageAdapter;
 
 pub struct BlockParallelExecutorProvider {
     strategy_factory: EthEvmConfig,
@@ -61,7 +63,7 @@ impl BlockExecutorProvider for BlockParallelExecutorProvider {
 
 pub struct ParallelExecutor<DB> {
     strategy_factory: EthEvmConfig,
-    db: State<DB>,
+    db: State<DB>
 }
 
 impl<DB> ParallelExecutor<DB>
@@ -85,13 +87,14 @@ where
         &mut self,
         block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
     ) -> Result<BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>, Self::Error> {
+        let db = &mut self.db;
         let mut strategy = self.strategy_factory
-            .executor_for_block(&mut self.db, block);
+            .executor_for_block(db, block);
         strategy.apply_pre_execution_changes()?;
         self.execute_block(block)?;
         let result = strategy.apply_post_execution_changes()?;
 
-        self.db.merge_transitions(BundleRetention::Reverts);
+        db.merge_transitions(BundleRetention::Reverts);
 
         Ok(result)
     }
@@ -114,7 +117,7 @@ where
         self.execute_block(block)?;
         let result = strategy.apply_post_execution_changes()?;
 
-        self.db.merge_transitions(BundleRetention::Reverts);
+        db.merge_transitions(BundleRetention::Reverts);
 
         Ok(result)
     }
@@ -143,12 +146,15 @@ where
         let block_env = env.block_env;
 
         let tx_envs = block.transactions_recovered()
-            .map(|(recover_tx)| recover_tx.into_tx_env())
+            .map(|recover_tx| Ok(recover_tx.into_tx_env()))
             .collect::<Result<Vec<_>, _>>()?;
 
+        let chain_id = chain_spec.chain_id();
+        let chain = metis_pe::chain::Ethereum::custom(chain_id);
+        let db_adapter = StateStorageAdapter(&mut self.db);
         let results = executor.execute_revm_parallel(
-            &chain_spec.chain(),
-            Mutex::new(&self.db),
+            &chain,
+            Mutex::new(db_adapter),
             spec_id,
             block_env,
             tx_envs,

@@ -31,7 +31,7 @@ impl InMemoryStorage {
 }
 
 impl Storage for InMemoryStorage {
-    fn code_hash(&self, address: &Address) -> Result<Option<B256>, StorageError> {
+    fn code_hash(&mut self, address: &Address) -> Result<Option<B256>, StorageError> {
         Ok(self
             .accounts
             .get(address)

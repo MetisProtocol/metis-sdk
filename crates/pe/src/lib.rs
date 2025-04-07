@@ -223,10 +223,10 @@ pub use executor::{
     ParallelExecutor, ParallelExecutorError, ParallelExecutorResult, execute_revm_sequential,
 };
 mod scheduler;
-mod storage;
+pub mod storage;
 pub use storage::{
     AccountBasic, BlockHashes, Bytecodes, ChainState, EvmAccount,
-    InMemoryStorage, //Storage, StorageWrapper,
+    InMemoryStorage, Storage, StorageWrapper,
 };
 mod vm;
 pub use vm::{ExecutionError, TxExecutionResult};

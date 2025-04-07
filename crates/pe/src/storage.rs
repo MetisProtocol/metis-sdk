@@ -102,7 +102,7 @@ impl From<u8> for StorageError {
 impl DBErrorMarker for StorageError {}
 
 pub trait Storage: Database<Error = StorageError> {
-    fn code_hash(&self, address: &Address) -> Result<Option<B256>, StorageError>;
+    fn code_hash(&mut self, address: &Address) -> Result<Option<B256>, StorageError>;
 }
 
 /// An interface to provide chain state for the transaction execution.
