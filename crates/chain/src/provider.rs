@@ -86,17 +86,40 @@ where
         BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>,
         Self::Error,
     > {
-        self.execute_block(block)?;
-        // TODO(fk): use the parallel executor result instead of the strategy EthBlockExecutor result.
-        let result = BlockExecutionResult::default();
+        // execute system contract call of `EIP-2935` and `EIP-4788`
+        // todo(fk): ensure the strategy db data wont be seperated into 2 different strategy
+        {
+            let mut strategy = self
+                .strategy_factory
+                .executor_for_block(&mut self.db, block);
+            strategy.apply_pre_execution_changes()?;
+        }
+
+        // execute block transactions parallel
+        let parallel_gas_used = self.execute_block(block)?;
+
+        // collect all EIP-6110 deposits to generate requests, process hard fork
+        // and calculate balance, transition account changes
+        let strategy = self
+            .strategy_factory
+            .executor_for_block(&mut self.db, block);
+        let strategy_result = strategy.apply_post_execution_changes()?;
+
+        // assemble new block execution result
+        let results = BlockExecutionResult {
+            receipts: strategy_result.receipts,
+            requests: strategy_result.requests,
+            gas_used: parallel_gas_used + strategy_result.gas_used,
+        };
         self.db.merge_transitions(BundleRetention::Reverts);
-        Ok(result)
+
+        Ok(results)
     }
 
     fn execute_one_with_state_hook<F>(
         &mut self,
         block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
-        state_hook: F,
+        _state_hook: F,
     ) -> Result<
         BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>,
         Self::Error,
@@ -104,18 +127,8 @@ where
     where
         F: OnStateHook + 'static,
     {
-        {
-            let mut strategy = self
-                .strategy_factory
-                .executor_for_block(&mut self.db, block)
-                .with_state_hook(Some(Box::new(state_hook)));
-            strategy.apply_pre_execution_changes()?;
-        }
-        self.execute_block(block)?;
-        // TODO(fk): use the parallel executor result instead of the strategy EthBlockExecutor result.
-        let result = BlockExecutionResult::default();
-        self.db.merge_transitions(BundleRetention::Reverts);
-        Ok(result)
+        // only strategy.execute_transaction used the Hook
+        self.execute_one(block)
     }
 
     fn into_state(self) -> State<DB> {
