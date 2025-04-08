@@ -129,12 +129,10 @@ type TxIncarnation = usize;
 //   - Aborting(i) --resume--> ReadyToExecute(i+1)
 #[derive(PartialEq, Debug)]
 enum IncarnationStatus {
-    NeedValidation,
     ReadyToExecute,
     Executing,
     Executed,
     Validated,
-    Aborting,
     Blocking,
 }
 
@@ -142,13 +140,6 @@ enum IncarnationStatus {
 struct TxStatus {
     incarnation: TxIncarnation,
     status: IncarnationStatus,
-}
-
-#[derive(PartialEq, Debug)]
-enum ValidationStatus {
-    NotReady,
-    Waiting,
-    Validated,
 }
 
 // We maintain an in-memory multi-version data structure that stores for

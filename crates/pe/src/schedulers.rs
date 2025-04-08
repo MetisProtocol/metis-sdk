@@ -1,11 +1,11 @@
 use crossbeam::queue::SegQueue;
 use std::sync::{
-    atomic::{AtomicBool, AtomicUsize, Ordering}, Mutex
+    atomic::{AtomicUsize, Ordering}, Mutex
 };
 
 use smallvec::SmallVec;
 
-use crate::{FinishExecFlags, IncarnationStatus, Task, TxIdx, TxStatus, TxVersion, ValidationStatus};
+use crate::{FinishExecFlags, IncarnationStatus, Task, TxIdx, TxStatus, TxVersion};
 
 #[derive(Debug)]
 pub(crate) struct TransactionsGraph {
@@ -182,17 +182,13 @@ pub(crate) struct ExeScheduler<T: TaskProvider> {
     /// The provider of transactions.
     provider: T,
     /// the queue of execution tasks
-    blocking_queue: SegQueue<TxIdx>,
-    /// the queue of validation tasks
-    validation_queue: SegQueue<TxIdx>,
+    execution_queue: SegQueue<TxIdx>,
     /// The most up-to-date incarnation number (initially 0) and
     /// the status of this incarnation.
     // TODO: Consider packing [TxStatus]s into atomics instead of
     // [Mutex] given how small they are.
     // TODO2: use AtomicUsize
     transactions_status: Vec<Mutex<TxStatus>>,
-    /// pending validation tasks
-    pending_validation: Vec<AtomicBool>,   
     /// The list of dependent transactions to resume when the
     /// key transaction is re-executed.
     // TODO2: USE Graph or other data structure to store the dependencies
@@ -206,8 +202,7 @@ impl<T: TaskProvider> ExeScheduler<T> {
         let block_size = provider.num_tasks();
         Self {
             provider,
-            blocking_queue: SegQueue::new(),
-            validation_queue: SegQueue::new(),
+            execution_queue: SegQueue::new(),
             transactions_status: (0..block_size)
                 .map(|_| {
                     Mutex::new(TxStatus {
@@ -216,7 +211,6 @@ impl<T: TaskProvider> ExeScheduler<T> {
                     })
                 })
                 .collect(),
-            pending_validation: (0..block_size).map(|_| AtomicBool::new(false)).collect(),
             transactions_dependents: (0..block_size).map(|_| Mutex::default()).collect(),
             num_validated: AtomicUsize::new(0),
         }
@@ -236,18 +230,15 @@ impl<T: TaskProvider> ExeScheduler<T> {
 
     // next_task returns the next task to execute.
     pub(crate) fn next_task(&self) -> Option<Task> {
-        if let Some(tx_idx) = self.validation_queue.pop() {
-            self.pending_validation[tx_idx].store(false, Ordering::Relaxed);
-            return Some(Task::Validation(tx_idx));
-        }
-        // Try to get the next task from the provider.
-        if let Some(tx_idx) = self.provider.next_task() {
+        // Try to do re-execution first.
+        if let Some(tx_idx) = self.execution_queue.pop() {
             if let Some(tx_version) = self.try_execute(tx_idx) {
                 return Some(Task::Execution(tx_version));
             }
         }
 
-        if let Some(tx_idx) = self.blocking_queue.pop() {
+        // Try to get the next task from the provider.
+        if let Some(tx_idx) = self.provider.next_task() {
             if let Some(tx_version) = self.try_execute(tx_idx) {
                 return Some(Task::Execution(tx_version));
             }
@@ -281,29 +272,28 @@ impl<T: TaskProvider> ExeScheduler<T> {
         true
     }
 
-    fn add_re_execution(&self, tx_idx: TxIdx) {
-        let mut tx = index_mutex!(self.transactions_status, tx_idx);
-        debug_assert_eq!(tx.status, IncarnationStatus::Aborting);
-        tx.status = IncarnationStatus::ReadyToExecute;
-        tx.incarnation += 1;
-        self.validation_queue.push(tx_idx);
-    }
-
     fn add_blocking_task(&self, tx_idx: TxIdx) {
         let mut tx = index_mutex!(self.transactions_status, tx_idx);
-        debug_assert_eq!(tx.status, IncarnationStatus::Blocking);
-        tx.status = IncarnationStatus::ReadyToExecute;
-        tx.incarnation += 1;
-        self.blocking_queue.push(tx_idx);
-        
+        if tx.status != IncarnationStatus::ReadyToExecute {
+            tx.status = IncarnationStatus::ReadyToExecute;
+            tx.incarnation += 1;
+            self.execution_queue.push(tx_idx);
+        }
     }
 
-    fn add_validation_task(&self, tx_idx: TxIdx) {
-        // If the transaction is already in the validation queue, skip it.
-        if self.pending_validation[tx_idx].swap(true, Ordering::Relaxed) {
-            return;
+    fn add_execution_task(&self, tx_idx: TxIdx) {
+        let mut tx = index_mutex!(self.transactions_status, tx_idx);
+        if tx.status == IncarnationStatus::Validated {
+            self.num_validated.fetch_sub(1, Ordering::Relaxed);
         }
-        self.validation_queue.push(tx_idx);
+        if matches!(
+            tx.status,
+            IncarnationStatus::Validated | IncarnationStatus::Executed
+        ) {
+            tx.status = IncarnationStatus::ReadyToExecute;
+            tx.incarnation += 1;
+            self.execution_queue.push(tx_idx);
+        }
     }
 
     // TODO: add new transaction status: NoReading
@@ -313,40 +303,29 @@ impl<T: TaskProvider> ExeScheduler<T> {
         flags: FinishExecFlags,
         affected_transactions: Vec<TxIdx>,
     ) -> Option<Task> {
-        {
-            let mut tx = index_mutex!(self.transactions_status, tx_version.tx_idx);
-            // If the transaction is aborted, we need to re-execute it.
-            if matches!(tx.status, IncarnationStatus::Aborting) {
-                //TODO2: use function
-                tx.status = IncarnationStatus::Executing;
-                tx.incarnation += 1;
-                return Some(Task::Execution(TxVersion { tx_idx: tx_version.tx_idx, tx_incarnation: tx.incarnation }));
-            }
-
-            self.provider.finish_task(tx_version.tx_idx);
-            
-            debug_assert_eq!(tx.status, IncarnationStatus::Executing);
-            debug_assert_eq!(tx.incarnation, tx_version.tx_incarnation);
-
-            if flags.contains(FinishExecFlags::NeedValidation) {
-                tx.status = IncarnationStatus::Executed;
-            } else {
-                tx.status = IncarnationStatus::Validated;
-            }
-        }
-
+        self.provider.finish_task(tx_version.tx_idx);
         // Resume dependent transactions
         let mut dependents = index_mutex!(self.transactions_dependents, tx_version.tx_idx);
         for tx_idx in dependents.drain(..) {
-            // TODO2: skip validation
             self.add_blocking_task(tx_idx);
         }
         
+        // affected transactions must be re-executed
         for tx_idx in affected_transactions {
-            self.add_validation_task(tx_idx);
+            self.add_execution_task(tx_idx);
         }
+        
+        let mut tx = index_mutex!(self.transactions_status, tx_version.tx_idx);
+        debug_assert_eq!(tx.status, IncarnationStatus::Executing);
+        debug_assert_eq!(tx.incarnation, tx_version.tx_incarnation);
 
-        self.num_validated.fetch_add(1, Ordering::Relaxed);
+        if flags.contains(FinishExecFlags::NeedValidation) {
+            tx.status = IncarnationStatus::Executed;
+            return Some(Task::Validation(tx_version.tx_idx));
+        } else {
+            tx.status = IncarnationStatus::Validated;
+            self.num_validated.fetch_add(1, Ordering::Relaxed);
+        }
 
         None
     }
@@ -361,63 +340,17 @@ impl<T: TaskProvider> ExeScheduler<T> {
     pub(crate) fn finish_validation(&self, tx_idx: TxIdx, aborted: bool) -> Option<Task> {
         let mut tx = index_mutex!(self.transactions_status, tx_idx);
         if aborted {
-            if matches!(
-                tx.status,
-                IncarnationStatus::Validated | IncarnationStatus::Executed
-            ) {
-                self.num_validated.fetch_sub(1, Ordering::Relaxed);
-                //TODO2: use function
+            // TODO2: use function
+            if tx.status == IncarnationStatus::Executed {
                 tx.status = IncarnationStatus::Executing;
                 tx.incarnation += 1;
-                return Some(Task::Execution(TxVersion { tx_idx, tx_incarnation: tx.incarnation }));
+                Some(Task::Execution(TxVersion { tx_idx, tx_incarnation: tx.incarnation }))
+            } else {
+                None
             }
-            tx.status = IncarnationStatus::Aborting;
-            None
         } else {
             tx.status = IncarnationStatus::Validated;
             None
-        }
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct ValidationScheduler {
-    /// the queue of reexecution tasks
-    task_queue: SegQueue<TxIdx>,
-    /// The number of validated transactions
-    transactions_status: Vec<Mutex<ValidationStatus>>,
-}
-
-impl ValidationScheduler {
-    pub(crate) fn new(num_tasks: usize) -> Self {
-        Self {
-            task_queue: SegQueue::new(),
-            transactions_status: (0..num_tasks)
-                .map(|_| Mutex::new(ValidationStatus::NotReady))
-                .collect(),
-        }
-    }
-
-    pub(crate) fn next_task(&self) -> Option<TxIdx> {
-        if let Some(txid) = self.task_queue.pop() {
-            let mut tx_status = index_mutex!(self.transactions_status, txid);
-            *tx_status = ValidationStatus::Validated;
-            Some(txid)
-        } else {
-            None
-        }
-    }
-
-    pub(crate) fn add_tasks(&self, txids: Vec<TxIdx>) {
-        for txid in txids {
-            let mut tx_status = index_mutex!(self.transactions_status, txid);
-            if matches!(
-                *tx_status,
-                ValidationStatus::NotReady | ValidationStatus::Validated
-            ) {
-                *tx_status = ValidationStatus::Waiting;
-                self.task_queue.push(txid);
-            }
         }
     }
 }

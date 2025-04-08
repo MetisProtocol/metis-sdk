@@ -28,7 +28,7 @@ use crate::{
     compat::get_block_env,
     hash_deterministic,
     mv_memory::MvMemory,
-    schedulers::{ExeScheduler, NormalProvider, TaskProvider, ValidationScheduler},
+    schedulers::{ExeScheduler, NormalProvider, TaskProvider},
     storage::StorageWrapper,
     vm::{ExecutionError, TxExecutionResult, Vm, VmExecutionError, VmExecutionResult, build_evm},
 };
@@ -117,7 +117,6 @@ pub struct ParallelExecutor {
     dropper: AsyncDropper<(
         MvMemory,
         ExeScheduler<NormalProvider>,
-        ValidationScheduler,
         Vec<TxEnv>,
     )>,
     /// The compile work shared with different vm instance.
@@ -226,7 +225,6 @@ impl ParallelExecutor {
         let block_size = txs.len();
         let task_provider = NormalProvider::new(block_size);
         let exe_scheduler = ExeScheduler::new(task_provider);
-        let validation_scheduler = ValidationScheduler::new(block_size);
 
         let mv_memory = chain.build_mv_memory(&block_env, &txs);
         let vm = Vm::new(
@@ -292,7 +290,7 @@ impl ParallelExecutor {
             match abort_reason {
                 AbortReason::FallbackToSequential => {
                     self.dropper
-                        .drop((mv_memory, exe_scheduler, validation_scheduler, Vec::new()));
+                        .drop((mv_memory, exe_scheduler, Vec::new()));
                     return execute_revm_sequential(
                         chain,
                         storage,
@@ -305,7 +303,7 @@ impl ParallelExecutor {
                 }
                 AbortReason::ExecutionError(err) => {
                     self.dropper
-                        .drop((mv_memory, exe_scheduler, validation_scheduler, txs));
+                        .drop((mv_memory, exe_scheduler, txs));
                     return Err(ParallelExecutorError::ExecutionError(err));
                 }
             }
@@ -444,7 +442,7 @@ impl ParallelExecutor {
         }
 
         self.dropper
-            .drop((mv_memory, exe_scheduler, validation_scheduler, txs));
+            .drop((mv_memory, exe_scheduler, txs));
 
         Ok(fully_evaluated_results)
     }

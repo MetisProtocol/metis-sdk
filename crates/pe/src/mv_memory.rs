@@ -1,6 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    sync::Mutex,
+    collections::{BTreeMap, BTreeSet, HashSet}, sync::Mutex
 };
 
 use alloy_primitives::{Address, B256};
@@ -102,6 +101,9 @@ impl MvMemory {
         }
 
         let mut last_locations = index_mutex!(self.last_locations, tx_version.tx_idx);
+        for location in last_locations.read.keys().filter(|k| !read_set.contains_key(*k)) {
+            self.location_reads.get_mut(location).unwrap().remove(&tx_version.tx_idx);
+        }
         last_locations.read = read_set;
 
         // TODO2: DOCs
