@@ -1,7 +1,7 @@
 use alloy_evm::block::BlockExecutionError;
 use alloy_evm::{Database, IntoTxEnv};
 use metis_primitives::TxEnv;
-use reth::api::{FullNodeTypes, NodeTypesWithEngine};
+use reth::api::{FullNodeTypes, NodeTypes};
 use reth::builder::BuilderContext;
 use reth::builder::components::ExecutorBuilder;
 use reth::primitives::EthPrimitives;
@@ -22,6 +22,7 @@ use std::num::NonZeroUsize;
 
 use crate::state::StateStorageAdapter;
 
+#[derive(Debug)]
 pub struct BlockParallelExecutorProvider {
     strategy_factory: EthEvmConfig,
 }
@@ -168,10 +169,9 @@ where
 #[non_exhaustive]
 pub struct ParallelExecutorBuilder;
 
-impl<Types, Node> ExecutorBuilder<Node> for ParallelExecutorBuilder
+impl<Node> ExecutorBuilder<Node> for ParallelExecutorBuilder
 where
-    Types: NodeTypesWithEngine<ChainSpec = ChainSpec, Primitives = EthPrimitives>,
-    Node: FullNodeTypes<Types = Types>,
+    Node: FullNodeTypes<Types: NodeTypes<ChainSpec = ChainSpec, Primitives = EthPrimitives>>,
 {
     type EVM = EthEvmConfig;
     type Executor = BlockParallelExecutorProvider;

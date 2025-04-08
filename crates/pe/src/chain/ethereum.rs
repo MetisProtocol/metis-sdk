@@ -1,7 +1,7 @@
 //! Ethereum
 
-use alloy_consensus::{ReceiptEnvelope, Transaction, TxEnvelope, TxType, Typed2718};
-use alloy_primitives::{Address, B256, ChainId};
+use alloy_consensus::{ReceiptEnvelope, TxEnvelope, TxType};
+use alloy_primitives::{B256, ChainId};
 use alloy_provider::network::eip2718::Encodable2718;
 use alloy_rpc_types_eth::{BlockTransactions, Header};
 use hashbrown::HashMap;
@@ -49,15 +49,6 @@ pub enum EthereumTransactionParsingError {
     MissingGasPrice,
 }
 
-fn get_ethereum_gas_price(tx: &TxEnvelope) -> Result<u128, EthereumTransactionParsingError> {
-    match tx.tx_type() {
-        TxType::Legacy | TxType::Eip2930 => tx
-            .gas_price()
-            .ok_or(EthereumTransactionParsingError::MissingGasPrice),
-        TxType::Eip1559 | TxType::Eip4844 | TxType::Eip7702 => Ok(tx.max_fee_per_gas()),
-    }
-}
-
 impl Chain for Ethereum {
     type Transaction = alloy_rpc_types_eth::Transaction;
     type Envelope = TxEnvelope;
@@ -71,10 +62,6 @@ impl Chain for Ethereum {
 
     fn spec(&self) -> SpecId {
         self.spec
-    }
-
-    fn mock_tx(&self, envelope: Self::Envelope, from: Address) -> Self::Transaction {
-        Self::mock_rpc_tx(envelope, from)
     }
 
     /// Get the REVM spec id of an Alloy block.
@@ -110,34 +97,6 @@ impl Chain for Ethereum {
             SpecId::HOMESTEAD
         } else {
             SpecId::FRONTIER
-        })
-    }
-
-    /// Get the REVM tx envs of an Alloy block.
-    // https://github.com/paradigmxyz/reth/blob/280aaaedc4699c14a5b6e88f25d929fe22642fa3/crates/primitives/src/revm/env.rs#L234-L339
-    // https://github.com/paradigmxyz/reth/blob/280aaaedc4699c14a5b6e88f25d929fe22642fa3/crates/primitives/src/alloy_compat.rs#L112-L233
-    // TODO: Properly test this.
-    fn get_tx_env(&self, tx: &Self::Transaction) -> Result<TxEnv, EthereumTransactionParsingError> {
-        Ok(TxEnv {
-            caller: tx.from,
-            gas_limit: tx.gas_limit(),
-            gas_price: get_ethereum_gas_price(&tx.inner)?,
-            gas_priority_fee: tx.max_priority_fee_per_gas(),
-            kind: tx.kind(),
-            value: tx.value(),
-            data: tx.input().clone(),
-            nonce: tx.nonce(),
-            chain_id: tx.chain_id(),
-            access_list: tx
-                .access_list()
-                .cloned()
-                .unwrap_or_default()
-                .to_vec()
-                .into(),
-            blob_hashes: tx.blob_versioned_hashes().unwrap_or_default().to_vec(),
-            max_fee_per_blob_gas: tx.max_fee_per_blob_gas().unwrap_or_default(),
-            authorization_list: tx.authorization_list().unwrap_or_default().to_vec(),
-            tx_type: tx.ty(),
         })
     }
 

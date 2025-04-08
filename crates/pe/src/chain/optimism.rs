@@ -63,26 +63,6 @@ fn get_optimism_gas_price(tx: &OpTxEnvelope) -> Result<U256, OptimismTransaction
     }
 }
 
-/// Extract [`OptimismFields`] from [`OpTxEnvelope`]
-// fn get_optimism_fields(
-//     tx: &OpTxEnvelope,
-// ) -> Result<OptimismFields, OptimismTransactionParsingError> {
-//     let mut envelope_buf = Vec::<u8>::new();
-//     tx.encode_2718(&mut envelope_buf);
-//
-//     let (source_hash, mint) = match &tx {
-//         OpTxEnvelope::Deposit(deposit) => (deposit.inner().source_hash(), deposit.inner().mint()),
-//         _ => (None, None),
-//     };
-//
-//     Ok(OptimismFields {
-//         source_hash,
-//         mint,
-//         is_system_transaction: Some(tx.is_system_transaction()),
-//         enveloped_tx: Some(Bytes::from(envelope_buf)),
-//     })
-// }
-
 impl Chain for Optimism {
     type Transaction = op_alloy_rpc_types::Transaction;
     type Envelope = OpTxEnvelope;
@@ -96,15 +76,6 @@ impl Chain for Optimism {
 
     fn spec(&self) -> SpecId {
         self.spec.into_eth_spec()
-    }
-
-    // TODO: allow to construct deposit transactions
-    fn mock_tx(&self, envelope: Self::Envelope, from: Address) -> Self::Transaction {
-        Self::Transaction {
-            inner: Self::mock_rpc_tx(envelope, from),
-            deposit_nonce: None,
-            deposit_receipt_version: None,
-        }
     }
 
     fn get_block_spec(&self, header: &Header) -> Result<OpSpecId, Self::BlockSpecError> {
@@ -224,27 +195,6 @@ impl Chain for Optimism {
             hash_builder.add_leaf(alloy_trie::Nibbles::unpack(&k), &v);
         }
         Ok(hash_builder.root())
-    }
-
-    fn get_tx_env(&self, tx: &Self::Transaction) -> Result<TxEnv, OptimismTransactionParsingError> {
-        let mut tx_env = TxEnv {
-            caller: tx.from,
-            gas_limit: tx.gas_limit(),
-            gas_price: tx.gas_price().unwrap(),
-            gas_priority_fee: tx.max_priority_fee_per_gas(),
-            kind: tx.kind(),
-            value: tx.value(),
-            data: tx.input().clone(),
-            nonce: tx.nonce(),
-            chain_id: tx.chain_id(),
-            access_list: tx.access_list().unwrap().clone(),
-            blob_hashes: tx.blob_versioned_hashes().unwrap_or_default().to_vec(),
-            max_fee_per_blob_gas: tx.max_fee_per_blob_gas().unwrap(),
-            authorization_list: tx.authorization_list().unwrap().to_vec(),
-            ..Default::default()
-        };
-        tx_env.derive_tx_type().unwrap();
-        Ok(tx_env)
     }
 
     fn is_eip_1559_enabled(&self, _spec_id: SpecId) -> bool {
