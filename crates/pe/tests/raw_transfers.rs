@@ -13,7 +13,7 @@ fn raw_transfers_independent() {
     common::test_execute_revm(
         &Ethereum::mainnet(),
         // Mock the beneficiary account (`Address:ZERO`) and the next `block_size` user accounts.
-        &mut InMemoryStorage::new(
+        InMemoryStorage::new(
             (0..=block_size).map(common::mock_account).collect(),
             Default::default(),
             Default::default(),
@@ -48,7 +48,7 @@ fn raw_transfers_same_sender_multiple_txs() {
     common::test_execute_revm(
         &Ethereum::mainnet(),
         // Mock the beneficiary account (`Address:ZERO`) and the next `block_size` user accounts.
-        &mut InMemoryStorage::new(
+        InMemoryStorage::new(
             (0..=block_size).map(common::mock_account).collect(),
             Default::default(),
             Default::default(),
@@ -69,7 +69,7 @@ fn raw_transfers_same_sender_multiple_txs() {
                     value: U256::from(1),
                     gas_limit: common::RAW_TRANSFER_GAS_LIMIT,
                     gas_price: 1_u128,
-                    nonce: nonce,
+                    nonce,
                     ..TxEnv::default()
                 }
             })

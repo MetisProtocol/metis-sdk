@@ -73,8 +73,4 @@ revmc-build = { git = "https://github.com/paradigmxyz/revmc", optional = true }
 
 [[bench]]
 harness = false
-name = "mainnet"
-
-[[bench]]
-harness = false
 name = "gigagas"

@@ -15,7 +15,7 @@ fn test_beneficiary(get_address: fn(usize) -> Address) {
     common::test_execute_revm(
         &Ethereum::mainnet(),
         // Mock the beneficiary account (`Address:ZERO`) and the next `BLOCK_SIZE` user accounts.
-        &mut InMemoryStorage::new(
+        InMemoryStorage::new(
             (0..=BLOCK_SIZE).map(common::mock_account).collect(),
             Default::default(),
             Default::default(),

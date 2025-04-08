@@ -6,22 +6,17 @@ use std::{
     sync::Arc,
 };
 
-use alloy_consensus::{Signed, TxLegacy};
-use alloy_primitives::{Address, B256, Bytes, PrimitiveSignature, TxKind, U256};
-use alloy_rpc_types_eth::{Block, BlockTransactions, Header};
+use alloy_primitives::Address;
+use alloy_rpc_types_eth::Block;
 use flate2::bufread::GzDecoder;
 use hashbrown::HashMap;
-use metis_pe::chain::Ethereum;
-use metis_pe::{
-    BlockHashes, BuildSuffixHasher, ChainState, EvmAccount, InMemoryStorage, chain::Chain,
-};
-use metis_primitives::TxEnv;
+use metis_pe::{BlockHashes, BuildSuffixHasher, EvmAccount, InMemoryStorage};
 
 /// runner module
 pub mod runner;
 
 /// runner module imports
-pub use runner::{mock_account, test_execute_alloy, test_execute_revm};
+pub use runner::{mock_account, test_execute_revm};
 
 /// storage module
 pub mod storage;
