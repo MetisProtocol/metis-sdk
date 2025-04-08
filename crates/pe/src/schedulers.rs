@@ -247,6 +247,12 @@ impl<T: TaskProvider> ExeScheduler<T> {
             }
         }
 
+        if let Some(tx_idx) = self.blocking_queue.pop() {
+            if let Some(tx_version) = self.try_execute(tx_idx) {
+                return Some(Task::Execution(tx_version));
+            }
+        }
+
         None
     }
 

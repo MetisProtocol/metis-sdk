@@ -252,22 +252,29 @@ impl ParallelExecutor {
         thread::scope(|scope| {
             for _ in 0..concurrency_level.into() {
                 scope.spawn(|| {
+                    let mut task = exe_scheduler.next_task();
                     while self.abort_reason.get().is_none() {
-                        if let Some(task) = exe_scheduler.next_task() {
-                            match task {
-                                Task::Execution(tx_version) => {
-                                    self.try_execute(
-                                        &vm,
-                                        &exe_scheduler,
-                                        &validation_scheduler,
-                                        tx_version,
-                                    );
-                                }
-                                Task::Validation(tx_idx) => {
-                                    try_validate(&mv_memory, &exe_scheduler, tx_idx);
-                                }
-                                
-                            }
+                        task = match task {
+                            Some(Task::Execution(tx_version)) => {
+                                self.try_execute(
+                                    &vm,
+                                    &exe_scheduler,
+                                    tx_version,
+                                )
+                            },
+                            Some(Task::Validation(tx_idx)) => {
+                                try_validate(&mv_memory, &exe_scheduler, tx_idx)
+                            },
+                            None => None
+                        };
+
+                        if task.is_some() {
+                            continue;
+                        }
+
+                        task = exe_scheduler.next_task();
+
+                        if task.is_some() {
                             continue;
                         }
 
@@ -446,19 +453,20 @@ impl ParallelExecutor {
         &self,
         vm: &Vm<'_, S, C>,
         exe_scheduler: &ExeScheduler<T>,
-        validation_scheduler: &ValidationScheduler,
         tx_version: TxVersion,
-    ) {
+    ) -> Option<Task> {
         loop {
             return match vm.execute(&tx_version) {
                 Err(VmExecutionError::Retry) => {
                     if self.abort_reason.get().is_none() {
                         continue;
                     }
+                    None
                 }
                 Err(VmExecutionError::FallbackToSequential) => {
                     self.abort_reason
                         .get_or_init(|| AbortReason::FallbackToSequential);
+                    None
                 }
                 Err(VmExecutionError::Blocking(blocking_tx_idx)) => {
                     if !exe_scheduler.add_dependency(tx_version.tx_idx, blocking_tx_idx)
@@ -468,31 +476,30 @@ impl ParallelExecutor {
                         // re-executed by the time we can add it as a dependency.
                         continue;
                     }
+                    None
                 }
                 Err(VmExecutionError::ExecutionError(err)) => {
                     self.abort_reason
                         .get_or_init(|| AbortReason::ExecutionError(err));
+                    None
                 }
                 Ok(VmExecutionResult {
                     execution_result,
                     flags,
-                    mut affected_txs,
+                    affected_txs,
                 }) => {
                     *index_mutex!(self.execution_results, tx_version.tx_idx) =
                         Some(execution_result);
-                    if let Some(txid) = exe_scheduler.finish_execution(tx_version, flags) {
-                        affected_txs.push(txid);
-                    }
-                    validation_scheduler.add_tasks(affected_txs);
+                    exe_scheduler.finish_execution(tx_version, flags, affected_txs)
                 }
             };
         }
     }
 }
 
-fn try_validate<T: TaskProvider>(mv_memory: &MvMemory, scheduler: &ExeScheduler<T>, tx_idx: TxIdx) {
+fn try_validate<T: TaskProvider>(mv_memory: &MvMemory, scheduler: &ExeScheduler<T>, tx_idx: TxIdx) -> Option<Task> {
     let read_set_valid = mv_memory.validate_read_locations(tx_idx);
-    scheduler.finish_validation(tx_idx, !read_set_valid);
+    scheduler.finish_validation(tx_idx, !read_set_valid)
 }
 
 /// Execute REVM transactions sequentially.
