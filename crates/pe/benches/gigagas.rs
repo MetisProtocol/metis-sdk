@@ -45,7 +45,7 @@ pub fn bench(c: &mut Criterion, name: &str, storage: InMemoryStorage, txs: Vec<T
         b.iter(|| {
             execute_revm_sequential(
                 black_box(&chain),
-                black_box(storage.clone()),
+                black_box(&storage),
                 black_box(spec_id),
                 black_box(block_env.clone()),
                 black_box(txs.clone()),
@@ -58,7 +58,7 @@ pub fn bench(c: &mut Criterion, name: &str, storage: InMemoryStorage, txs: Vec<T
         b.iter(|| {
             pe.execute_revm_parallel(
                 black_box(&chain),
-                black_box(storage.clone()),
+                black_box(&storage),
                 black_box(spec_id),
                 black_box(block_env.clone()),
                 black_box(txs.clone()),
@@ -73,7 +73,7 @@ pub fn bench(c: &mut Criterion, name: &str, storage: InMemoryStorage, txs: Vec<T
             b.iter(|| {
                 execute_revm_sequential(
                     black_box(&chain),
-                    black_box(storage.clone()),
+                    black_box(&storage),
                     black_box(spec_id),
                     black_box(block_env.clone()),
                     black_box(txs.clone()),
@@ -85,7 +85,7 @@ pub fn bench(c: &mut Criterion, name: &str, storage: InMemoryStorage, txs: Vec<T
             b.iter(|| {
                 pe.execute_revm_parallel(
                     black_box(&chain),
-                    black_box(storage.clone()),
+                    black_box(&storage),
                     black_box(spec_id),
                     black_box(block_env.clone()),
                     black_box(txs.clone()),
