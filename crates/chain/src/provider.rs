@@ -177,20 +177,18 @@ where
         );
 
         // todo(fk): total gas used should be the last `cumulative_gas_used`???
-        let mut parallel_receipts = Vec::new();
         let mut total_gas_used: u64 = 0;
-        let _ = results.unwrap().into_iter().map(|r| {
-            parallel_receipts.push(r.receipt.clone());
-            total_gas_used += &r.receipt.cumulative_gas_used
-        });
-
-        let dst_receipts: Vec<Receipt> = parallel_receipts
+        let receipts = results
+            .unwrap()
             .into_iter()
-            .map(|r| crate::utils::from_receipt(r))
+            .map(|r| {
+                total_gas_used += &r.receipt.cumulative_gas_used;
+                crate::utils::from_receipt(r.tx_type, r.receipt)
+            })
             .collect();
 
         Ok(BlockExecutionResult {
-            receipts: dst_receipts,
+            receipts,
             gas_used: total_gas_used,
             ..Default::default()
         })

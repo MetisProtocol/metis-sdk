@@ -1,12 +1,3 @@
-#[cfg(feature = "compiler")]
-use std::sync::Arc;
-use std::{
-    fmt::Debug,
-    num::NonZeroUsize,
-    sync::{Mutex, OnceLock, mpsc},
-    thread,
-};
-
 use crate::{
     EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, TxIdx, TxVersion,
     chain::Chain,
@@ -31,6 +22,14 @@ use revm::{
     primitives::hardfork::SpecId,
 };
 use revm::{DatabaseRef, state::Bytecode};
+#[cfg(feature = "compiler")]
+use std::sync::Arc;
+use std::{
+    fmt::Debug,
+    num::NonZeroUsize,
+    sync::{Mutex, OnceLock, mpsc},
+    thread,
+};
 
 /// Errors when executing a block with the parallel executor.
 // TODO: implement traits explicitly due to trait bounds on `C` instead of types of `Chain`
@@ -503,6 +502,8 @@ pub fn execute_revm_sequential<DB: DatabaseRef, C: Chain>(
     let mut results = Vec::with_capacity(txs.len());
     let mut cumulative_gas_used: u64 = 0;
     for tx in txs {
+        let tx_type_value: u8 = tx.tx_type();
+        let tx_type = alloy_consensus::TxType::try_from(tx_type_value).unwrap();
         #[cfg(feature = "compiler")]
         let result_and_state = {
             use revm::handler::Handler;
@@ -522,7 +523,8 @@ pub fn execute_revm_sequential<DB: DatabaseRef, C: Chain>(
         };
         evm.db().commit(result_and_state.state.clone());
 
-        let mut execution_result = TxExecutionResult::from_revm(chain, spec_id, result_and_state);
+        let mut execution_result =
+            TxExecutionResult::from_revm(tx_type, chain, spec_id, result_and_state);
 
         cumulative_gas_used =
             cumulative_gas_used.saturating_add(execution_result.receipt.cumulative_gas_used);

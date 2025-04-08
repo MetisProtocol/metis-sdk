@@ -6,6 +6,7 @@ use crate::{
     hash_deterministic,
     mv_memory::MvMemory,
 };
+use alloy_consensus::TxType;
 use alloy_primitives::TxKind;
 use alloy_rpc_types_eth::Receipt;
 use hashbrown::HashMap;
@@ -55,6 +56,7 @@ type EvmStateTransitions = HashMap<Address, Option<EvmAccount>, BuildSuffixHashe
 /// Execution result of a transaction
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TxExecutionResult {
+    pub tx_type: TxType,
     /// Receipt of execution
     // TODO: Consider promoting to [ReceiptEnvelope] if there is high demand
     pub receipt: Receipt,
@@ -67,11 +69,13 @@ impl TxExecutionResult {
     /// Note that [`cumulative_gas_used`] is preset to the gas used in this transaction.
     /// It should be post-processed with the remaining transactions in the block.
     pub fn from_revm<C: Chain>(
+        tx_type: TxType,
         chain: &C,
         spec_id: SpecId,
         ResultAndState { result, state }: ResultAndState,
     ) -> Self {
         Self {
+            tx_type,
             receipt: Receipt {
                 status: result.is_success().into(),
                 cumulative_gas_used: result.gas_used(),
@@ -711,8 +715,11 @@ impl<'a, S: DatabaseRef, C: Chain> Vm<'a, S, C> {
 
                 let affected_txs = self.mv_memory.record(tx_version, db.read_set, write_set);
 
+                let tx_type_value = tx.tx_type.clone();
+                let tx_type = alloy_consensus::TxType::try_from(tx_type_value).unwrap();
                 Ok(VmExecutionResult {
                     execution_result: TxExecutionResult::from_revm(
+                        tx_type,
                         self.chain,
                         self.spec_id,
                         result_and_state,
