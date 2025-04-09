@@ -1,9 +1,5 @@
-use alloy_primitives::Bloom;
-use alloy_rpc_types_eth::Block;
-use metis_pe::{
-    EvmAccount, ParallelExecutor, Storage,
-    chain::{CalculateReceiptRootError, Chain},
-};
+use metis_pe::{EvmAccount, ParallelExecutor, chain::Chain};
+use revm::DatabaseRef;
 use revm::context::{BlockEnv, TxEnv};
 use revm::primitives::hardfork::SpecId;
 use revm::primitives::{Address, U256, alloy_primitives::U160};
@@ -28,7 +24,7 @@ pub fn mock_account(idx: usize) -> (Address, EvmAccount) {
 pub fn test_execute_revm<C, S>(chain: &C, storage: S, txs: Vec<TxEnv>)
 where
     C: Chain + PartialEq + Send + Sync,
-    S: Storage + Send + Sync + std::fmt::Debug,
+    S: DatabaseRef + Send + Sync,
 {
     let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
     let mut pe = ParallelExecutor::default();
@@ -36,7 +32,7 @@ where
         metis_pe::execute_revm_sequential(
             chain,
             &storage,
-            SpecId::LATEST,
+            SpecId::PRAGUE,
             BlockEnv::default(),
             txs.clone(),
             #[cfg(feature = "compiler")]
@@ -45,57 +41,10 @@ where
         pe.execute_revm_parallel(
             chain,
             &storage,
-            SpecId::LATEST,
+            SpecId::PRAGUE,
             BlockEnv::default(),
             txs,
             concurrency_level,
         ),
     );
-}
-
-/// Execute an Alloy block sequentially & with pe and assert that
-/// the execution results match.
-pub fn test_execute_alloy<C, S>(
-    chain: &C,
-    storage: &S,
-    block: Block<C::Transaction>,
-    must_match_block_header: bool,
-) where
-    C: Chain + PartialEq + Send + Sync,
-    S: Storage + Send + Sync + std::fmt::Debug,
-{
-    let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
-    let mut pe = ParallelExecutor::default();
-    let sequential_result = pe.execute(chain, storage, &block, concurrency_level, true);
-    let parallel_result = pe.execute(chain, storage, &block, concurrency_level, false);
-    assert!(sequential_result.is_ok());
-    assert_eq!(&sequential_result, &parallel_result);
-
-    let tx_results = sequential_result.unwrap();
-    if must_match_block_header {
-        let spec_id = chain.get_block_spec(&block.header).unwrap();
-
-        match chain.calculate_receipt_root(spec_id, &block.transactions, &tx_results) {
-            Ok(receipt_root) => assert_eq!(block.header.receipts_root, receipt_root),
-            Err(CalculateReceiptRootError::Unsupported) => {}
-            Err(err) => panic!("{:?}", err),
-        }
-
-        assert_eq!(
-            block.header.logs_bloom,
-            tx_results
-                .iter()
-                .map(|tx| tx.receipt.bloom_slow())
-                .fold(Bloom::default(), |acc, bloom| acc.bit_or(bloom))
-        );
-
-        assert_eq!(
-            block.header.gas_used,
-            tx_results
-                .iter()
-                .last()
-                .map(|result| result.receipt.cumulative_gas_used)
-                .unwrap_or_default()
-        );
-    }
 }

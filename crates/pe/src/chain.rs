@@ -4,14 +4,13 @@ use std::error::Error as StdError;
 use std::fmt::Debug;
 
 use alloy_consensus::{Signed, TxLegacy};
-use alloy_primitives::{Address, B256};
-use alloy_rpc_types_eth::{BlockTransactions, Header, Transaction};
+use alloy_rpc_types_eth::Header;
 use revm::{
     context::{BlockEnv, TxEnv},
     primitives::hardfork::SpecId,
 };
 
-use crate::{TxExecutionResult, mv_memory::MvMemory};
+use crate::mv_memory::MvMemory;
 
 /// Different chains may have varying reward policies.
 /// This enum specifies which policy to follow, with optional
@@ -28,20 +27,6 @@ pub enum RewardPolicy {
         /// Base Fee Vault
         base_fee_vault_location_hash: crate::MemoryLocationHash,
     },
-}
-
-/// The error type of [`Chain::calculate_receipt_root`]
-#[derive(Debug, Clone)]
-pub enum CalculateReceiptRootError {
-    /// Unsupported
-    Unsupported,
-    /// Invalid transaction type
-    InvalidTxType(u8),
-    /// Arbitrary error message
-    Custom(String),
-    /// Optimism deposit is missing sender
-    #[cfg(feature = "optimism")]
-    OpDepositMissingSender,
 }
 
 /// Custom behaviours for different chains & networks
@@ -67,26 +52,8 @@ pub trait Chain: Debug {
 
     fn spec(&self) -> SpecId;
 
-    /// Mock RPC transaction for testing.
-    fn mock_rpc_tx(envelope: Self::Envelope, from: Address) -> Transaction<Self::Envelope> {
-        Transaction {
-            inner: envelope,
-            from,
-            block_hash: None,
-            block_number: None,
-            transaction_index: None,
-            effective_gas_price: None,
-        }
-    }
-
-    /// Mock `Self::Transaction` for testing.
-    fn mock_tx(&self, envelope: Self::Envelope, from: Address) -> Self::Transaction;
-
     /// Get block's [`SpecId`]
     fn get_block_spec(&self, header: &Header) -> Result<Self::SpecId, Self::BlockSpecError>;
-
-    /// Get [`TxEnv`]
-    fn get_tx_env(&self, tx: &Self::Transaction) -> Result<TxEnv, Self::TransactionParsingError>;
 
     /// Build [`MvMemory`]
     fn build_mv_memory(&self, _block_env: &BlockEnv, txs: &[TxEnv]) -> MvMemory {
@@ -95,14 +62,6 @@ pub trait Chain: Debug {
 
     /// Get [`RewardPolicy`]
     fn get_reward_policy(&self) -> RewardPolicy;
-
-    /// Calculate receipt root
-    fn calculate_receipt_root(
-        &self,
-        spec_id: Self::SpecId,
-        txs: &BlockTransactions<Self::Transaction>,
-        tx_results: &[TxExecutionResult],
-    ) -> Result<B256, CalculateReceiptRootError>;
 
     /// Check whether EIP-1559 is enabled
     /// <https://github.com/ethereum/EIPs/blob/96523ef4d76ca440f73f0403ddb5c9cb3b24dcae/EIPS/eip-1559.md>

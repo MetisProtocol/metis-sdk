@@ -1,2 +1,2 @@
 pub mod provider;
-mod state;
+pub mod state;

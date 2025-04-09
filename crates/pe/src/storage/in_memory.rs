@@ -1,11 +1,11 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use super::{BlockHashes, Bytecodes, ChainState, StorageError};
 use alloy_primitives::{Address, B256, U256, keccak256};
 use metis_primitives::EVMBytecode;
-
-use super::{BlockHashes, Bytecodes, ChainState};
-use crate::{AccountBasic, Storage};
+use revm::state::AccountInfo;
+use revm::{Database, DatabaseRef};
 
 /// A storage that stores chain data in memory.
 #[derive(Debug, Clone, Default)]
@@ -30,43 +30,76 @@ impl InMemoryStorage {
     }
 }
 
-impl Storage for InMemoryStorage {
-    // TODO: More proper error handling
-    type Error = u8;
+impl Database for InMemoryStorage {
+    type Error = StorageError;
 
-    fn basic(&self, address: &Address) -> Result<Option<AccountBasic>, Self::Error> {
-        Ok(self.accounts.get(address).map(|account| AccountBasic {
+    fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
+        Ok(self.accounts.get(&address).map(|account| AccountInfo {
             balance: account.balance,
             nonce: account.nonce,
+            code_hash: account.code_hash.unwrap(),
+            code: account.code.clone(),
         }))
     }
 
-    fn code_hash(&self, address: &Address) -> Result<Option<B256>, Self::Error> {
-        Ok(self
-            .accounts
-            .get(address)
-            .and_then(|account| account.code_hash))
+    fn code_by_hash(&mut self, code_hash: B256) -> Result<EVMBytecode, Self::Error> {
+        self.bytecodes
+            .get(&code_hash)
+            .cloned()
+            .ok_or_else(|| StorageError::StorageNotFound("code_hash_not_found".to_owned()))
     }
 
-    fn code_by_hash(&self, code_hash: &B256) -> Result<Option<EVMBytecode>, Self::Error> {
-        Ok(self.bytecodes.get(code_hash).cloned())
-    }
-
-    fn storage(&self, address: &Address, index: &U256) -> Result<U256, Self::Error> {
+    fn storage(&mut self, address: Address, index: U256) -> Result<U256, Self::Error> {
         Ok(self
             .accounts
-            .get(address)
-            .and_then(|account| account.storage.get(index))
+            .get(&address)
+            .and_then(|account| account.storage.get(&index))
             .copied()
             .unwrap_or_default())
     }
 
-    fn block_hash(&self, number: &u64) -> Result<B256, Self::Error> {
+    fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error> {
         Ok(self
             .block_hashes
-            .get(number)
+            .get(&number)
             .copied()
-            // Matching REVM's [EmptyDB] for now
+            .unwrap_or_else(|| keccak256(number.to_string().as_bytes())))
+    }
+}
+
+impl DatabaseRef for InMemoryStorage {
+    type Error = StorageError;
+
+    fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
+        Ok(self.accounts.get(&address).map(|account| AccountInfo {
+            balance: account.balance,
+            nonce: account.nonce,
+            code_hash: account.code_hash.unwrap(),
+            code: account.code.clone(),
+        }))
+    }
+
+    fn code_by_hash_ref(&self, code_hash: B256) -> Result<EVMBytecode, Self::Error> {
+        self.bytecodes
+            .get(&code_hash)
+            .cloned()
+            .ok_or_else(|| StorageError::StorageNotFound("code_hash_not_found".to_owned()))
+    }
+
+    fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
+        Ok(self
+            .accounts
+            .get(&address)
+            .and_then(|account| account.storage.get(&index))
+            .copied()
+            .unwrap_or_default())
+    }
+
+    fn block_hash_ref(&self, number: u64) -> Result<B256, Self::Error> {
+        Ok(self
+            .block_hashes
+            .get(&number)
+            .copied()
             .unwrap_or_else(|| keccak256(number.to_string().as_bytes())))
     }
 }

@@ -2,8 +2,6 @@
 
 // TODO: More fancy benchmarks & plots.
 
-use std::{num::NonZeroUsize, sync::Arc, thread};
-
 use alloy_primitives::{Address, U160, U256};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use metis_pe::{
@@ -12,6 +10,7 @@ use metis_pe::{
 };
 use revm::context::{BlockEnv, TransactTo, TxEnv};
 use revm::primitives::hardfork::SpecId;
+use std::{num::NonZeroUsize, sync::Arc, thread};
 
 // Better project structure
 
@@ -38,7 +37,7 @@ static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 pub fn bench(c: &mut Criterion, name: &str, storage: InMemoryStorage, txs: Vec<TxEnv>) {
     let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
     let chain = Ethereum::mainnet();
-    let spec_id = SpecId::LATEST;
+    let spec_id = SpecId::PRAGUE;
     let block_env = BlockEnv::default();
     let mut pe = ParallelExecutor::default();
     let mut group = c.benchmark_group(name);

@@ -92,7 +92,7 @@ impl ERC20Token {
             balance: U256::ZERO,
             nonce: 1u64,
             code_hash: Some(bytecode.hash_slow()),
-            code: Some(bytecode.into()),
+            code: Some(bytecode),
             storage: store.build(),
         }
     }
