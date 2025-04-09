@@ -450,6 +450,7 @@ pub fn execute_revm_sequential<DB: DatabaseRef, C: Chain>(
     let mut results = Vec::with_capacity(txs.len());
     let mut cumulative_gas_used: u64 = 0;
     for tx in txs {
+        let tx_type = alloy_consensus::TxType::try_from(tx.tx_type).unwrap();
         #[cfg(feature = "compiler")]
         let result_and_state = {
             use revm::handler::Handler;
@@ -469,7 +470,8 @@ pub fn execute_revm_sequential<DB: DatabaseRef, C: Chain>(
         };
         evm.db().commit(result_and_state.state.clone());
 
-        let mut execution_result = TxExecutionResult::from_revm(chain, spec_id, result_and_state);
+        let mut execution_result =
+            TxExecutionResult::from_revm(tx_type, chain, spec_id, result_and_state);
 
         cumulative_gas_used =
             cumulative_gas_used.saturating_add(execution_result.receipt.cumulative_gas_used);

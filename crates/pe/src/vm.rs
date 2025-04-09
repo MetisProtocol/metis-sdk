@@ -6,8 +6,8 @@ use crate::{
     hash_deterministic,
     mv_memory::MvMemory,
 };
+use alloy_consensus::TxType;
 use alloy_primitives::TxKind;
-use alloy_rpc_types_eth::Receipt;
 use hashbrown::HashMap;
 #[cfg(feature = "optimism")]
 use metis_primitives::Transaction;
@@ -17,6 +17,7 @@ use metis_vm::ExtCompileWorker;
 use op_revm::OpTransaction;
 #[cfg(feature = "optimism")]
 use op_revm::{DefaultOp, OpBuilder, OpContext, OpEvm, OpSpecId};
+use reth_primitives::Receipt;
 #[cfg(feature = "optimism")]
 use revm::context::Cfg;
 use revm::context_interface::{JournalTr, result::HaltReason};
@@ -67,13 +68,15 @@ impl TxExecutionResult {
     /// Note that [`cumulative_gas_used`] is preset to the gas used in this transaction.
     /// It should be post-processed with the remaining transactions in the block.
     pub fn from_revm<C: Chain>(
+        tx_type: TxType,
         chain: &C,
         spec_id: SpecId,
         ResultAndState { result, state }: ResultAndState,
     ) -> Self {
         Self {
             receipt: Receipt {
-                status: result.is_success().into(),
+                tx_type,
+                success: result.is_success(),
                 cumulative_gas_used: result.gas_used(),
                 logs: result.into_logs(),
             },
@@ -710,9 +713,10 @@ impl<'a, S: DatabaseRef, C: Chain> Vm<'a, S, C> {
                 };
 
                 let affected_txs = self.mv_memory.record(tx_version, db.read_set, write_set);
-
+                let tx_type = alloy_consensus::TxType::try_from(tx.tx_type).unwrap();
                 Ok(VmExecutionResult {
                     execution_result: TxExecutionResult::from_revm(
+                        tx_type,
                         self.chain,
                         self.spec_id,
                         result_and_state,

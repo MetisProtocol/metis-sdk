@@ -48,7 +48,16 @@ alloy-transport = "0.13.0"
 alloy-transport-http = "0.13.0"
 alloy-trie = "0.7.9"
 alloy-evm = "0.3.1"
+alloy-hardforks = "0.1.4"
+alloy-eips = "0.13.0"
+
 revm = { version = "21.0.0", features = ["std", "serde-json"] }
+
+reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
+reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
+reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
+reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 
 # Allocators
 rpmalloc = { version = "0.2.2", features = ["thread_cache", "global_cache"] }
