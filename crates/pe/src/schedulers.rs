@@ -1,6 +1,7 @@
 use crossbeam::queue::SegQueue;
 use std::sync::{
-    atomic::{AtomicUsize, Ordering}, Mutex
+    Mutex,
+    atomic::{AtomicUsize, Ordering},
 };
 
 use smallvec::SmallVec;
@@ -24,14 +25,18 @@ pub(crate) struct TransactionsGraph {
 }
 
 impl TransactionsGraph {
-    pub(crate) fn new(block_size: usize) -> Self {
-        Self {
+    pub(crate) fn new(block_size: usize, dependencies: Vec<(TxIdx, TxIdx)>) -> Self {
+        let graph = Self {
             block_size,
             num_done: AtomicUsize::new(0),
             transactions_queue: SegQueue::new(),
             transactions_degree: (0..block_size).map(|_| AtomicUsize::new(0)).collect(),
             transactions_dependents: (0..block_size).map(|_| Mutex::default()).collect(),
+        };
+        for (tx_idx, blocking_tx_idx) in dependencies {
+            graph.add_dependency(tx_idx, blocking_tx_idx);
         }
+        graph
     }
 
     pub(crate) fn init(&self) {
@@ -73,9 +78,9 @@ impl TransactionsGraph {
         self.block_size
     }
 
-    pub(crate) fn size(&self) -> usize {
-        self.block_size - self.num_done.load(Ordering::Relaxed)
-    }
+    // pub(crate) fn size(&self) -> usize {
+    //     self.block_size - self.num_done.load(Ordering::Relaxed)
+    // }
 }
 
 pub trait TaskProvider {
@@ -95,8 +100,8 @@ pub struct DAGProvider {
 }
 
 impl DAGProvider {
-    pub(crate) fn new(block_size: usize) -> Self {
-        let graph = TransactionsGraph::new(block_size);
+    pub fn new(block_size: usize) -> Self {
+        let graph = TransactionsGraph::new(block_size, vec![]);
         graph.init();
 
         Self { graph }
@@ -304,17 +309,19 @@ impl<T: TaskProvider> ExeScheduler<T> {
         affected_transactions: Vec<TxIdx>,
     ) -> Option<Task> {
         self.provider.finish_task(tx_version.tx_idx);
-        // Resume dependent transactions
-        let mut dependents = index_mutex!(self.transactions_dependents, tx_version.tx_idx);
-        for tx_idx in dependents.drain(..) {
-            self.add_blocking_task(tx_idx);
+        {
+            // Resume dependent transactions
+            let mut dependents = index_mutex!(self.transactions_dependents, tx_version.tx_idx);
+            for tx_idx in dependents.drain(..) {
+                self.add_blocking_task(tx_idx);
+            }
         }
-        
+
         // affected transactions must be re-executed
         for tx_idx in affected_transactions {
             self.add_execution_task(tx_idx);
         }
-        
+
         let mut tx = index_mutex!(self.transactions_status, tx_version.tx_idx);
         debug_assert_eq!(tx.status, IncarnationStatus::Executing);
         debug_assert_eq!(tx.incarnation, tx_version.tx_incarnation);
@@ -344,12 +351,16 @@ impl<T: TaskProvider> ExeScheduler<T> {
             if tx.status == IncarnationStatus::Executed {
                 tx.status = IncarnationStatus::Executing;
                 tx.incarnation += 1;
-                Some(Task::Execution(TxVersion { tx_idx, tx_incarnation: tx.incarnation }))
+                Some(Task::Execution(TxVersion {
+                    tx_idx,
+                    tx_incarnation: tx.incarnation,
+                }))
             } else {
                 None
             }
         } else {
             tx.status = IncarnationStatus::Validated;
+            self.num_validated.fetch_add(1, Ordering::Relaxed);
             None
         }
     }

@@ -23,7 +23,7 @@ use revm::{
 };
 
 use crate::{
-    EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, Storage, TxIdx, TxVersion, Task,
+    EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, Storage, Task, TxIdx, TxVersion,
     chain::Chain,
     compat::get_block_env,
     hash_deterministic,
@@ -114,11 +114,7 @@ impl<T> AsyncDropper<T> {
 pub struct ParallelExecutor {
     execution_results: Vec<Mutex<Option<TxExecutionResult>>>,
     abort_reason: OnceLock<AbortReason>,
-    dropper: AsyncDropper<(
-        MvMemory,
-        ExeScheduler<NormalProvider>,
-        Vec<TxEnv>,
-    )>,
+    dropper: AsyncDropper<(MvMemory, ExeScheduler<NormalProvider>, Vec<TxEnv>)>,
     /// The compile work shared with different vm instance.
     #[cfg(feature = "compiler")]
     pub worker: Arc<ExtCompileWorker>,
@@ -254,16 +250,12 @@ impl ParallelExecutor {
                     while self.abort_reason.get().is_none() {
                         task = match task {
                             Some(Task::Execution(tx_version)) => {
-                                self.try_execute(
-                                    &vm,
-                                    &exe_scheduler,
-                                    tx_version,
-                                )
-                            },
+                                self.try_execute(&vm, &exe_scheduler, tx_version)
+                            }
                             Some(Task::Validation(tx_idx)) => {
                                 try_validate(&mv_memory, &exe_scheduler, tx_idx)
-                            },
-                            None => None
+                            }
+                            None => None,
                         };
 
                         if task.is_some() {
@@ -289,8 +281,7 @@ impl ParallelExecutor {
         if let Some(abort_reason) = self.abort_reason.take() {
             match abort_reason {
                 AbortReason::FallbackToSequential => {
-                    self.dropper
-                        .drop((mv_memory, exe_scheduler, Vec::new()));
+                    self.dropper.drop((mv_memory, exe_scheduler, Vec::new()));
                     return execute_revm_sequential(
                         chain,
                         storage,
@@ -302,8 +293,7 @@ impl ParallelExecutor {
                     );
                 }
                 AbortReason::ExecutionError(err) => {
-                    self.dropper
-                        .drop((mv_memory, exe_scheduler, txs));
+                    self.dropper.drop((mv_memory, exe_scheduler, txs));
                     return Err(ParallelExecutorError::ExecutionError(err));
                 }
             }
@@ -441,8 +431,7 @@ impl ParallelExecutor {
             }
         }
 
-        self.dropper
-            .drop((mv_memory, exe_scheduler, txs));
+        self.dropper.drop((mv_memory, exe_scheduler, txs));
 
         Ok(fully_evaluated_results)
     }
@@ -495,7 +484,11 @@ impl ParallelExecutor {
     }
 }
 
-fn try_validate<T: TaskProvider>(mv_memory: &MvMemory, scheduler: &ExeScheduler<T>, tx_idx: TxIdx) -> Option<Task> {
+fn try_validate<T: TaskProvider>(
+    mv_memory: &MvMemory,
+    scheduler: &ExeScheduler<T>,
+    tx_idx: TxIdx,
+) -> Option<Task> {
     let read_set_valid = mv_memory.validate_read_locations(tx_idx);
     scheduler.finish_validation(tx_idx, !read_set_valid)
 }

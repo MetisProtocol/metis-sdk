@@ -222,6 +222,7 @@ mod schedulers;
 pub use executor::{
     ParallelExecutor, ParallelExecutorError, ParallelExecutorResult, execute_revm_sequential,
 };
+pub use schedulers::{DAGProvider, NormalProvider};
 // mod scheduler;
 mod storage;
 pub use storage::{
