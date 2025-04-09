@@ -62,7 +62,7 @@ fn mixed_block() {
     }
     common::test_execute_revm(
         &Ethereum::mainnet(),
-        &mut InMemoryStorage::new(final_state, Arc::new(final_bytecodes), Default::default()),
+        InMemoryStorage::new(final_state, Arc::new(final_bytecodes), Default::default()),
         // TODO: Shuffle transactions to scatter dependencies around the block.
         // Note that we'll need to guarantee that the nonces are increasing.
         final_txs,

@@ -10,14 +10,12 @@ use std::{
 use crate::{
     EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, TxIdx, TxVersion,
     chain::Chain,
-    compat::get_block_env,
     hash_deterministic,
     mv_memory::MvMemory,
     schedulers::{ExeScheduler, NormalProvider, TaskProvider, ValidationScheduler},
     vm::{ExecutionError, TxExecutionResult, Vm, VmExecutionError, VmExecutionResult, build_evm},
 };
 use alloy_primitives::{TxNonce, U256};
-use alloy_rpc_types_eth::{Block, BlockTransactions};
 use hashbrown::HashMap;
 use metis_primitives::Transaction;
 #[cfg(feature = "compiler")]
@@ -148,63 +146,9 @@ impl ParallelExecutor {
 }
 
 impl ParallelExecutor {
-    pub fn execute<S, C>(
-        &mut self,
-        chain: &C,
-        storage: S,
-        // We assume the block is still needed afterwards like in most Reth cases
-        // so take in a reference and only copy values when needed. We may want
-        // to use a [`std::borrow::Cow`] to build [`BlockEnv`] and [`TxEnv`] without
-        // (much) copying when ownership can be given. Another challenge with this is
-        // the new Alloy [`Transaction`] interface that is mostly `&self`. We'd need
-        // to do some dirty destruction to get the owned fields.
-        block: &Block<C::Transaction>,
-        concurrency_level: NonZeroUsize,
-        force_sequential: bool,
-    ) -> ParallelExecutorResult<C>
-    where
-        C: Chain + Send + Sync,
-        S: DatabaseRef + Send + Sync,
-    {
-        let spec_id = chain.spec();
-        let block_env = get_block_env(&block.header, spec_id);
-        let tx_envs = match &block.transactions {
-            BlockTransactions::Full(txs) => txs
-                .iter()
-                .map(|tx| chain.get_tx_env(tx))
-                .collect::<Result<Vec<TxEnv>, _>>()
-                .map_err(ParallelExecutorError::InvalidTransaction)?,
-            _ => return Err(ParallelExecutorError::MissingTransactionData),
-        };
-        // TODO: Continue to fine tune this condition.
-        if force_sequential
-            || tx_envs.len() < concurrency_level.get()
-            || block.header.gas_used < 4_000_000
-        {
-            execute_revm_sequential(
-                chain,
-                storage,
-                spec_id,
-                block_env,
-                tx_envs,
-                #[cfg(feature = "compiler")]
-                self.worker.clone(),
-            )
-        } else {
-            self.execute_revm_parallel(
-                chain,
-                storage,
-                spec_id,
-                block_env,
-                tx_envs,
-                concurrency_level,
-            )
-        }
-    }
-
     /// Execute an REVM block.
-    // Ideally everyone would go through the [Alloy] interface. This one is currently
-    // useful for testing, and for users that are heavily tied to Revm like Reth.
+    /// Ideally everyone would go through the [Alloy] interface. This one is currently
+    /// useful for testing, and for users that are heavily tied to Revm like Reth.
     pub fn execute_revm_parallel<S, C>(
         &mut self,
         chain: &C,

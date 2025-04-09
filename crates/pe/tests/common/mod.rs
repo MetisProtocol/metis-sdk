@@ -6,22 +6,17 @@ use std::{
     sync::Arc,
 };
 
-use alloy_consensus::{Signed, TxLegacy};
-use alloy_primitives::{Address, B256, Bytes, PrimitiveSignature, TxKind, U256};
-use alloy_rpc_types_eth::{Block, BlockTransactions, Header};
+use alloy_primitives::Address;
+use alloy_rpc_types_eth::Block;
 use flate2::bufread::GzDecoder;
 use hashbrown::HashMap;
-use metis_pe::chain::Ethereum;
-use metis_pe::{
-    BlockHashes, BuildSuffixHasher, ChainState, EvmAccount, InMemoryStorage, chain::Chain,
-};
-use metis_primitives::TxEnv;
+use metis_pe::{BlockHashes, BuildSuffixHasher, EvmAccount, InMemoryStorage};
 
 /// runner module
 pub mod runner;
 
 /// runner module imports
-pub use runner::{mock_account, test_execute_alloy, test_execute_revm};
+pub use runner::{mock_account, test_execute_revm};
 
 /// storage module
 pub mod storage;
@@ -67,50 +62,4 @@ pub fn for_each_block_from_disk(mut handler: impl FnMut(Block, InMemoryStorage))
             InMemoryStorage::new(accounts, Arc::clone(&bytecodes), Arc::clone(&block_hashes)),
         );
     }
-}
-
-/// Test a chain with [`block_size`] independent raw transactions that transfer to itself
-pub fn test_independent_raw_transfers<C>(chain: &C, block_size: usize)
-where
-    C: Chain + Send + Sync + PartialEq,
-{
-    let accounts = (0..block_size).map(mock_account).collect::<ChainState>();
-    let block: Block<C::Transaction> = Block {
-        header: Header {
-            inner: alloy_consensus::Header {
-                timestamp: 1710338135,
-                excess_blob_gas: Some(0),
-                gas_limit: u64::MAX,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        transactions: BlockTransactions::<C::Transaction>::Full(
-            accounts
-                .iter()
-                .map(|(address, account)| {
-                    chain.mock_tx(
-                        Signed::new_unchecked(
-                            TxLegacy {
-                                chain_id: Some(chain.id()),
-                                nonce: account.nonce,
-                                gas_price: 0,
-                                gas_limit: RAW_TRANSFER_GAS_LIMIT,
-                                to: TxKind::Call(*address),
-                                value: U256::from(1),
-                                input: Bytes::default(),
-                            },
-                            PrimitiveSignature::new(U256::ZERO, U256::ZERO, false),
-                            B256::default(),
-                        )
-                        .into(),
-                        *address,
-                    )
-                })
-                .collect(),
-        ),
-        ..Block::<C::Transaction>::default()
-    };
-    let mut storage = InMemoryStorage::new(accounts, Default::default(), Default::default());
-    test_execute_alloy(chain, &mut storage, block, false);
 }
