@@ -1,14 +1,10 @@
 //! Chain specific utils
 
-use std::error::Error as StdError;
-use std::fmt::Debug;
-
-use alloy_consensus::{Signed, TxLegacy};
-use alloy_rpc_types_eth::Header;
 use revm::{
     context::{BlockEnv, TxEnv},
     primitives::hardfork::SpecId,
 };
+use std::fmt::Debug;
 
 use crate::mv_memory::MvMemory;
 
@@ -34,16 +30,6 @@ pub trait Chain: Debug {
     /// The transaction type
     type Transaction: Debug + Clone + PartialEq;
 
-    /// The envelope type
-    // TODO: Support more tx conversions
-    type Envelope: Debug + From<Signed<TxLegacy>>;
-
-    /// The error type for [`Self::get_block_spec`].
-    type BlockSpecError: StdError + Debug + Clone + PartialEq + 'static;
-
-    /// The error type for [`Self::get_tx_env`].
-    type TransactionParsingError: StdError + Debug + Clone + PartialEq + 'static;
-
     /// The chain spec id
     type SpecId;
 
@@ -51,9 +37,6 @@ pub trait Chain: Debug {
     fn id(&self) -> u64;
 
     fn spec(&self) -> SpecId;
-
-    /// Get block's [`SpecId`]
-    fn get_block_spec(&self, header: &Header) -> Result<Self::SpecId, Self::BlockSpecError>;
 
     /// Build [`MvMemory`]
     fn build_mv_memory(&self, _block_env: &BlockEnv, txs: &[TxEnv]) -> MvMemory {

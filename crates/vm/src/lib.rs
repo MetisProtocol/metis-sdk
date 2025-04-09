@@ -12,7 +12,6 @@ pub use inference::{
     DEFAULT_MODEL_PATH, GAS_PER_INFERENCE_TOKEN, INFERENCE_PRECOMPILE_ADDRESS, InferencePrecompiles,
 };
 
-pub mod analysis;
 pub mod env;
 pub mod error;
 mod runtime;

@@ -1,8 +1,8 @@
 use hashbrown::HashMap;
+use metis_primitives::FxBuildHasher;
 use revm::primitives::{
     Address, B256, I256, U256, alloy_primitives::U160, keccak256, ruint::UintTryFrom,
 };
-use rustc_hash::FxBuildHasher;
 
 /// A builder for constructing storage mappings, using `U256` keys and values.
 #[derive(Debug, Default)]

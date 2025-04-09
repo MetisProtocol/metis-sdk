@@ -1,9 +1,7 @@
 use crate::{
-    BuildIdentityHasher, BuildSuffixHasher, EvmAccount, FinishExecFlags, MemoryEntry,
-    MemoryLocation, MemoryLocationHash, MemoryValue, ReadOrigin, ReadOrigins, ReadSet, TxIdx,
-    TxVersion, WriteSet,
+    EvmAccount, FinishExecFlags, MemoryEntry, MemoryLocation, MemoryLocationHash, MemoryValue,
+    ReadOrigin, ReadOrigins, ReadSet, TxIdx, TxVersion, WriteSet,
     chain::{Chain, RewardPolicy},
-    hash_deterministic,
     mv_memory::MvMemory,
 };
 use alloy_consensus::TxType;
@@ -11,6 +9,7 @@ use alloy_primitives::TxKind;
 use hashbrown::HashMap;
 #[cfg(feature = "optimism")]
 use metis_primitives::Transaction;
+use metis_primitives::{BuildIdentityHasher, BuildSuffixHasher, hash_deterministic};
 #[cfg(feature = "compiler")]
 use metis_vm::ExtCompileWorker;
 #[cfg(feature = "optimism")]
@@ -678,7 +677,7 @@ impl<'a, S: DatabaseRef, C: Chain> Vm<'a, S, C> {
                             self.mv_memory
                                 .new_bytecodes
                                 .entry(account.info.code_hash)
-                                .or_insert_with(|| account.info.code.clone().unwrap());
+                                .or_insert_with(|| account.info.code.clone().unwrap_or_default());
                         }
                     }
 
@@ -713,7 +712,9 @@ impl<'a, S: DatabaseRef, C: Chain> Vm<'a, S, C> {
                 };
 
                 let affected_txs = self.mv_memory.record(tx_version, db.read_set, write_set);
-                let tx_type = alloy_consensus::TxType::try_from(tx.tx_type).unwrap();
+                let tx_type = alloy_consensus::TxType::try_from(tx.tx_type).map_err(|err| {
+                    VmExecutionError::ExecutionError(EVMError::Custom(err.to_string()))
+                })?;
                 Ok(VmExecutionResult {
                     execution_result: TxExecutionResult::from_revm(
                         tx_type,

@@ -1,5 +1,5 @@
 #[allow(unused)]
-use metis_primitives::{Bytes, EVMBytecode, FromHex};
+use metis_primitives::{Bytecode, Bytes, FromHex};
 
 #[cfg(feature = "compiler")]
 #[tokio::test]

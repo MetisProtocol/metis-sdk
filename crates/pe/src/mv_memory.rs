@@ -5,11 +5,12 @@ use std::{
 
 use alloy_primitives::{Address, B256};
 use dashmap::DashMap;
+use metis_primitives::BuildSuffixHasher;
 use revm::bytecode::Bytecode;
 
 use crate::{
-    BuildIdentityHasher, BuildSuffixHasher, MemoryEntry, MemoryLocationHash, ReadOrigin, ReadSet,
-    TxIdx, TxVersion, WriteSet,
+    BuildIdentityHasher, MemoryEntry, MemoryLocationHash, ReadOrigin, ReadSet, TxIdx, TxVersion,
+    WriteSet,
 };
 
 #[derive(Default, Debug)]

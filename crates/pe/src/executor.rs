@@ -1,14 +1,12 @@
 use crate::{
     EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, TxIdx, TxVersion,
     chain::Chain,
-    hash_deterministic,
     mv_memory::MvMemory,
     schedulers::{ExeScheduler, NormalProvider, TaskProvider, ValidationScheduler},
     vm::{ExecutionError, TxExecutionResult, Vm, VmExecutionError, VmExecutionResult, build_evm},
 };
 use alloy_primitives::{TxNonce, U256};
-use hashbrown::HashMap;
-use metis_primitives::Transaction;
+use metis_primitives::{Transaction, hash_deterministic};
 #[cfg(feature = "compiler")]
 use metis_vm::ExtCompileWorker;
 #[cfg(feature = "compiler")]
@@ -32,16 +30,10 @@ use std::{
 /// Errors when executing a block with the parallel executor.
 // TODO: implement traits explicitly due to trait bounds on `C` instead of types of `Chain`
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
-pub enum ParallelExecutorError<C: Chain> {
-    /// Cannot derive the chain spec from the block header.
-    #[error("Cannot derive the chain spec from the block header")]
-    BlockSpecError(#[source] C::BlockSpecError),
+pub enum ParallelExecutorError {
     /// Transactions lack information for execution.
     #[error("Transactions lack information for execution")]
     MissingTransactionData,
-    /// Invalid input transaction.
-    #[error("Invalid input transaction")]
-    InvalidTransaction(#[source] C::TransactionParsingError),
     /// Nonce too low or too high
     #[error("Nonce mismatch for tx #{tx_idx}. Expected {executed_nonce}, got {tx_nonce}")]
     NonceMismatch {
@@ -70,7 +62,7 @@ pub enum ParallelExecutorError<C: Chain> {
 }
 
 /// Execution result of a block
-pub type ParallelExecutorResult<C> = Result<Vec<TxExecutionResult>, ParallelExecutorError<C>>;
+pub type ParallelExecutorResult = Result<Vec<TxExecutionResult>, ParallelExecutorError>;
 
 #[derive(Debug)]
 enum AbortReason {
@@ -156,7 +148,7 @@ impl ParallelExecutor {
         block_env: BlockEnv,
         txs: Vec<TxEnv>,
         concurrency_level: NonZeroUsize,
-    ) -> ParallelExecutorResult<C>
+    ) -> ParallelExecutorResult
     where
         C: Chain + Send + Sync,
         S: DatabaseRef + Send + Sync,
@@ -364,7 +356,7 @@ impl ParallelExecutor {
                             nonce,
                             code_hash,
                             code: Some(code.clone()),
-                            storage: HashMap::default(),
+                            storage: Default::default(),
                         });
                     }
                 }
@@ -440,13 +432,14 @@ pub fn execute_revm_sequential<DB: DatabaseRef, C: Chain>(
     block_env: BlockEnv,
     txs: Vec<TxEnv>,
     #[cfg(feature = "compiler")] worker: Arc<ExtCompileWorker>,
-) -> ParallelExecutorResult<C> {
+) -> ParallelExecutorResult {
     let mut db = CacheDB::new(storage);
     let mut evm = build_evm(&mut db, spec_id, block_env);
     let mut results = Vec::with_capacity(txs.len());
     let mut cumulative_gas_used: u64 = 0;
     for tx in txs {
-        let tx_type = alloy_consensus::TxType::try_from(tx.tx_type).unwrap();
+        let tx_type = alloy_consensus::TxType::try_from(tx.tx_type)
+            .map_err(|_| ParallelExecutorError::UnreachableError)?;
         #[cfg(feature = "compiler")]
         let result_and_state = {
             use revm::handler::Handler;
