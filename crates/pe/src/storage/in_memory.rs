@@ -1,9 +1,10 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use super::{BlockHashes, Bytecodes, ChainState, StorageError};
-use alloy_primitives::{Address, B256, U256, keccak256};
-use metis_primitives::EVMBytecode;
+use super::StorageError;
+use metis_primitives::{
+    Address, B256, BlockHashes, Bytecode, Bytecodes, ChainState, U256, keccak256,
+};
 use revm::state::AccountInfo;
 use revm::{Database, DatabaseRef};
 
@@ -42,7 +43,7 @@ impl Database for InMemoryStorage {
         }))
     }
 
-    fn code_by_hash(&mut self, code_hash: B256) -> Result<EVMBytecode, Self::Error> {
+    fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error> {
         self.bytecodes
             .get(&code_hash)
             .cloned()
@@ -74,12 +75,12 @@ impl DatabaseRef for InMemoryStorage {
         Ok(self.accounts.get(&address).map(|account| AccountInfo {
             balance: account.balance,
             nonce: account.nonce,
-            code_hash: account.code_hash.unwrap(),
+            code_hash: account.code_hash.unwrap_or_default(),
             code: account.code.clone(),
         }))
     }
 
-    fn code_by_hash_ref(&self, code_hash: B256) -> Result<EVMBytecode, Self::Error> {
+    fn code_by_hash_ref(&self, code_hash: B256) -> Result<Bytecode, Self::Error> {
         self.bytecodes
             .get(&code_hash)
             .cloned()

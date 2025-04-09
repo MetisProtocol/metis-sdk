@@ -1,5 +1,3 @@
-//! Optimism
-
 use super::{CalculateReceiptRootError, Chain, RewardPolicy};
 use crate::{
     BuildIdentityHasher, MemoryLocation, TxExecutionResult, hash_deterministic, mv_memory::MvMemory,
@@ -39,35 +37,8 @@ impl Optimism {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum OptimismBlockSpecError {
-    #[error("Spec is not supported")]
-    UnsupportedSpec,
-}
-
-/// Represents errors that can occur when parsing transactions
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum OptimismTransactionParsingError {
-    #[error("Transaction must set gas price")]
-    MissingGasPrice,
-}
-
-fn get_optimism_gas_price(tx: &OpTxEnvelope) -> Result<U256, OptimismTransactionParsingError> {
-    match tx.tx_type() {
-        OpTxType::Legacy | OpTxType::Eip2930 => tx
-            .gas_price()
-            .map(U256::from)
-            .ok_or(OptimismTransactionParsingError::MissingGasPrice),
-        OpTxType::Eip1559 | OpTxType::Eip7702 => Ok(U256::from(tx.max_fee_per_gas())),
-        OpTxType::Deposit => Ok(U256::ZERO),
-    }
-}
-
 impl Chain for Optimism {
     type Transaction = op_alloy_rpc_types::Transaction;
-    type Envelope = OpTxEnvelope;
-    type BlockSpecError = OptimismBlockSpecError;
-    type TransactionParsingError = OptimismTransactionParsingError;
     type SpecId = OpSpecId;
 
     fn id(&self) -> u64 {
@@ -76,27 +47,6 @@ impl Chain for Optimism {
 
     fn spec(&self) -> SpecId {
         self.spec.into_eth_spec()
-    }
-
-    fn get_block_spec(&self, header: &Header) -> Result<OpSpecId, Self::BlockSpecError> {
-        // TODO: The implementation below is only true for Optimism Mainnet.
-        // When supporting other networks (e.g. Optimism Sepolia), remember to adjust the code here.
-        if header.timestamp >= 1720627201 {
-            Ok(OpSpecId::FJORD)
-        } else if header.timestamp >= 1710374401 {
-            Ok(OpSpecId::ECOTONE)
-        } else if header.timestamp >= 1704992401 {
-            Ok(OpSpecId::CANYON)
-        } else if header.number >= 105235063 {
-            // On Optimism Mainnet, Bedrock and Regolith are activated at the same time.
-            // Therefore, this function never returns SpecId::BEDROCK.
-            // The statement above might not be true for other networks, e.g. Optimism Goerli.
-            Ok(OpSpecId::REGOLITH)
-        } else {
-            // TODO: revm does not support pre-Bedrock blocks.
-            // https://docs.optimism.io/builders/node-operators/architecture#legacy-geth
-            Err(OptimismBlockSpecError::UnsupportedSpec)
-        }
     }
 
     fn build_mv_memory(&self, block_env: &BlockEnv, txs: &[TxEnv]) -> MvMemory {

@@ -2,33 +2,14 @@
 
 // TODO: Better types & API for third-party integration
 
-use std::hash::{BuildHasher, BuildHasherDefault, Hash, Hasher};
+use std::hash::Hash;
 
 use alloy_primitives::{Address, B256, U256};
 use bitflags::bitflags;
 use hashbrown::HashMap;
+use metis_primitives::BuildIdentityHasher;
 use revm::state::AccountInfo;
-use rustc_hash::FxBuildHasher;
 use smallvec::SmallVec;
-
-/// We use the last 8 bytes of an existing hash like address
-/// or code hash instead of rehashing it.
-// TODO: Make sure this is acceptable for production
-#[derive(Debug, Default)]
-pub struct SuffixHasher(u64);
-impl Hasher for SuffixHasher {
-    fn write(&mut self, bytes: &[u8]) {
-        let mut suffix = [0u8; 8];
-        suffix.copy_from_slice(&bytes[bytes.len() - 8..]);
-        self.0 = u64::from_be_bytes(suffix);
-    }
-    fn finish(&self) -> u64 {
-        self.0
-    }
-}
-
-/// Build a suffix hasher
-pub type BuildSuffixHasher = BuildHasherDefault<SuffixHasher>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum MemoryLocation {
@@ -43,35 +24,6 @@ enum MemoryLocation {
 // data, write and read sets, which is much faster than rehashing
 // on every single lookup & validation.
 type MemoryLocationHash = u64;
-
-/// This is primarily used for memory location hash, but can also be used for
-/// transaction indexes, etc.
-#[derive(Debug, Default)]
-pub struct IdentityHasher(u64);
-impl Hasher for IdentityHasher {
-    fn write_u64(&mut self, id: u64) {
-        self.0 = id;
-    }
-    fn write_usize(&mut self, id: usize) {
-        self.0 = id as u64;
-    }
-    fn finish(&self) -> u64 {
-        self.0
-    }
-    fn write(&mut self, _: &[u8]) {
-        unreachable!()
-    }
-}
-
-/// Build an identity hasher
-pub type BuildIdentityHasher = BuildHasherDefault<IdentityHasher>;
-
-// TODO: Ensure it's not easy to hand-craft transactions and storage slots
-// that can cause a lot of collisions that destroys pe's performance.
-#[inline(always)]
-fn hash_deterministic<T: Hash>(x: T) -> u64 {
-    FxBuildHasher.hash_one(x)
-}
 
 // TODO: It would be nice if we could tie the different cases of
 // memory locations & values at the type level, to prevent lots of
@@ -213,16 +165,15 @@ macro_rules! index_mutex {
 }
 
 pub mod chain;
-pub mod compat;
-mod executor;
-mod mv_memory;
+pub mod executor;
+pub mod mv_memory;
+pub use mv_memory::MvMemory;
 pub mod schedulers;
 pub use executor::{
     ParallelExecutor, ParallelExecutorError, ParallelExecutorResult, execute_revm_sequential,
 };
-mod storage;
-pub use storage::{
-    AccountBasic, BlockHashes, Bytecodes, ChainState, EvmAccount, InMemoryStorage, StorageError,
-};
-mod vm;
+pub mod storage;
+pub use metis_primitives::{AccountBasic, BlockHashes, Bytecodes, ChainState, EvmAccount};
+pub use storage::{InMemoryStorage, StorageError};
+pub mod vm;
 pub use vm::{ExecutionError, TxExecutionResult};

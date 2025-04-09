@@ -10,7 +10,8 @@ use alloy_primitives::Address;
 use alloy_rpc_types_eth::Block;
 use flate2::bufread::GzDecoder;
 use hashbrown::HashMap;
-use metis_pe::{BlockHashes, BuildSuffixHasher, EvmAccount, InMemoryStorage};
+use metis_pe::InMemoryStorage;
+use metis_primitives::{BlockHashes, BuildSuffixHasher, EvmAccount};
 
 /// runner module
 pub mod runner;
