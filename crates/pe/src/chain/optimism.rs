@@ -144,59 +144,6 @@ impl Chain for Optimism {
         }
     }
 
-    // Refer to section 4.3.2. Holistic Validity in the Ethereum Yellow Paper.
-    // https://github.com/ethereum/go-ethereum/blob/master/cmd/era/main.go#L289
-    // https://github.com/paradigmxyz/reth/blob/b4a1b733c93f7e262f1b774722670e08cdcb6276/crates/primitives/src/proofs.rs
-    fn calculate_receipt_root(
-        &self,
-        spec_id: SpecId,
-        txs: &BlockTransactions<Self::Transaction>,
-        tx_results: &[TxExecutionResult],
-    ) -> Result<B256, CalculateReceiptRootError> {
-        let mut trie_entries = txs
-            .txns()
-            .zip(tx_results.iter())
-            .map(|(tx, tx_result)| {
-                let receipt = tx_result.receipt.clone();
-                Ok(match tx.inner.inner.tx_type() {
-                    OpTxType::Legacy => OpReceiptEnvelope::Legacy(receipt.with_bloom()),
-                    OpTxType::Eip2930 => OpReceiptEnvelope::Eip2930(receipt.with_bloom()),
-                    OpTxType::Eip1559 => OpReceiptEnvelope::Eip1559(receipt.with_bloom()),
-                    OpTxType::Eip7702 => OpReceiptEnvelope::Eip7702(receipt.with_bloom()),
-                    OpTxType::Deposit => {
-                        let account = tx_result
-                            .state
-                            .get(&tx.from)
-                            .and_then(Option::as_ref)
-                            .ok_or(CalculateReceiptRootError::OpDepositMissingSender)?;
-                        let receipt = OpDepositReceipt {
-                            inner: receipt,
-                            deposit_nonce: (spec_id >= SpecId::from(OpSpecId::CANYON))
-                                .then_some(account.nonce - 1),
-                            deposit_receipt_version: (spec_id >= SpecId::from(OpSpecId::CANYON))
-                                .then_some(1),
-                        };
-                        OpReceiptEnvelope::Deposit(receipt.with_bloom())
-                    }
-                })
-            })
-            .enumerate()
-            .map(|(index, receipt)| {
-                Ok((
-                    alloy_rlp::encode_fixed_size(&index),
-                    receipt?.encoded_2718(),
-                ))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        trie_entries.sort();
-
-        let mut hash_builder = alloy_trie::HashBuilder::default();
-        for (k, v) in trie_entries {
-            hash_builder.add_leaf(alloy_trie::Nibbles::unpack(&k), &v);
-        }
-        Ok(hash_builder.root())
-    }
-
     fn is_eip_1559_enabled(&self, _spec_id: SpecId) -> bool {
         true
     }
