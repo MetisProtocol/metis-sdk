@@ -10,10 +10,7 @@ use revm::{
 };
 
 use super::{Chain, RewardPolicy};
-use crate::{
-    BuildIdentityHasher, MemoryLocation, TxIdx, hash_deterministic,
-    mv_memory::MvMemory,
-};
+use crate::{BuildIdentityHasher, MemoryLocation, TxIdx, hash_deterministic, mv_memory::MvMemory};
 
 /// Implementation of [`Chain`] for Ethereum
 #[derive(Debug, Clone, PartialEq, Eq)]

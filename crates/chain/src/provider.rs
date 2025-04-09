@@ -1,10 +1,18 @@
-use alloy_evm::block::BlockExecutionError;
+use crate::state::StateStorageAdapter;
+use alloy_eips::eip7685::Requests;
+use alloy_evm::block::state_changes::post_block_balance_increments;
+use alloy_evm::block::{BlockExecutionError, BlockValidationError, SystemCaller};
+use alloy_evm::eth::dao_fork::DAO_HARDFORK_BENEFICIARY;
+use alloy_evm::eth::{dao_fork, eip6110};
 use alloy_evm::{Database, IntoTxEnv};
+use alloy_hardforks::EthereumHardfork;
 use metis_primitives::TxEnv;
 use reth::api::{FullNodeTypes, NodeTypes};
 use reth::builder::BuilderContext;
 use reth::builder::components::ExecutorBuilder;
+use reth::chainspec::EthereumHardforks;
 use reth::primitives::EthPrimitives;
+use reth::primitives::Receipt;
 use reth::{
     api::ConfigureEvm,
     providers::BlockExecutionResult,
@@ -19,8 +27,6 @@ use reth_evm_ethereum::EthEvmConfig;
 use reth_primitives::{NodePrimitives, RecoveredBlock};
 use std::fmt::Debug;
 use std::num::NonZeroUsize;
-
-use crate::state::StateStorageAdapter;
 
 #[derive(Debug)]
 pub struct BlockParallelExecutorProvider {
@@ -87,17 +93,40 @@ where
         BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>,
         Self::Error,
     > {
-        self.execute_block(block)?;
-        // TODO(fk): use the parallel executor result instead of the strategy EthBlockExecutor result.
-        let result = BlockExecutionResult::default();
+        // note: 1.receipt builder, 2.gas used calculated, 3. state write, 4. db persist
+        // execute system contract call of `EIP-2935` and `EIP-4788`
+        {
+            let mut strategy = self
+                .strategy_factory
+                .executor_for_block(&mut self.db, block);
+            strategy.apply_pre_execution_changes()?;
+        }
+
+        // execute block transactions parallel
+        let parallel_execute_result = self.execute_block(block)?;
+
+        // calculate requests
+        let receipts = parallel_execute_result.receipts;
+        let requests = self.calc_requests(receipts.clone(), block)?;
+
+        // governance reward for full block, ommers...
+        self.post_execution(block)?;
+
+        // assemble new block execution result, there is no dump receipt
+        let results = BlockExecutionResult {
+            receipts,
+            requests,
+            gas_used: parallel_execute_result.gas_used,
+        };
         self.db.merge_transitions(BundleRetention::Reverts);
-        Ok(result)
+
+        Ok(results)
     }
 
     fn execute_one_with_state_hook<F>(
         &mut self,
         block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
-        state_hook: F,
+        _state_hook: F,
     ) -> Result<
         BlockExecutionResult<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Receipt>,
         Self::Error,
@@ -105,18 +134,8 @@ where
     where
         F: OnStateHook + 'static,
     {
-        {
-            let mut strategy = self
-                .strategy_factory
-                .executor_for_block(&mut self.db, block)
-                .with_state_hook(Some(Box::new(state_hook)));
-            strategy.apply_pre_execution_changes()?;
-        }
-        self.execute_block(block)?;
-        // TODO(fk): use the parallel executor result instead of the strategy EthBlockExecutor result.
-        let result = BlockExecutionResult::default();
-        self.db.merge_transitions(BundleRetention::Reverts);
-        Ok(result)
+        // only strategy.execute_transaction used the Hook
+        self.execute_one(block)
     }
 
     fn into_state(self) -> State<DB> {
@@ -135,7 +154,7 @@ where
     fn execute_block(
         &mut self,
         block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
-    ) -> Result<u64, BlockExecutionError> {
+    ) -> Result<BlockExecutionResult<Receipt>, BlockExecutionError> {
         let mut executor = metis_pe::ParallelExecutor::default();
         let env = self.strategy_factory.evm_env(block.header());
         let chain_spec = self.strategy_factory.chain_spec();
@@ -157,11 +176,91 @@ where
             tx_envs,
             NonZeroUsize::new(num_cpus::get()).unwrap_or(NonZeroUsize::new(1).unwrap()),
         );
-        Ok(results
+
+        let mut total_gas_used: u64 = 0;
+        let receipts = results
             .unwrap()
             .into_iter()
-            .map(|r| r.receipt.cumulative_gas_used)
-            .sum())
+            .map(|r| {
+                total_gas_used += &r.receipt.cumulative_gas_used;
+                r.receipt
+            })
+            .collect();
+
+        Ok(BlockExecutionResult {
+            receipts,
+            gas_used: total_gas_used,
+            ..Default::default()
+        })
+    }
+
+    fn post_execution(
+        &mut self,
+        block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
+    ) -> Result<(), BlockExecutionError> {
+        let env = self.strategy_factory.evm_env(block.header());
+        let chain_spec = self.strategy_factory.chain_spec();
+        let block_env = env.block_env;
+        let body = block.body();
+        let ommers = &body.ommers;
+        let withdraws = &body.clone().withdrawals.unwrap();
+        let mut balance_increments =
+            post_block_balance_increments(chain_spec, &block_env, ommers, Some(withdraws));
+
+        // Irregular state change at Ethereum DAO hardfork
+        if chain_spec
+            .fork(EthereumHardfork::Dao)
+            .transitions_at_block(block.number)
+        {
+            // drain balances from hardcoded addresses.
+            let drained_balance: u128 = self
+                .db
+                .drain_balances(dao_fork::DAO_HARDFORK_ACCOUNTS)
+                .map_err(|_| BlockValidationError::IncrementBalanceFailed)?
+                .into_iter()
+                .sum();
+
+            // return balance to DAO beneficiary.
+            *balance_increments
+                .entry(DAO_HARDFORK_BENEFICIARY)
+                .or_default() += drained_balance;
+        }
+        // increment balances
+        self.db
+            .increment_balances(balance_increments)
+            .map_err(|_| BlockValidationError::IncrementBalanceFailed)?;
+
+        Ok(())
+    }
+
+    fn calc_requests(
+        &mut self,
+        receipts: Vec<Receipt>,
+        block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
+    ) -> Result<Requests, BlockExecutionError> {
+        let spec = self.strategy_factory.chain_spec();
+        let data: Requests = if spec.is_prague_active_at_timestamp(block.timestamp) {
+            // Collect all EIP-6110 deposits
+            let deposit_requests = eip6110::parse_deposits_from_receipts(spec, &receipts)?;
+
+            let mut requests = Requests::default();
+
+            if !deposit_requests.is_empty() {
+                requests.push_request_with_type(eip6110::DEPOSIT_REQUEST_TYPE, deposit_requests);
+            }
+
+            let mut strategy = self
+                .strategy_factory
+                .executor_for_block(&mut self.db, block);
+            let evm = strategy.evm_mut();
+            let mut system_caller = SystemCaller::new(spec);
+            requests.extend(system_caller.apply_post_execution_changes(evm)?);
+            requests
+        } else {
+            Requests::default()
+        };
+
+        Ok(data)
     }
 }
 
