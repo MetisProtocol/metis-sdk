@@ -177,7 +177,6 @@ where
             NonZeroUsize::new(num_cpus::get()).unwrap_or(NonZeroUsize::new(1).unwrap()),
         );
 
-        // todo(fk): total gas used should be the last `cumulative_gas_used`???
         let mut total_gas_used: u64 = 0;
         let receipts = results
             .unwrap()
