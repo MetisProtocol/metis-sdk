@@ -49,7 +49,6 @@ pub use executor::{
 };
 pub use schedulers::{DAGProvider, NormalProvider};
 pub use types::*;
-// mod scheduler;
 mod storage;
 pub use storage::{
     AccountBasic, BlockHashes, Bytecodes, ChainState, EvmAccount, InMemoryStorage, StorageError,

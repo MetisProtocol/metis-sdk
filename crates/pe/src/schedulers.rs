@@ -77,10 +77,6 @@ impl TransactionsGraph {
     pub fn block_size(&self) -> usize {
         self.block_size
     }
-
-    // pub(crate) fn size(&self) -> usize {
-    //     self.block_size - self.num_done.load(Ordering::Relaxed)
-    // }
 }
 
 pub trait TaskProvider {
