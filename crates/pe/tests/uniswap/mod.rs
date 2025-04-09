@@ -178,7 +178,7 @@ pub fn generate_cluster(
     for account in state.values_mut() {
         let code = account.code.take();
         if let Some(code) = code {
-            bytecodes.insert(account.code_hash.unwrap(), code);
+            bytecodes.insert(account.code_hash, code);
         }
     }
 

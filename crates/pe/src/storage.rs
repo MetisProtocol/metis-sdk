@@ -18,8 +18,7 @@ pub struct EvmAccount {
     /// The account's nonce.
     pub nonce: u64,
     /// The optional code hash of the account.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub code_hash: Option<B256>,
+    pub code_hash: B256,
     /// The account's optional code.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<Bytecode>,
@@ -33,7 +32,7 @@ impl From<Account> for EvmAccount {
         Self {
             balance: account.info.balance,
             nonce: account.info.nonce,
-            code_hash: has_code.then_some(account.info.code_hash),
+            code_hash: account.info.code_hash,
             code: has_code.then(|| account.info.code.unwrap_or_default()),
             storage: account
                 .storage

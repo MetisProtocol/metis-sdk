@@ -9,7 +9,7 @@ use std::{
 
 use alloy_primitives::{TxNonce, U256};
 use hashbrown::HashMap;
-use metis_primitives::Transaction;
+use metis_primitives::{KECCAK_EMPTY, Transaction};
 #[cfg(feature = "compiler")]
 use metis_vm::ExtCompileWorker;
 #[cfg(feature = "compiler")]
@@ -260,7 +260,7 @@ impl ParallelExecutor {
             if let Some(write_history) = mv_memory.data.get(&location_hash) {
                 let mut balance = U256::ZERO;
                 let mut nonce = 0;
-                let mut code_hash = None;
+                let mut code_hash = KECCAK_EMPTY;
                 // Read from storage if the first multi-version entry is not an absolute value.
                 if !matches!(
                     write_history.first_key_value(),
@@ -269,11 +269,11 @@ impl ParallelExecutor {
                     if let Ok(Some(account)) = storage.basic_ref(address) {
                         balance = account.balance;
                         nonce = account.nonce;
-                        code_hash = Some(account.code_hash);
+                        code_hash = account.code_hash;
                     }
                 }
-                let code = if let Some(code_hash) = &code_hash {
-                    match storage.code_by_hash_ref(*code_hash) {
+                let code = if code_hash != KECCAK_EMPTY {
+                    match storage.code_by_hash_ref(code_hash) {
                         Ok(code) => code,
                         Err(err) => {
                             return Err(ParallelExecutorError::StorageError(err.to_string()));
@@ -346,7 +346,7 @@ impl ParallelExecutor {
                     let account = tx_result.state.entry(address).or_default();
                     // TODO: Deduplicate this logic with [TxExecutionResult::from_revm]
                     if chain.is_eip_161_enabled(spec_id)
-                        && code_hash.is_none()
+                        && code_hash.is_empty()
                         && nonce == 0
                         && balance == U256::ZERO
                     {

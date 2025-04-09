@@ -91,7 +91,7 @@ impl ERC20Token {
         EvmAccount {
             balance: U256::ZERO,
             nonce: 1u64,
-            code_hash: Some(bytecode.hash_slow()),
+            code_hash: bytecode.hash_slow(),
             code: Some(bytecode),
             storage: store.build(),
         }

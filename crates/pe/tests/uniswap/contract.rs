@@ -56,7 +56,7 @@ impl WETH9 {
         EvmAccount {
             balance: U256::ZERO,
             nonce: 1u64,
-            code_hash: Some(bytecode.hash_slow()),
+            code_hash: bytecode.hash_slow(),
             code: Some(bytecode),
             storage: store.build(),
         }
@@ -136,7 +136,7 @@ impl UniswapV3Factory {
         EvmAccount {
             balance: U256::ZERO,
             nonce: 1u64,
-            code_hash: Some(bytecode.hash_slow()),
+            code_hash: bytecode.hash_slow(),
             code: Some(bytecode),
             storage: store.build(),
         }
@@ -259,7 +259,7 @@ impl UniswapV3Pool {
         EvmAccount {
             balance: U256::ZERO,
             nonce: 1u64,
-            code_hash: Some(bytecode.hash_slow()),
+            code_hash: bytecode.hash_slow(),
             code: Some(bytecode),
             storage: store.build(),
         }
@@ -334,7 +334,7 @@ impl SwapRouter {
         EvmAccount {
             balance: U256::ZERO,
             nonce: 1u64,
-            code_hash: Some(bytecode.hash_slow()),
+            code_hash: bytecode.hash_slow(),
             code: Some(bytecode),
             storage: store.build(),
         }
@@ -383,7 +383,7 @@ impl SingleSwap {
         EvmAccount {
             balance: U256::ZERO,
             nonce: 1u64,
-            code_hash: Some(bytecode.hash_slow()),
+            code_hash: bytecode.hash_slow(),
             code: Some(bytecode),
             storage: store.build(),
         }
