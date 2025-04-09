@@ -11,8 +11,8 @@ alloy-rpc-types-eth.workspace = true
 alloy-consensus.workspace = true
 alloy-primitives.workspace = true
 alloy-evm.workspace = true
-alloy-hardforks = "0.1.4"
-alloy-eips = "0.12.6"
+alloy-hardforks.workspace = true
+alloy-eips.workspace = true
 
 reth.workspace = true
 reth-chainspec.workspace = true

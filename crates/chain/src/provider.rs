@@ -7,7 +7,7 @@ use alloy_evm::eth::{dao_fork, eip6110};
 use alloy_evm::{Database, IntoTxEnv};
 use alloy_hardforks::EthereumHardfork;
 use metis_primitives::TxEnv;
-use reth::api::{FullNodeTypes, NodeTypesWithEngine};
+use reth::api::{FullNodeTypes, NodeTypes};
 use reth::builder::BuilderContext;
 use reth::builder::components::ExecutorBuilder;
 use reth::chainspec::EthereumHardforks;
@@ -28,6 +28,7 @@ use reth_primitives::{NodePrimitives, RecoveredBlock};
 use std::fmt::Debug;
 use std::num::NonZeroUsize;
 
+#[derive(Debug)]
 pub struct BlockParallelExecutorProvider {
     strategy_factory: EthEvmConfig,
 }
@@ -183,7 +184,7 @@ where
             .into_iter()
             .map(|r| {
                 total_gas_used += &r.receipt.cumulative_gas_used;
-                crate::utils::from_receipt(r.tx_type, r.receipt)
+                r.receipt
             })
             .collect();
 
@@ -268,10 +269,9 @@ where
 #[non_exhaustive]
 pub struct ParallelExecutorBuilder;
 
-impl<Types, Node> ExecutorBuilder<Node> for ParallelExecutorBuilder
+impl<Node> ExecutorBuilder<Node> for ParallelExecutorBuilder
 where
-    Types: NodeTypesWithEngine<ChainSpec = ChainSpec, Primitives = EthPrimitives>,
-    Node: FullNodeTypes<Types = Types>,
+    Node: FullNodeTypes<Types: NodeTypes<ChainSpec = ChainSpec, Primitives = EthPrimitives>>,
 {
     type EVM = EthEvmConfig;
     type Executor = BlockParallelExecutorProvider;

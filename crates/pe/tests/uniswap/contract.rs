@@ -57,7 +57,7 @@ impl WETH9 {
             balance: U256::ZERO,
             nonce: 1u64,
             code_hash: Some(bytecode.hash_slow()),
-            code: Some(bytecode.into()),
+            code: Some(bytecode),
             storage: store.build(),
         }
     }
@@ -137,7 +137,7 @@ impl UniswapV3Factory {
             balance: U256::ZERO,
             nonce: 1u64,
             code_hash: Some(bytecode.hash_slow()),
-            code: Some(bytecode.into()),
+            code: Some(bytecode),
             storage: store.build(),
         }
     }
@@ -260,7 +260,7 @@ impl UniswapV3Pool {
             balance: U256::ZERO,
             nonce: 1u64,
             code_hash: Some(bytecode.hash_slow()),
-            code: Some(bytecode.into()),
+            code: Some(bytecode),
             storage: store.build(),
         }
     }
@@ -335,7 +335,7 @@ impl SwapRouter {
             balance: U256::ZERO,
             nonce: 1u64,
             code_hash: Some(bytecode.hash_slow()),
-            code: Some(bytecode.into()),
+            code: Some(bytecode),
             storage: store.build(),
         }
     }
@@ -384,7 +384,7 @@ impl SingleSwap {
             balance: U256::ZERO,
             nonce: 1u64,
             code_hash: Some(bytecode.hash_slow()),
-            code: Some(bytecode.into()),
+            code: Some(bytecode),
             storage: store.build(),
         }
     }

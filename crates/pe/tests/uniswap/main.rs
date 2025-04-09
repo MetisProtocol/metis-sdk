@@ -37,7 +37,7 @@ fn uniswap_clusters() {
     }
     common::test_execute_revm(
         &Ethereum::mainnet(),
-        &mut InMemoryStorage::new(final_state, Arc::new(final_bytecodes), Default::default()),
+        InMemoryStorage::new(final_state, Arc::new(final_bytecodes), Default::default()),
         final_txs,
     )
 }

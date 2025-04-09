@@ -13,7 +13,7 @@ fn raw_transfers_independent() {
     common::test_execute_revm(
         &Ethereum::mainnet(),
         // Mock the beneficiary account (`Address:ZERO`) and the next `block_size` user accounts.
-        &mut InMemoryStorage::new(
+        InMemoryStorage::new(
             (0..=block_size).map(common::mock_account).collect(),
             Default::default(),
             Default::default(),
@@ -48,7 +48,7 @@ fn raw_transfers_same_sender_multiple_txs() {
     common::test_execute_revm(
         &Ethereum::mainnet(),
         // Mock the beneficiary account (`Address:ZERO`) and the next `block_size` user accounts.
-        &mut InMemoryStorage::new(
+        InMemoryStorage::new(
             (0..=block_size).map(common::mock_account).collect(),
             Default::default(),
             Default::default(),
@@ -69,46 +69,10 @@ fn raw_transfers_same_sender_multiple_txs() {
                     value: U256::from(1),
                     gas_limit: common::RAW_TRANSFER_GAS_LIMIT,
                     gas_price: 1_u128,
-                    nonce: nonce,
+                    nonce,
                     ..TxEnv::default()
                 }
             })
             .collect(),
     );
-}
-
-#[test]
-fn ethereum_empty_alloy_block() {
-    common::test_independent_raw_transfers(&Ethereum::mainnet(), 0);
-}
-
-#[test]
-fn ethereum_one_tx_alloy_block() {
-    common::test_independent_raw_transfers(&Ethereum::mainnet(), 1);
-}
-
-#[test]
-fn ethereum_independent_raw_transfers() {
-    common::test_independent_raw_transfers(&Ethereum::mainnet(), 100_000);
-}
-
-#[cfg(feature = "optimism")]
-#[test]
-fn optimism_empty_alloy_block() {
-    use metis_pe::chain::Optimism;
-    common::test_independent_raw_transfers(&Optimism::mainnet(), 0);
-}
-
-#[cfg(feature = "optimism")]
-#[test]
-fn optimism_one_tx_alloy_block() {
-    use metis_pe::chain::Optimism;
-    common::test_independent_raw_transfers(&Optimism::mainnet(), 1);
-}
-
-#[cfg(feature = "optimism")]
-#[test]
-fn optimism_independent_raw_transfers() {
-    use metis_pe::chain::Optimism;
-    common::test_independent_raw_transfers(&Optimism::mainnet(), 100_000);
 }

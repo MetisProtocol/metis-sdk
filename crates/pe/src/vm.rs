@@ -8,7 +8,6 @@ use crate::{
 };
 use alloy_consensus::TxType;
 use alloy_primitives::TxKind;
-use alloy_rpc_types_eth::Receipt;
 use hashbrown::HashMap;
 #[cfg(feature = "optimism")]
 use metis_primitives::Transaction;
@@ -18,6 +17,7 @@ use metis_vm::ExtCompileWorker;
 use op_revm::OpTransaction;
 #[cfg(feature = "optimism")]
 use op_revm::{DefaultOp, OpBuilder, OpContext, OpEvm, OpSpecId};
+use reth_primitives::Receipt;
 #[cfg(feature = "optimism")]
 use revm::context::Cfg;
 use revm::context_interface::{JournalTr, result::HaltReason};
@@ -56,7 +56,6 @@ type EvmStateTransitions = HashMap<Address, Option<EvmAccount>, BuildSuffixHashe
 /// Execution result of a transaction
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TxExecutionResult {
-    pub tx_type: TxType,
     /// Receipt of execution
     // TODO: Consider promoting to [ReceiptEnvelope] if there is high demand
     pub receipt: Receipt,
@@ -75,9 +74,9 @@ impl TxExecutionResult {
         ResultAndState { result, state }: ResultAndState,
     ) -> Self {
         Self {
-            tx_type,
             receipt: Receipt {
-                status: result.is_success().into(),
+                tx_type,
+                success: result.is_success(),
                 cumulative_gas_used: result.gas_used(),
                 logs: result.into_logs(),
             },
