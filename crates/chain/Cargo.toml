@@ -6,19 +6,40 @@ edition.workspace = true
 [dependencies]
 metis-primitives.workspace = true
 metis-pe.workspace = true
-revm.workspace = true
+
+# Alloy and Revm dependencies
 alloy-rpc-types-eth.workspace = true
 alloy-consensus.workspace = true
 alloy-primitives.workspace = true
 alloy-evm.workspace = true
 alloy-hardforks.workspace = true
 alloy-eips.workspace = true
+alloy-signer.workspace = true
+alloy-signer-local.workspace = true
+alloy-rlp.workspace = true
+alloy-sol-types.workspace = true
+revm.workspace = true
 
+# Reth dependencies
 reth.workspace = true
 reth-chainspec.workspace = true
+reth-node-ethereum.workspace = true
 reth-evm-ethereum.workspace = true
 reth-evm.workspace = true
 reth-primitives.workspace = true
+reth-tracing.workspace = true
+reth-ethereum.workspace = true
 
+tokio.workspace = true
+serde.workspace = true
+futures = "0.3"
 eyre = "0.6"
+actix-web = "4.10.2"
 num_cpus = "1.16.0"
+
+[build-dependencies]
+reth-exex-test-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
+reth-testing-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
+
+[features]
+inference = []

@@ -5,30 +5,28 @@ version.workspace = true
 
 [features]
 defaults = []
-
 full = []
-
 optimism = [
   "dep:op-alloy-consensus",
   "dep:op-alloy-network",
   "dep:op-alloy-rpc-types",
   "dep:op-revm"
 ]
-
 compiler = ["metis-vm/compiler", "dep:revmc-build"]
-
 global-alloc = ["dep:rpmalloc", "dep:snmalloc-rs", "dep:tikv-jemallocator"]
 
 [dependencies]
 metis-primitives.workspace = true
 metis-vm.workspace = true
 
+# Alloy and Revm dependencies
 alloy-consensus.workspace = true
 alloy-primitives.workspace = true
 alloy-provider.workspace = true
 alloy-rlp.workspace = true
 alloy-rpc-types-eth.workspace = true
 alloy-trie.workspace = true
+revm.workspace = true
 
 bitflags.workspace = true
 bitvec.workspace = true
@@ -38,22 +36,16 @@ rustc-hash.workspace = true
 serde.workspace = true
 smallvec.workspace = true
 thiserror.workspace = true
-revm.workspace = true
 crossbeam.workspace = true
 
-# OP dependencies
+# OP Alloy and OP Revm dependencies
 op-alloy-consensus = { version = "0.12.0", optional = true }
 op-alloy-network = { version = "0.12.0", optional = true }
 op-alloy-rpc-types = { version = "0.12.0", optional = true}
 op-revm = { version = "2.0.0", optional = true }
 
+# Reth dependencies
 reth-primitives.workspace = true
-
-# Storage RPC feature dependencies
-alloy-transport = { workspace = true, optional = true }
-alloy-transport-http = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true }
-tokio = { workspace = true, optional = true }
 
 # Various allocators for benchmarks
 rpmalloc = { workspace = true, optional = true }
