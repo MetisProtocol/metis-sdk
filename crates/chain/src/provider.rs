@@ -241,7 +241,7 @@ where
         let spec = self.strategy_factory.chain_spec();
         let data: Requests = if spec.is_prague_active_at_timestamp(block.timestamp) {
             // Collect all EIP-6110 deposits
-            let deposit_requests = eip6110::parse_deposits_from_receipts(&spec, &receipts)?;
+            let deposit_requests = eip6110::parse_deposits_from_receipts(spec, &receipts)?;
 
             let mut requests = Requests::default();
 

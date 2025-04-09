@@ -14,11 +14,11 @@ alloy-evm.workspace = true
 alloy-hardforks = "0.1.4"
 alloy-eips = "0.12.6"
 
-reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.4", version = "1.3.4" }
-reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.4", version = "1.3.4" }
-reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.4", version = "1.3.4" }
-reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.4", version = "1.3.4" }
-reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.4", version = "1.3.4" }
-eyre = "0.6"
+reth.workspace = true
+reth-chainspec.workspace = true
+reth-evm-ethereum.workspace = true
+reth-evm.workspace = true
+reth-primitives.workspace = true
 
+eyre = "0.6"
 num_cpus = "1.16.0"

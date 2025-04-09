@@ -714,9 +714,7 @@ impl<'a, S: DatabaseRef, C: Chain> Vm<'a, S, C> {
                 };
 
                 let affected_txs = self.mv_memory.record(tx_version, db.read_set, write_set);
-
-                let tx_type_value = tx.tx_type.clone();
-                let tx_type = alloy_consensus::TxType::try_from(tx_type_value).unwrap();
+                let tx_type = alloy_consensus::TxType::try_from(tx.tx_type).unwrap();
                 Ok(VmExecutionResult {
                     execution_result: TxExecutionResult::from_revm(
                         tx_type,
