@@ -37,9 +37,12 @@ eyre = "0.6"
 actix-web = "4.10.2"
 num_cpus = "1.16.0"
 
+# AI Inference dependencies
+alith = { git = "https://github.com/0xLazAI/alith", tag = "v0.5.1", features = ["llamacpp"], optional = true }
+
 [build-dependencies]
 reth-exex-test-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 reth-testing-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 
 [features]
-inference = []
+inference = ["dep:alith"]

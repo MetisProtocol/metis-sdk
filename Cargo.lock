@@ -6464,6 +6464,7 @@ name = "metis-chain"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "alith",
  "alloy-consensus",
  "alloy-eips",
  "alloy-evm",
