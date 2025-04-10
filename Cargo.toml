@@ -1,8 +1,5 @@
 [workspace]
-members = [
-    "bin/reth",
-    "crates/*",
-]
+members = ["crates/*"]
 
 resolver = "2"
 

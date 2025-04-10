@@ -6475,6 +6475,7 @@ dependencies = [
  "alloy-signer",
  "alloy-signer-local",
  "alloy-sol-types",
+ "clap",
  "eyre",
  "futures",
  "metis-pe",
@@ -6482,10 +6483,13 @@ dependencies = [
  "num_cpus",
  "reth",
  "reth-chainspec",
+ "reth-cli-util",
  "reth-ethereum",
+ "reth-ethereum-cli",
  "reth-evm",
  "reth-evm-ethereum",
  "reth-exex-test-utils",
+ "reth-node-builder",
  "reth-node-ethereum",
  "reth-primitives",
  "reth-testing-utils",
@@ -6494,6 +6498,7 @@ dependencies = [
  "revmc-build",
  "serde",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -6544,21 +6549,6 @@ dependencies = [
  "revm",
  "rustc-hash 2.1.1",
  "serde",
-]
-
-[[package]]
-name = "metis-reth"
-version = "0.1.0"
-dependencies = [
- "clap",
- "metis-chain",
- "reth",
- "reth-cli-util",
- "reth-ethereum",
- "reth-ethereum-cli",
- "reth-node-builder",
- "reth-node-ethereum",
- "tracing",
 ]
 
 [[package]]
