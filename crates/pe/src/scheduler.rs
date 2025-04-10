@@ -179,7 +179,7 @@ impl TaskProvider for NormalProvider {
 // failure due to the ESTIMATE markers on memory locations, instead of waiting
 // for a subsequent incarnation to finish.
 #[derive(Debug)]
-pub(crate) struct ExeScheduler<T: TaskProvider> {
+pub(crate) struct Scheduler<T: TaskProvider> {
     /// The provider of transactions.
     provider: T,
     /// the queue of execution tasks
@@ -198,7 +198,7 @@ pub(crate) struct ExeScheduler<T: TaskProvider> {
     num_validated: AtomicUsize,
 }
 
-impl<T: TaskProvider> ExeScheduler<T> {
+impl<T: TaskProvider> Scheduler<T> {
     pub(crate) fn new(provider: T) -> Self {
         let block_size = provider.num_tasks();
         Self {

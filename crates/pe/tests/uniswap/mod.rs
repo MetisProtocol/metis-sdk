@@ -5,7 +5,7 @@ pub mod contract;
 
 use crate::erc20::contract::ERC20Token;
 use contract::{SingleSwap, SwapRouter, UniswapV3Factory, UniswapV3Pool, WETH9};
-use metis_pe::{Bytecodes, ChainState, EvmAccount};
+use metis_pe::{AccountState, Bytecodes, EvmAccount};
 use revm::context::{TransactTo, TxEnv};
 use revm::primitives::{Address, B256, Bytes, U256, fixed_bytes, uint};
 
@@ -19,7 +19,7 @@ pub const ESTIMATED_GAS_USED: u64 = 155_934;
 pub fn generate_cluster(
     num_people: usize,
     num_swaps_per_person: usize,
-) -> (ChainState, Bytecodes, Vec<TxEnv>) {
+) -> (AccountState, Bytecodes, Vec<TxEnv>) {
     // TODO: Better randomness control. Sometimes we want duplicates to test
     // dependent transactions, sometimes we want to guarantee non-duplicates
     // for independent benchmarks.
@@ -108,7 +108,7 @@ pub fn generate_cluster(
     let single_swap_account =
         SingleSwap::new(swap_router_address, dai_address, usdc_address).build();
 
-    let mut state = ChainState::from_iter([
+    let mut state = AccountState::from_iter([
         (weth9_address, weth9_account),
         (dai_address, dai_account),
         (usdc_address, usdc_account),

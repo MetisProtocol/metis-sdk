@@ -1,10 +1,12 @@
+//! Reference: https://github.com/risechain/pevm
+
 use alloy_primitives::{Address, B256, U256};
 use hashbrown::HashMap;
 use metis_primitives::BuildIdentityHasher;
 use revm::state::AccountInfo;
 use smallvec::SmallVec;
 use std::fmt;
-use std::hash::{BuildHasherDefault, Hash, Hasher};
+use std::hash::Hash;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -14,6 +16,7 @@ pub struct AtomicWrapper<T: Into<usize> + From<usize>> {
 }
 
 impl<T: Into<usize> + From<usize>> AtomicWrapper<T> {
+    #[inline]
     pub fn new(value: T) -> Self {
         Self {
             inner: AtomicUsize::new(value.into()),
@@ -21,18 +24,22 @@ impl<T: Into<usize> + From<usize>> AtomicWrapper<T> {
         }
     }
 
+    #[inline]
     pub fn load(&self, ordering: Ordering) -> T {
         T::from(self.inner.load(ordering))
     }
 
+    #[inline]
     pub fn store(&self, value: T, ordering: Ordering) {
         self.inner.store(value.into(), ordering);
     }
 
+    #[inline]
     pub fn swap(&self, value: T, ordering: Ordering) -> T {
         T::from(self.inner.swap(value.into(), ordering))
     }
 
+    #[inline]
     pub fn compare_exchange(
         &self,
         current: T,
@@ -53,25 +60,6 @@ impl<T: Into<usize> + From<usize> + fmt::Debug> fmt::Debug for AtomicWrapper<T> 
     }
 }
 
-/// We use the last 8 bytes of an existing hash like address
-/// or code hash instead of rehashing it.
-// TODO: Make sure this is acceptable for production
-#[derive(Debug, Default)]
-pub struct SuffixHasher(u64);
-impl Hasher for SuffixHasher {
-    fn write(&mut self, bytes: &[u8]) {
-        let mut suffix = [0u8; 8];
-        suffix.copy_from_slice(&bytes[bytes.len() - 8..]);
-        self.0 = u64::from_be_bytes(suffix);
-    }
-    fn finish(&self) -> u64 {
-        self.0
-    }
-}
-
-/// Build a suffix hasher
-pub type BuildSuffixHasher = BuildHasherDefault<SuffixHasher>;
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum MemoryLocation {
     // TODO: Separate an account's balance and nonce?
@@ -80,30 +68,11 @@ pub enum MemoryLocation {
     Storage(Address, U256),
 }
 
-// We only need the full memory location to read from storage.
-// We then identify the locations with its hash in the multi-version
-// data, write and read sets, which is much faster than rehashing
-// on every single lookup & validation.
+/// We only need the full memory location to read from storage.
+/// We then identify the locations with its hash in the multi-version
+/// data, write and read sets, which is much faster than rehashing
+/// on every single lookup & validation.
 pub type MemoryLocationHash = u64;
-
-/// This is primarily used for memory location hash, but can also be used for
-/// transaction indexes, etc.
-#[derive(Debug, Default)]
-pub struct IdentityHasher(u64);
-impl Hasher for IdentityHasher {
-    fn write_u64(&mut self, id: u64) {
-        self.0 = id;
-    }
-    fn write_usize(&mut self, id: usize) {
-        self.0 = id as u64;
-    }
-    fn finish(&self) -> u64 {
-        self.0
-    }
-    fn write(&mut self, _: &[u8]) {
-        unreachable!()
-    }
-}
 
 // TODO: It would be nice if we could tie the different cases of
 // memory locations & values at the type level, to prevent lots of
@@ -143,23 +112,24 @@ pub enum MemoryEntry {
     Estimate,
 }
 
-// The index of the transaction in the block.
-// TODO: Consider downsizing to [u32].
+/// The index of the transaction in the block.
 pub type TxIdx = usize;
 
-// The i-th time a transaction is re-executed, counting from 0.
-// TODO: Consider downsizing to [u32].
+/// The i-th time a transaction is re-executed, counting from 0.
 pub type TxIncarnation = usize;
 
-// - ReadyToExecute(i) --try_incarnate--> Executing(i)
-// Non-blocked execution:
-//   - Executing(i) --finish_execution--> Executed(i)
-//   - Executed(i) --finish_validation--> Validated(i)
-//   - Executed/Validated(i) --try_validation_abort--> Aborting(i)
-//   - Aborted(i) --finish_validation(w.aborted=true)--> ReadyToExecute(i+1)
-// Blocked execution:
-//   - Executing(i) --add_dependency--> Aborting(i)
-//   - Aborting(i) --resume--> ReadyToExecute(i+1)
+/// Execution:
+/// - ReadyToExecute(i) --try_incarnate--> Executing(i)
+///
+/// Non-blocked execution:
+/// - Executing(i) --finish_execution--> Executed(i)
+/// - Executed(i) --finish_validation--> Validated(i)
+/// - Executed/Validated(i) --try_validation_abort--> Aborting(i)
+/// - Aborted(i) --finish_validation(w.aborted=true)--> ReadyToExecute(i+1)
+///
+/// Blocked execution:
+/// - Executing(i) --add_dependency--> Aborting(i)
+/// - Blocking(i) --resume--> ReadyToExecute(i+1)
 #[derive(PartialEq, Debug)]
 pub enum IncarnationStatus {
     ReadyToExecute = 0,
@@ -198,47 +168,47 @@ impl From<TxStatus> for usize {
     }
 }
 
-// We maintain an in-memory multi-version data structure that stores for
-// each memory location the latest value written per transaction, along
-// with the associated transaction incarnation. When a transaction reads
-// a memory location, it obtains from the multi-version data structure the
-// value written to this location by the highest transaction that appears
-// before it in the block, along with the associated version. If no previous
-// transactions have written to a location, the value would be read from the
-// storage state before block execution.
+/// We maintain an in-memory multi-version data structure that stores for
+/// each memory location the latest value written per transaction, along
+/// with the associated transaction incarnation. When a transaction reads
+/// a memory location, it obtains from the multi-version data structure the
+/// value written to this location by the highest transaction that appears
+/// before it in the block, along with the associated version. If no previous
+/// transactions have written to a location, the value would be read from the
+/// storage state before block execution.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TxVersion {
     pub tx_idx: TxIdx,
     pub tx_incarnation: TxIncarnation,
 }
 
-// The origin of a memory read. It could be from the live multi-version
-// data structure or from storage (chain state before block execution).
+/// The origin of a memory read. It could be from the live multi-version
+/// data structure or from storage (chain state before block execution).
 #[derive(Debug, PartialEq)]
 pub enum ReadOrigin {
     MvMemory(TxVersion),
     Storage,
 }
 
-// A scheduled worker task
-// TODO: Add more useful work when there are idle workers like near
-// the end of block execution, while waiting for a huge blocking
-// transaction to resolve, etc.
+/// A scheduled worker task
+/// TODO: Add more useful work when there are idle workers like near
+/// the end of block execution, while waiting for a huge blocking
+/// transaction to resolve, etc.
 #[derive(Debug)]
 pub enum Task {
     Execution(TxVersion),
     Validation(TxIdx),
 }
 
-// Most memory locations only have one read origin. Lazy updated ones like
-// the beneficiary balance, raw transfer senders & recipients, etc. have a
-// list of lazy updates all the way to the first strict/absolute value.
+/// Most memory locations only have one read origin. Lazy updated ones like
+/// the beneficiary balance, raw transfer senders & recipients, etc. have a
+/// list of lazy updates all the way to the first strict/absolute value.
 pub type ReadOrigins = SmallVec<[ReadOrigin; 1]>;
 
-// For validation: a list of read origins (previous transaction versions)
-// for each read memory location.
+/// For validation: a list of read origins (previous transaction versions)
+/// for each read memory location.
 pub type ReadSet = HashMap<MemoryLocationHash, ReadOrigins, BuildIdentityHasher>;
 
-// The updates made by this transaction incarnation, which is applied
-// to the multi-version data structure at the end of execution.
+/// The updates made by this transaction incarnation, which is applied
+/// to the multi-version data structure at the end of execution.
 pub type WriteSet = Vec<(MemoryLocationHash, MemoryValue)>;

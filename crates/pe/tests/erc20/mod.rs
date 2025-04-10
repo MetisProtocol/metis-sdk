@@ -4,7 +4,7 @@
 pub mod contract;
 
 use contract::ERC20Token;
-use metis_pe::{Bytecodes, ChainState, EvmAccount};
+use metis_pe::{AccountState, Bytecodes, EvmAccount};
 use rand::Rng;
 use revm::context::{TransactTo, TxEnv};
 use revm::primitives::{Address, U256, uint};
@@ -28,7 +28,7 @@ pub fn generate_cluster(
     num_families: usize,
     num_people_per_family: usize,
     num_transfers_per_person: usize,
-) -> (ChainState, Bytecodes, Vec<TxEnv>) {
+) -> (AccountState, Bytecodes, Vec<TxEnv>) {
     let families: Vec<Vec<Address>> = (0..num_families)
         .map(|_| generate_addresses(num_people_per_family))
         .collect();
@@ -41,7 +41,7 @@ pub fn generate_cluster(
         .add_balances(&people_addresses, uint!(1_000_000_000_000_000_000_U256))
         .build();
 
-    let mut state = ChainState::from_iter([(gld_address, gld_account)]);
+    let mut state = AccountState::from_iter([(gld_address, gld_account)]);
     let mut txs = Vec::new();
 
     for person in &people_addresses {

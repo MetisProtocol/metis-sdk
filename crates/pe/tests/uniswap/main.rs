@@ -13,7 +13,7 @@ pub mod uniswap;
 
 use crate::uniswap::generate_cluster;
 use metis_pe::chain::Ethereum;
-use metis_pe::{Bytecodes, ChainState, EvmAccount, InMemoryStorage};
+use metis_pe::{AccountState, Bytecodes, EvmAccount, InMemoryStorage};
 use revm::context::TxEnv;
 use revm::primitives::Address;
 use std::sync::Arc;
@@ -24,7 +24,7 @@ fn uniswap_clusters() {
     const NUM_PEOPLE_PER_CLUSTER: usize = 20;
     const NUM_SWAPS_PER_PERSON: usize = 20;
 
-    let mut final_state = ChainState::default();
+    let mut final_state = AccountState::default();
     final_state.insert(Address::ZERO, EvmAccount::default()); // Beneficiary
     let mut final_bytecodes = Bytecodes::default();
     let mut final_txs = Vec::<TxEnv>::new();

@@ -11,7 +11,7 @@ pub mod erc20;
 use common::test_execute_revm;
 use erc20::generate_cluster;
 use metis_pe::chain::Ethereum;
-use metis_pe::{Bytecodes, ChainState, EvmAccount, InMemoryStorage};
+use metis_pe::{AccountState, Bytecodes, EvmAccount, InMemoryStorage};
 use revm::context::TxEnv;
 use revm::primitives::Address;
 use std::sync::Arc;
@@ -35,7 +35,7 @@ fn erc20_clusters() {
     const NUM_PEOPLE_PER_FAMILY: usize = 15;
     const NUM_TRANSFERS_PER_PERSON: usize = 15;
 
-    let mut final_state = ChainState::default();
+    let mut final_state = AccountState::default();
     final_state.insert(Address::ZERO, EvmAccount::default()); // Beneficiary
     let mut final_bytecodes = Bytecodes::default();
     let mut final_txs = Vec::<TxEnv>::new();

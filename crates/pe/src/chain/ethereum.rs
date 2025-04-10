@@ -51,7 +51,7 @@ impl Chain for Ethereum {
         let beneficiary_location_hash =
             hash_deterministic(MemoryLocation::Basic(block_env.beneficiary));
 
-        // TODO: Estimate more locations based on sender, to, etc.
+        // TODO: Estimate more locations based on sender, to and the bytecode static code analysis, etc.
         let mut estimated_locations = HashMap::with_hasher(BuildIdentityHasher::default());
         estimated_locations.insert(
             beneficiary_location_hash,
