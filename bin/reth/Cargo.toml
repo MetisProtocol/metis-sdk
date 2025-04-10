@@ -14,16 +14,9 @@ reth-cli-util.workspace = true
 reth-node-ethereum.workspace = true
 reth-ethereum-cli.workspace = true
 reth-node-builder.workspace = true
-reth-node-api.workspace = true
 
-metis-pe.workspace = true
 metis-chain.workspace = true
 
-alloy-genesis.workspace = true
-
-tokio = "1.44.2"
-eyre = "0.6"
-tempfile = "3.19.1"
 tracing = "0.1.41"
 clap = { version = "4.5.35", features = ["derive"] }
 

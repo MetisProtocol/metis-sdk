@@ -72,7 +72,6 @@ reth-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8", f
 reth-cli-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 reth-node-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
-reth-node-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 
 # Allocators
 tikv-jemallocator = "0.6.0"

@@ -6550,20 +6550,14 @@ dependencies = [
 name = "metis-reth"
 version = "0.1.0"
 dependencies = [
- "alloy-genesis",
  "clap",
- "eyre",
  "metis-chain",
- "metis-pe",
  "reth",
  "reth-cli-util",
  "reth-ethereum",
  "reth-ethereum-cli",
- "reth-node-api",
  "reth-node-builder",
  "reth-node-ethereum",
- "tempfile",
- "tokio",
  "tracing",
 ]
 
