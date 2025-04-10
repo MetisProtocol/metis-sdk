@@ -6465,15 +6465,10 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "alith",
- "alloy-consensus",
  "alloy-eips",
  "alloy-evm",
  "alloy-hardforks",
  "alloy-primitives",
- "alloy-rlp",
- "alloy-rpc-types-eth",
- "alloy-signer",
- "alloy-signer-local",
  "alloy-sol-types",
  "eyre",
  "futures",
@@ -6482,6 +6477,7 @@ dependencies = [
  "num_cpus",
  "reth",
  "reth-chainspec",
+ "reth-cli-util",
  "reth-ethereum",
  "reth-evm",
  "reth-evm-ethereum",
@@ -6494,6 +6490,7 @@ dependencies = [
  "revmc-build",
  "serde",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

@@ -1,5 +1,6 @@
 [workspace]
 members = ["crates/*"]
+
 resolver = "2"
 
 [workspace.lints]
@@ -52,6 +53,8 @@ alloy-trie = { version = "0.7.9", default-features = false }
 alloy-signer = { version = "0.13.0", default-features = false }
 alloy-signer-local = { version = "0.13.0", default-features = false }
 alloy-evm = "0.3.2"
+alloy-genesis = "0.13.0"
+
 revm = { version = "21.0.0", features = ["std", "serde-json"] }
 
 # Reth dependencies
@@ -63,6 +66,9 @@ reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 reth-tracing = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 reth-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8", features = ["full"] }
+reth-cli-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
+reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
+reth-node-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 
 # Allocators
 tikv-jemallocator = "0.6.0"
