@@ -1,11 +1,17 @@
+#![allow(missing_docs)]
+
+#[global_allocator]
+static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
+
 use clap::Parser;
 use metis_chain::provider::ParallelExecutorBuilder;
-use reth::builder::Node;
-use reth::builder::NodeHandle;
-use reth::chainspec::EthereumChainSpecParser;
+use reth_node_builder::{Node, NodeHandle};
+use reth_ethereum_cli::chainspec::EthereumChainSpecParser;
 use reth::{args::RessArgs, cli::Cli, ress::install_ress_subprotocol};
-use reth_ethereum::node::EthereumNode;
-use std::default::Default;
+use reth_node_ethereum::EthereumNode;
+use reth_node_api::{NodeAddOns, AddOnsContext};
+use reth_node_builder::NodeComponents;
+//use reth_node_ethereum::EthereumAddOns;
 use tracing::info;
 
 fn main() {
@@ -20,9 +26,10 @@ fn main() {
             info!(target: "reth::cli", "Launching node");
             let node = EthereumNode::default();
             let provider = ParallelExecutorBuilder::default();
+            let components = node.components_builder().executor(provider);
             let launcher = builder
                 .with_types()
-                .with_components(node.components_builder().executor(provider))
+                .with_components(components)
                 .with_add_ons(node.add_ons());
             let NodeHandle {
                 node,

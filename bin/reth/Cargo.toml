@@ -10,8 +10,11 @@ readme.workspace = true
 [dependencies]
 reth.workspace = true
 reth-ethereum.workspace = true
-reth-tracing.workspace = true
 reth-cli-util.workspace = true
+reth-node-ethereum.workspace = true
+reth-ethereum-cli.workspace = true
+reth-node-builder.workspace = true
+reth-node-api.workspace = true
 
 metis-pe.workspace = true
 metis-chain.workspace = true
