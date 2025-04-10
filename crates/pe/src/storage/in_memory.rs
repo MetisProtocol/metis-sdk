@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use super::StorageError;
 use metis_primitives::{
-    Address, B256, BlockHashes, Bytecode, Bytecodes, ChainState, KECCAK_EMPTY, U256, keccak256,
+    Address, B256, BlockHashes, Bytecode, Bytecodes, ChainState, U256, keccak256,
 };
 use revm::state::AccountInfo;
 use revm::{Database, DatabaseRef};
@@ -38,7 +38,7 @@ impl Database for InMemoryStorage {
         Ok(self.accounts.get(&address).map(|account| AccountInfo {
             balance: account.balance,
             nonce: account.nonce,
-            code_hash: account.code_hash.unwrap_or(KECCAK_EMPTY),
+            code_hash: account.code_hash,
             code: account.code.clone(),
         }))
     }
@@ -75,7 +75,7 @@ impl DatabaseRef for InMemoryStorage {
         Ok(self.accounts.get(&address).map(|account| AccountInfo {
             balance: account.balance,
             nonce: account.nonce,
-            code_hash: account.code_hash.unwrap_or_default(),
+            code_hash: account.code_hash,
             code: account.code.clone(),
         }))
     }

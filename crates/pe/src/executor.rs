@@ -355,7 +355,7 @@ impl ParallelExecutor {
                         *account = Some(EvmAccount {
                             balance,
                             nonce,
-                            code_hash: (code_hash != KECCAK_EMPTY).then_some(code_hash),
+                            code_hash,
                             code: Some(code.clone()),
                             storage: Default::default(),
                         });
