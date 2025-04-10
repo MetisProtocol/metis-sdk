@@ -2,8 +2,7 @@
 
 // TODO: Better types & API for third-party integration
 use bitflags::bitflags;
-use rustc_hash::FxBuildHasher;
-use std::hash::{BuildHasher, Hash};
+use std::hash::Hash;
 // This optimization is desired as we constantly index into many
 // vectors of the block-size size. It can yield up to 5% improvement.
 macro_rules! index_mutex {
@@ -14,13 +13,6 @@ macro_rules! index_mutex {
         // TODO: Better error handling for the mutex.
         unsafe { $vec.get_unchecked($index).lock().unwrap() }
     };
-}
-
-// TODO: Ensure it's not easy to hand-craft transactions and storage slots
-// that can cause a lot of collisions that destroys pe's performance.
-#[inline(always)]
-fn hash_deterministic<T: Hash>(x: T) -> u64 {
-    FxBuildHasher.hash_one(x)
 }
 
 bitflags! {
@@ -39,9 +31,9 @@ bitflags! {
 }
 
 pub mod chain;
-pub mod compat;
-mod executor;
-mod mv_memory;
+pub mod executor;
+pub mod mv_memory;
+pub use mv_memory::MvMemory;
 pub mod schedulers;
 pub mod types;
 pub use executor::{
@@ -49,9 +41,8 @@ pub use executor::{
 };
 pub use schedulers::{DAGProvider, NormalProvider};
 pub use types::*;
-mod storage;
-pub use storage::{
-    AccountBasic, BlockHashes, Bytecodes, ChainState, EvmAccount, InMemoryStorage, StorageError,
-};
-mod vm;
+pub mod storage;
+pub use metis_primitives::{AccountBasic, BlockHashes, Bytecodes, ChainState, EvmAccount};
+pub use storage::{InMemoryStorage, StorageError};
+pub mod vm;
 pub use vm::{ExecutionError, TxExecutionResult};

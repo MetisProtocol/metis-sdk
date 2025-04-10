@@ -5,12 +5,10 @@ use std::{
 
 use alloy_primitives::{Address, B256};
 use dashmap::DashMap;
+use metis_primitives::{BuildIdentityHasher, BuildSuffixHasher};
 use revm::bytecode::Bytecode;
 
-use crate::{
-    BuildIdentityHasher, BuildSuffixHasher, MemoryEntry, MemoryLocationHash, ReadOrigin, ReadSet,
-    TxIdx, TxVersion, WriteSet,
-};
+use crate::{MemoryEntry, MemoryLocationHash, ReadOrigin, ReadSet, TxIdx, TxVersion, WriteSet};
 
 #[derive(Default, Debug)]
 struct LastLocations {

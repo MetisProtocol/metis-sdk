@@ -1,5 +1,6 @@
 use alloy_primitives::{Address, B256, U256};
 use hashbrown::HashMap;
+use metis_primitives::BuildIdentityHasher;
 use revm::state::AccountInfo;
 use smallvec::SmallVec;
 use std::fmt;
@@ -103,9 +104,6 @@ impl Hasher for IdentityHasher {
         unreachable!()
     }
 }
-
-/// Build an identity hasher
-pub type BuildIdentityHasher = BuildHasherDefault<IdentityHasher>;
 
 // TODO: It would be nice if we could tie the different cases of
 // memory locations & values at the type level, to prevent lots of

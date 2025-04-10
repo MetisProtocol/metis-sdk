@@ -19,6 +19,7 @@ use reth::{
     revm::db::{State, states::bundle_state::BundleRetention},
 };
 use reth_chainspec::{ChainSpec, EthChainSpec};
+use reth_evm::block::InternalBlockExecutionError;
 use reth_evm::{
     OnStateHook,
     execute::{BlockExecutor, BlockExecutorProvider, Executor},
@@ -68,6 +69,8 @@ impl BlockExecutorProvider for BlockParallelExecutorProvider {
 pub struct ParallelExecutor<DB> {
     strategy_factory: EthEvmConfig,
     db: State<DB>,
+    executor: metis_pe::ParallelExecutor,
+    concurrency_level: NonZeroUsize,
 }
 
 impl<DB> ParallelExecutor<DB> {
@@ -75,6 +78,9 @@ impl<DB> ParallelExecutor<DB> {
         Self {
             strategy_factory,
             db,
+            executor: metis_pe::ParallelExecutor::default(),
+            concurrency_level: NonZeroUsize::new(num_cpus::get())
+                .unwrap_or(NonZeroUsize::new(1).unwrap()),
         }
     }
 }
@@ -155,7 +161,6 @@ where
         &mut self,
         block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
     ) -> Result<BlockExecutionResult<Receipt>, BlockExecutionError> {
-        let mut executor = metis_pe::ParallelExecutor::default();
         let env = self.strategy_factory.evm_env(block.header());
         let chain_spec = self.strategy_factory.chain_spec();
         let spec_id = *env.spec_id();
@@ -168,18 +173,20 @@ where
 
         let chain_id = chain_spec.chain_id();
         let chain = metis_pe::chain::Ethereum::custom(chain_id);
-        let results = executor.execute_revm_parallel(
+        let results = self.executor.execute_revm_parallel(
             &chain,
             StateStorageAdapter::new(&mut self.db),
             spec_id,
             block_env,
             tx_envs,
-            NonZeroUsize::new(num_cpus::get()).unwrap_or(NonZeroUsize::new(1).unwrap()),
+            self.concurrency_level,
         );
 
         let mut total_gas_used: u64 = 0;
         let receipts = results
-            .unwrap()
+            .map_err(|err| {
+                BlockExecutionError::Internal(InternalBlockExecutionError::Other(Box::new(err)))
+            })?
             .into_iter()
             .map(|r| {
                 total_gas_used += &r.receipt.cumulative_gas_used;
@@ -203,9 +210,9 @@ where
         let block_env = env.block_env;
         let body = block.body();
         let ommers = &body.ommers;
-        let withdraws = &body.clone().withdrawals.unwrap();
+        let withdraws = body.withdrawals.as_ref();
         let mut balance_increments =
-            post_block_balance_increments(chain_spec, &block_env, ommers, Some(withdraws));
+            post_block_balance_increments(chain_spec, &block_env, ommers, withdraws);
 
         // Irregular state change at Ethereum DAO hardfork
         if chain_spec
