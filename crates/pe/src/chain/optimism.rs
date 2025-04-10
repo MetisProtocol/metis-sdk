@@ -1,13 +1,11 @@
 use super::{Chain, RewardPolicy};
-use crate::{
-    MemoryLocation, mv_memory::MvMemory,
-};
+use crate::{MemoryLocation, mv_memory::MvMemory};
 use alloy_primitives::ChainId;
 use hashbrown::HashMap;
+use metis_primitives::{BuildIdentityHasher, hash_deterministic};
 use op_revm::OpSpecId;
 use revm::context::{BlockEnv, TxEnv};
 use revm::primitives::hardfork::SpecId;
-use metis_primitives::{hash_deterministic, BuildIdentityHasher};
 
 /// Implementation of [`Chain`] for Optimism
 #[derive(Debug, Clone, PartialEq, Eq)]
