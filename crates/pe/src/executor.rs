@@ -338,7 +338,7 @@ impl ParallelExecutor {
                     let account = tx_result.state.entry(address).or_default();
                     // TODO: Deduplicate this logic with [TxExecutionResult::from_revm]
                     if chain.is_eip_161_enabled(spec_id)
-                        && code_hash.is_empty()
+                        && code_hash == KECCAK_EMPTY
                         && nonce == 0
                         && balance == U256::ZERO
                     {
