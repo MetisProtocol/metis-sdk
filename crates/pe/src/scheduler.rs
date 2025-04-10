@@ -276,7 +276,9 @@ impl<T: TaskProvider> Scheduler<T> {
             old_status.status,
             IncarnationStatus::Executed | IncarnationStatus::Validated
         ) {
-            return false;
+            if tx.compare_exchange(old_status.clone(), old_status, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+                return false;
+            }
         }
 
         let tx = self.transactions_status.get(tx_idx).unwrap();
@@ -346,14 +348,7 @@ impl<T: TaskProvider> Scheduler<T> {
         affected_transactions: Vec<TxIdx>,
     ) -> Option<Task> {
         self.provider.finish_task(tx_version.tx_idx);
-        {
-            // Resume dependent transactions
-            let mut dependents = index_mutex!(self.transactions_dependents, tx_version.tx_idx);
-            for tx_idx in dependents.drain(..) {
-                self.add_blocking_task(tx_idx);
-            }
-        }
-
+        
         // affected transactions must be re-executed
         for tx_idx in affected_transactions {
             self.add_execution_task(tx_idx);
@@ -364,17 +359,24 @@ impl<T: TaskProvider> Scheduler<T> {
         debug_assert_eq!(old_status.status, IncarnationStatus::Executing);
         debug_assert_eq!(old_status.incarnation, tx_version.tx_incarnation);
 
-        if flags.contains(FinishExecFlags::NeedValidation) {
+        let ret = if flags.contains(FinishExecFlags::NeedValidation) {
             old_status.status = IncarnationStatus::Executed;
             tx.store(old_status, Ordering::Relaxed);
-            return Some(Task::Validation(tx_version.tx_idx));
+            Some(Task::Validation(tx_version.tx_idx))
         } else {
             old_status.status = IncarnationStatus::Validated;
             tx.store(old_status, Ordering::Relaxed);
             self.num_validated.fetch_add(1, Ordering::Relaxed);
+            None
+        };
+
+        // Resume dependent transactions
+        let mut dependents = index_mutex!(self.transactions_dependents, tx_version.tx_idx);
+        for tx_idx in dependents.drain(..) {
+            self.add_blocking_task(tx_idx);
         }
 
-        None
+        ret
     }
 
     pub(crate) fn is_finish(&self) -> bool {

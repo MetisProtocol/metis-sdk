@@ -130,7 +130,7 @@ pub type TxIncarnation = usize;
 /// Blocked execution:
 /// - Executing(i) --add_dependency--> Aborting(i)
 /// - Blocking(i) --resume--> ReadyToExecute(i+1)
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum IncarnationStatus {
     ReadyToExecute = 0,
     Executing,
@@ -139,7 +139,7 @@ pub enum IncarnationStatus {
     Blocking,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct TxStatus {
     pub incarnation: TxIncarnation,
     pub status: IncarnationStatus,
