@@ -1,35 +1,23 @@
-//! Benchmark mocked blocks that exceed 1 Gigagas.
-
-// TODO: More fancy benchmarks & plots.
-
 use alloy_primitives::{Address, U160, U256};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use metis_pe::{
-    Bytecodes, ChainState, EvmAccount, InMemoryStorage, ParallelExecutor, chain::Ethereum,
+    AccountState, Bytecodes, EvmAccount, InMemoryStorage, ParallelExecutor, chain::Ethereum,
     execute_revm_sequential,
 };
 use revm::context::{BlockEnv, TransactTo, TxEnv};
 use revm::primitives::hardfork::SpecId;
 use std::{num::NonZeroUsize, sync::Arc, thread};
 
-// Better project structure
-
-/// common module
 #[path = "../tests/common/mod.rs"]
 pub mod common;
-
-/// erc20 module
 #[path = "../tests/erc20/mod.rs"]
 pub mod erc20;
-
-/// uniswap module
 #[path = "../tests/uniswap/mod.rs"]
 pub mod uniswap;
 
-///  large gas value
 const GIGA_GAS: u64 = 1_000_000_000;
 
-#[cfg(feature = "global-alloc")]
+#[cfg(feature = "jemalloc")]
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
@@ -147,7 +135,7 @@ pub fn bench_erc20(c: &mut Criterion) {
 /// Benchmarks the execution time of Uniswap V3 swap transactions.
 pub fn bench_uniswap(c: &mut Criterion) {
     let block_size = (GIGA_GAS as f64 / uniswap::ESTIMATED_GAS_USED as f64).ceil() as usize;
-    let mut final_state = ChainState::from_iter([(Address::ZERO, EvmAccount::default())]); // Beneficiary
+    let mut final_state = AccountState::from_iter([(Address::ZERO, EvmAccount::default())]); // Beneficiary
     let mut final_bytecodes = Bytecodes::default();
     let mut final_txs = Vec::<TxEnv>::new();
     for _ in 0..block_size {

@@ -4,8 +4,6 @@ edition.workspace = true
 version.workspace = true
 
 [features]
-defaults = []
-full = []
 optimism = [
   "dep:op-alloy-consensus",
   "dep:op-alloy-network",
@@ -13,7 +11,7 @@ optimism = [
   "dep:op-revm"
 ]
 compiler = ["metis-vm/compiler", "dep:revmc-build"]
-global-alloc = ["dep:rpmalloc", "dep:snmalloc-rs", "dep:tikv-jemallocator"]
+jemalloc = ["dep:tikv-jemallocator"]
 
 [dependencies]
 metis-primitives.workspace = true
@@ -47,10 +45,11 @@ op-revm = { version = "2.0.0", optional = true }
 # Reth dependencies
 reth-primitives.workspace = true
 
-# Various allocators for benchmarks
-rpmalloc = { workspace = true, optional = true }
-snmalloc-rs = { workspace = true, optional = true }
+# jemalloc
 tikv-jemallocator = { workspace = true, optional = true }
+
+# Testing
+pretty_assertions = "1"
 
 [dev-dependencies]
 bincode.workspace = true

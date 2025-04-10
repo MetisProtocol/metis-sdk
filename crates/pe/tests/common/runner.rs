@@ -1,4 +1,5 @@
 use metis_pe::{EvmAccount, ParallelExecutor, chain::Chain};
+use pretty_assertions::assert_eq;
 use revm::DatabaseRef;
 use revm::context::{BlockEnv, TxEnv};
 use revm::primitives::hardfork::SpecId;

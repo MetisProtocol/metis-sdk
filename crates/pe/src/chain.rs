@@ -1,5 +1,3 @@
-//! Chain specific utils
-
 use revm::{
     context::{BlockEnv, TxEnv},
     primitives::hardfork::SpecId,

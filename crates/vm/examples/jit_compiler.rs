@@ -1,6 +1,6 @@
 pub use alloy_sol_types::{SolCall, sol};
 pub use metis_primitives::hex;
-use metis_primitives::{EVMBytecode, KECCAK_EMPTY, SpecId, TxKind, U256, address, keccak256};
+use metis_primitives::{Bytecode, KECCAK_EMPTY, SpecId, TxKind, U256, address, keccak256};
 use metis_vm::{CompilerHandler, Error};
 use revm::{
     Context, MainBuilder, MainContext,
@@ -27,7 +27,7 @@ fn main() -> Result<(), Error> {
     let to = address!("2000000000000000000000000000000000000002");
     let beneficiary = address!("3000000000000000000000000000000000000003");
     let code_hash = keccak256(COUNTER_BYTECODE);
-    let bytecode = EVMBytecode::new_raw(COUNTER_BYTECODE.into());
+    let bytecode = Bytecode::new_raw(COUNTER_BYTECODE.into());
     cache.insert_account(
         caller,
         AccountInfo {

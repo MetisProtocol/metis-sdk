@@ -1,13 +1,8 @@
-use super::{CalculateReceiptRootError, Chain, RewardPolicy};
-use crate::{
-    BuildIdentityHasher, MemoryLocation, TxExecutionResult, hash_deterministic, mv_memory::MvMemory,
-};
-use alloy_consensus::Transaction;
-use alloy_primitives::{Address, B256, ChainId, U256};
-use alloy_rpc_types_eth::{BlockTransactions, Header};
+use super::{Chain, RewardPolicy};
+use crate::{MemoryLocation, mv_memory::MvMemory};
+use alloy_primitives::ChainId;
 use hashbrown::HashMap;
-use op_alloy_consensus::{OpDepositReceipt, OpReceiptEnvelope, OpTxEnvelope, OpTxType};
-use op_alloy_network::eip2718::Encodable2718;
+use metis_primitives::{BuildIdentityHasher, hash_deterministic};
 use op_revm::OpSpecId;
 use revm::context::{BlockEnv, TxEnv};
 use revm::primitives::hardfork::SpecId;
@@ -50,7 +45,7 @@ impl Chain for Optimism {
     }
 
     fn build_mv_memory(&self, block_env: &BlockEnv, txs: &[TxEnv]) -> MvMemory {
-        let beneficiary_location_hash =
+        let _beneficiary_location_hash =
             hash_deterministic(MemoryLocation::Basic(block_env.beneficiary));
         let l1_fee_recipient_location_hash =
             hash_deterministic(op_revm::constants::L1_FEE_RECIPIENT);
@@ -59,7 +54,7 @@ impl Chain for Optimism {
 
         // TODO: Estimate more locations based on sender, to, etc.
         let mut estimated_locations = HashMap::with_hasher(BuildIdentityHasher::default());
-        for (index, tx) in txs.iter().enumerate() {
+        for (index, _tx) in txs.iter().enumerate() {
             // TODO: Benchmark to check whether adding these estimated
             // locations helps or harms the performance.
             estimated_locations

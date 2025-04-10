@@ -9,7 +9,6 @@ use rustc_hash::FxBuildHasher;
 /// `ERC20Token` contract bytecode
 const ERC20_TOKEN: &str = include_str!("./assets/ERC20Token.hex");
 
-/// @risechain/op-test-bench/foundry/src/ERC20Token.sol
 #[derive(Debug, Default)]
 pub struct ERC20Token {
     name: String,

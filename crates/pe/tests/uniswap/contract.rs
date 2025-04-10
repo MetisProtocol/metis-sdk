@@ -341,7 +341,6 @@ impl SwapRouter {
     }
 }
 
-/// `@risechain/op-test-bench/foundry/src/SingleSwap.sol`
 #[derive(Debug, Default)]
 pub struct SingleSwap {
     swap_router: Address,

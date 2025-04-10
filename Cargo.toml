@@ -30,7 +30,7 @@ use_self = "warn"
 [workspace.dependencies]
 metis-vm = { path = "crates/vm" }
 metis-primitives = { path = "crates/primitives" }
-metis-pe = { path = "crates/pe", features = ["full"] }
+metis-pe = { path = "crates/pe" }
 metis-chain = { path = "crates/chain" }
 
 anyhow = "1.0.97"
@@ -61,7 +61,7 @@ alloy-genesis = "0.13.0"
 revm = { version = "21.0.0", features = ["std", "serde-json"] }
 
 # Reth dependencies
-reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
+reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8", default-features = false }
 reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
@@ -75,8 +75,6 @@ reth-node-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8
 reth-node-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 
 # Allocators
-rpmalloc = { version = "0.2.2", features = ["thread_cache", "global_cache"] }
-snmalloc-rs = "0.3.7"
 tikv-jemallocator = "0.6.0"
 
 bincode = "1.3.3"
