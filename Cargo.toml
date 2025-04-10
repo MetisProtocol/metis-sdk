@@ -1,8 +1,7 @@
 [workspace]
 members = [
-    #"bin/reth",
+    "bin/reth",
     "crates/*",
-    "examples/custom_evm"
 ]
 
 resolver = "2"
@@ -70,6 +69,7 @@ reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 reth-tracing = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 reth-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8", features = ["full"] }
+reth-cli-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 
 # Allocators
 rpmalloc = { version = "0.2.2", features = ["thread_cache", "global_cache"] }
