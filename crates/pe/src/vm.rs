@@ -284,7 +284,7 @@ impl<S: DatabaseRef, C: Chain> Database for VmDb<'_, S, C> {
                 return Ok(Some(AccountInfo {
                     nonce: self.tx.nonce,
                     balance: U256::MAX,
-                    code: None,
+                    code: Some(Bytecode::default()),
                     code_hash: KECCAK_EMPTY,
                 }));
             } else if Some(location_hash) == self.to_hash {

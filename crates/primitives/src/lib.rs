@@ -42,7 +42,7 @@ pub use rustc_hash::FxBuildHasher;
 use serde::{Deserialize, Serialize};
 
 /// An EVM account.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvmAccount {
     /// The account's balance.
     pub balance: U256,
@@ -57,14 +57,25 @@ pub struct EvmAccount {
     pub storage: HashMap<U256, U256, FxBuildHasher>,
 }
 
+impl Default for EvmAccount {
+    fn default() -> Self {
+        Self {
+            balance: Default::default(),
+            nonce: Default::default(),
+            code_hash: KECCAK_EMPTY,
+            code: Some(Bytecode::default()),
+            storage: Default::default(),
+        }
+    }
+}
+
 impl From<Account> for EvmAccount {
     fn from(account: Account) -> Self {
-        let has_code = !account.info.is_empty_code_hash();
         Self {
             balance: account.info.balance,
             nonce: account.info.nonce,
             code_hash: account.info.code_hash,
-            code: has_code.then(|| account.info.code.unwrap_or_default()),
+            code: account.info.code,
             storage: account
                 .storage
                 .into_iter()
