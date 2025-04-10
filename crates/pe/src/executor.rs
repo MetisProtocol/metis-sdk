@@ -27,7 +27,7 @@ use revm::{
     primitives::hardfork::SpecId,
 };
 
-use revm::{DatabaseRef, state::Bytecode};
+use revm::DatabaseRef;
 
 /// Errors when executing a block with the parallel executor.
 // TODO: implement traits explicitly due to trait bounds on `C` instead of types of `Chain`
@@ -264,15 +264,9 @@ impl ParallelExecutor {
                         code_hash = account.code_hash;
                     }
                 }
-                let code = if code_hash != KECCAK_EMPTY {
-                    match storage.code_by_hash_ref(code_hash) {
-                        Ok(code) => code,
-                        Err(err) => {
-                            return Err(ParallelExecutorError::StorageError(err.to_string()));
-                        }
-                    }
-                } else {
-                    Bytecode::default()
+                let code = match storage.code_by_hash_ref(code_hash) {
+                    Ok(code) => code,
+                    Err(err) => return Err(ParallelExecutorError::StorageError(err.to_string())),
                 };
 
                 for (tx_idx, memory_entry) in write_history.iter() {

@@ -52,6 +52,9 @@ rpmalloc = { workspace = true, optional = true }
 snmalloc-rs = { workspace = true, optional = true }
 tikv-jemallocator = { workspace = true, optional = true }
 
+# Testing
+pretty_assertions = "1"
+
 [dev-dependencies]
 bincode.workspace = true
 criterion.workspace = true
