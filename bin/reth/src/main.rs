@@ -5,13 +5,11 @@ static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::ne
 
 use clap::Parser;
 use metis_chain::provider::ParallelExecutorBuilder;
-use reth_node_builder::{Node, NodeHandle};
-use reth_ethereum_cli::chainspec::EthereumChainSpecParser;
 use reth::{args::RessArgs, cli::Cli, ress::install_ress_subprotocol};
+use reth_ethereum_cli::chainspec::EthereumChainSpecParser;
+use reth_node_builder::{Node, NodeHandle};
 use reth_node_ethereum::EthereumNode;
-use reth_node_api::{NodeAddOns, AddOnsContext};
-use reth_node_builder::NodeComponents;
-//use reth_node_ethereum::EthereumAddOns;
+use reth_node_ethereum::node::EthereumAddOns;
 use tracing::info;
 
 fn main() {
@@ -30,7 +28,8 @@ fn main() {
             let launcher = builder
                 .with_types()
                 .with_components(components)
-                .with_add_ons(node.add_ons());
+                .with_add_ons(EthereumAddOns::default());
+
             let NodeHandle {
                 node,
                 node_exit_future,
