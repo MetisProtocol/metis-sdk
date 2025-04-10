@@ -1,10 +1,19 @@
 use crate::{
-    EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, TxIdx, TxVersion,
+    EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, Task, TxIdx, TxVersion,
     chain::Chain,
     mv_memory::MvMemory,
-    schedulers::{ExeScheduler, NormalProvider, TaskProvider, ValidationScheduler},
+    schedulers::{ExeScheduler, NormalProvider, TaskProvider},
     vm::{ExecutionError, TxExecutionResult, Vm, VmExecutionError, VmExecutionResult, build_evm},
 };
+#[cfg(feature = "compiler")]
+use std::sync::Arc;
+use std::{
+    fmt::Debug,
+    num::NonZeroUsize,
+    sync::{Mutex, OnceLock, mpsc},
+    thread,
+};
+
 use alloy_primitives::{TxNonce, U256};
 use metis_primitives::{KECCAK_EMPTY, Transaction, hash_deterministic};
 #[cfg(feature = "compiler")]
@@ -17,15 +26,8 @@ use revm::{
     database::CacheDB,
     primitives::hardfork::SpecId,
 };
+
 use revm::{DatabaseRef, state::Bytecode};
-#[cfg(feature = "compiler")]
-use std::sync::Arc;
-use std::{
-    fmt::Debug,
-    num::NonZeroUsize,
-    sync::{Mutex, OnceLock, mpsc},
-    thread,
-};
 
 /// Errors when executing a block with the parallel executor.
 // TODO: implement traits explicitly due to trait bounds on `C` instead of types of `Chain`
@@ -102,12 +104,7 @@ impl<T> AsyncDropper<T> {
 pub struct ParallelExecutor {
     execution_results: Vec<Mutex<Option<TxExecutionResult>>>,
     abort_reason: OnceLock<AbortReason>,
-    dropper: AsyncDropper<(
-        MvMemory,
-        ExeScheduler<NormalProvider>,
-        ValidationScheduler,
-        Vec<TxEnv>,
-    )>,
+    dropper: AsyncDropper<(MvMemory, ExeScheduler<NormalProvider>, Vec<TxEnv>)>,
     /// The compile work shared with different vm instance.
     #[cfg(feature = "compiler")]
     pub worker: Arc<ExtCompileWorker>,
@@ -160,7 +157,6 @@ impl ParallelExecutor {
         let block_size = txs.len();
         let task_provider = NormalProvider::new(block_size);
         let exe_scheduler = ExeScheduler::new(task_provider);
-        let validation_scheduler = ValidationScheduler::new(block_size);
 
         let mv_memory = chain.build_mv_memory(&block_env, &txs);
         let vm = Vm::new(
@@ -186,18 +182,25 @@ impl ParallelExecutor {
         thread::scope(|scope| {
             for _ in 0..concurrency_level.into() {
                 scope.spawn(|| {
+                    let mut task = exe_scheduler.next_task();
                     while self.abort_reason.get().is_none() {
-                        if let Some(tx_idx) = validation_scheduler.next_task() {
-                            try_validate(&mv_memory, &exe_scheduler, tx_idx);
+                        task = match task {
+                            Some(Task::Execution(tx_version)) => {
+                                self.try_execute(&vm, &exe_scheduler, tx_version)
+                            }
+                            Some(Task::Validation(tx_idx)) => {
+                                try_validate(&mv_memory, &exe_scheduler, tx_idx)
+                            }
+                            None => None,
+                        };
+
+                        if task.is_some() {
                             continue;
                         }
-                        if let Some(tx_version) = exe_scheduler.next_task() {
-                            self.try_execute(
-                                &vm,
-                                &exe_scheduler,
-                                &validation_scheduler,
-                                tx_version,
-                            );
+
+                        task = exe_scheduler.next_task();
+
+                        if task.is_some() {
                             continue;
                         }
 
@@ -214,8 +217,7 @@ impl ParallelExecutor {
         if let Some(abort_reason) = self.abort_reason.take() {
             match abort_reason {
                 AbortReason::FallbackToSequential => {
-                    self.dropper
-                        .drop((mv_memory, exe_scheduler, validation_scheduler, Vec::new()));
+                    self.dropper.drop((mv_memory, exe_scheduler, Vec::new()));
                     return execute_revm_sequential(
                         chain,
                         storage,
@@ -227,8 +229,7 @@ impl ParallelExecutor {
                     );
                 }
                 AbortReason::ExecutionError(err) => {
-                    self.dropper
-                        .drop((mv_memory, exe_scheduler, validation_scheduler, txs));
+                    self.dropper.drop((mv_memory, exe_scheduler, txs));
                     return Err(ParallelExecutorError::ExecutionError(err));
                 }
             }
@@ -251,7 +252,7 @@ impl ParallelExecutor {
             if let Some(write_history) = mv_memory.data.get(&location_hash) {
                 let mut balance = U256::ZERO;
                 let mut nonce = 0;
-                let mut code_hash = None;
+                let mut code_hash = KECCAK_EMPTY;
                 // Read from storage if the first multi-version entry is not an absolute value.
                 if !matches!(
                     write_history.first_key_value(),
@@ -260,11 +261,11 @@ impl ParallelExecutor {
                     if let Ok(Some(account)) = storage.basic_ref(address) {
                         balance = account.balance;
                         nonce = account.nonce;
-                        code_hash = Some(account.code_hash);
+                        code_hash = account.code_hash;
                     }
                 }
-                let code = if let Some(code_hash) = &code_hash {
-                    match storage.code_by_hash_ref(*code_hash) {
+                let code = if code_hash != KECCAK_EMPTY {
+                    match storage.code_by_hash_ref(code_hash) {
                         Ok(code) => code,
                         Err(err) => {
                             return Err(ParallelExecutorError::StorageError(err.to_string()));
@@ -337,7 +338,7 @@ impl ParallelExecutor {
                     let account = tx_result.state.entry(address).or_default();
                     // TODO: Deduplicate this logic with [TxExecutionResult::from_revm]
                     if chain.is_eip_161_enabled(spec_id)
-                        && code_hash.is_none()
+                        && code_hash == KECCAK_EMPTY
                         && nonce == 0
                         && balance == U256::ZERO
                     {
@@ -354,7 +355,7 @@ impl ParallelExecutor {
                         *account = Some(EvmAccount {
                             balance,
                             nonce,
-                            code_hash: code_hash.unwrap_or(KECCAK_EMPTY),
+                            code_hash,
                             code: Some(code.clone()),
                             storage: Default::default(),
                         });
@@ -363,8 +364,7 @@ impl ParallelExecutor {
             }
         }
 
-        self.dropper
-            .drop((mv_memory, exe_scheduler, validation_scheduler, txs));
+        self.dropper.drop((mv_memory, exe_scheduler, txs));
 
         Ok(fully_evaluated_results)
     }
@@ -373,19 +373,20 @@ impl ParallelExecutor {
         &self,
         vm: &Vm<'_, S, C>,
         exe_scheduler: &ExeScheduler<T>,
-        validation_scheduler: &ValidationScheduler,
         tx_version: TxVersion,
-    ) {
+    ) -> Option<Task> {
         loop {
             return match vm.execute(&tx_version) {
                 Err(VmExecutionError::Retry) => {
                     if self.abort_reason.get().is_none() {
                         continue;
                     }
+                    None
                 }
                 Err(VmExecutionError::FallbackToSequential) => {
                     self.abort_reason
                         .get_or_init(|| AbortReason::FallbackToSequential);
+                    None
                 }
                 Err(VmExecutionError::Blocking(blocking_tx_idx)) => {
                     if !exe_scheduler.add_dependency(tx_version.tx_idx, blocking_tx_idx)
@@ -395,31 +396,34 @@ impl ParallelExecutor {
                         // re-executed by the time we can add it as a dependency.
                         continue;
                     }
+                    None
                 }
                 Err(VmExecutionError::ExecutionError(err)) => {
                     self.abort_reason
                         .get_or_init(|| AbortReason::ExecutionError(err));
+                    None
                 }
                 Ok(VmExecutionResult {
                     execution_result,
                     flags,
-                    mut affected_txs,
+                    affected_txs,
                 }) => {
                     *index_mutex!(self.execution_results, tx_version.tx_idx) =
                         Some(execution_result);
-                    if let Some(txid) = exe_scheduler.finish_execution(tx_version, flags) {
-                        affected_txs.push(txid);
-                    }
-                    validation_scheduler.add_tasks(affected_txs);
+                    exe_scheduler.finish_execution(tx_version, flags, affected_txs)
                 }
             };
         }
     }
 }
 
-fn try_validate<T: TaskProvider>(mv_memory: &MvMemory, scheduler: &ExeScheduler<T>, tx_idx: TxIdx) {
+fn try_validate<T: TaskProvider>(
+    mv_memory: &MvMemory,
+    scheduler: &ExeScheduler<T>,
+    tx_idx: TxIdx,
+) -> Option<Task> {
     let read_set_valid = mv_memory.validate_read_locations(tx_idx);
-    scheduler.finish_validation(tx_idx, !read_set_valid);
+    scheduler.finish_validation(tx_idx, !read_set_valid)
 }
 
 /// Execute REVM transactions sequentially.

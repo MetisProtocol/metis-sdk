@@ -31,6 +31,7 @@ fn test_beneficiary(get_address: fn(usize) -> Address) {
                     kind: TransactTo::Call(address),
                     value: U256::from(1),
                     gas_price: 1_u128,
+                    nonce: 1,
                     ..TxEnv::default()
                 }
             })

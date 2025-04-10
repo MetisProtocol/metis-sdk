@@ -1,13 +1,13 @@
 use alloy_primitives::ChainId;
 use hashbrown::HashMap;
-use metis_primitives::hash_deterministic;
+use metis_primitives::{BuildIdentityHasher, hash_deterministic};
 use revm::{
     context::{BlockEnv, TxEnv},
     primitives::hardfork::SpecId,
 };
 
 use super::{Chain, RewardPolicy};
-use crate::{BuildIdentityHasher, MemoryLocation, TxIdx, mv_memory::MvMemory};
+use crate::{MemoryLocation, TxIdx, mv_memory::MvMemory};
 
 /// Implementation of [`Chain`] for Ethereum
 #[derive(Debug, Clone, PartialEq, Eq)]

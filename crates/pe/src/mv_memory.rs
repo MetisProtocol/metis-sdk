@@ -5,13 +5,10 @@ use std::{
 
 use alloy_primitives::{Address, B256};
 use dashmap::DashMap;
-use metis_primitives::BuildSuffixHasher;
+use metis_primitives::{BuildIdentityHasher, BuildSuffixHasher};
 use revm::bytecode::Bytecode;
 
-use crate::{
-    BuildIdentityHasher, MemoryEntry, MemoryLocationHash, ReadOrigin, ReadSet, TxIdx, TxVersion,
-    WriteSet,
-};
+use crate::{MemoryEntry, MemoryLocationHash, ReadOrigin, ReadSet, TxIdx, TxVersion, WriteSet};
 
 #[derive(Default, Debug)]
 struct LastLocations {
@@ -103,6 +100,16 @@ impl MvMemory {
         }
 
         let mut last_locations = index_mutex!(self.last_locations, tx_version.tx_idx);
+        for location in last_locations
+            .read
+            .keys()
+            .filter(|k| !read_set.contains_key(*k))
+        {
+            self.location_reads
+                .get_mut(location)
+                .unwrap()
+                .remove(&tx_version.tx_idx);
+        }
         last_locations.read = read_set;
 
         // TODO2: DOCs
