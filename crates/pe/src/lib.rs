@@ -1,16 +1,13 @@
-//! Blazingly fast Parallel EVM in Rust.
-
-// TODO: Better types & API for third-party integration
 use bitflags::bitflags;
 use std::hash::Hash;
-// This optimization is desired as we constantly index into many
-// vectors of the block-size size. It can yield up to 5% improvement.
+
+/// This optimization is desired as we constantly index into many
+/// vectors of the block-size size. It can yield up to 5% improvement.
 macro_rules! index_mutex {
     ($vec:expr, $index:expr) => {
         // SAFETY: A correct scheduler would not leak indexes larger
         // than the block size, which is the size of all vectors we
         // index via this macro. Otherwise, DO NOT USE!
-        // TODO: Better error handling for the mutex.
         unsafe { $vec.get_unchecked($index).lock().unwrap() }
     };
 }
@@ -34,15 +31,15 @@ pub mod chain;
 pub mod executor;
 pub mod mv_memory;
 pub use mv_memory::MvMemory;
-pub mod schedulers;
+pub mod scheduler;
 pub mod types;
 pub use executor::{
     ParallelExecutor, ParallelExecutorError, ParallelExecutorResult, execute_revm_sequential,
 };
-pub use schedulers::{DAGProvider, NormalProvider};
+pub use scheduler::{DAGProvider, NormalProvider};
 pub use types::*;
 pub mod storage;
-pub use metis_primitives::{AccountBasic, BlockHashes, Bytecodes, ChainState, EvmAccount};
+pub use metis_primitives::{AccountState, BlockHashes, Bytecodes, EvmAccount};
 pub use storage::{InMemoryStorage, StorageError};
 pub mod vm;
 pub use vm::{ExecutionError, TxExecutionResult};

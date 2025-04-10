@@ -2,7 +2,7 @@ use crate::{
     EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, Task, TxIdx, TxVersion,
     chain::Chain,
     mv_memory::MvMemory,
-    schedulers::{ExeScheduler, NormalProvider, TaskProvider},
+    scheduler::{NormalProvider, Scheduler, TaskProvider},
     vm::{ExecutionError, TxExecutionResult, Vm, VmExecutionError, VmExecutionResult, build_evm},
 };
 #[cfg(feature = "compiler")]
@@ -30,7 +30,6 @@ use revm::{
 use revm::DatabaseRef;
 
 /// Errors when executing a block with the parallel executor.
-// TODO: implement traits explicitly due to trait bounds on `C` instead of types of `Chain`
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum ParallelExecutorError {
     /// Transactions lack information for execution.
@@ -47,7 +46,6 @@ pub enum ParallelExecutorError {
         executed_nonce: TxNonce,
     },
     /// Storage error.
-    // TODO: More concrete types than just an arbitrary string.
     #[error("Storage error: {0}")]
     StorageError(String),
     /// EVM execution error.
@@ -104,7 +102,7 @@ impl<T> AsyncDropper<T> {
 pub struct ParallelExecutor {
     execution_results: Vec<Mutex<Option<TxExecutionResult>>>,
     abort_reason: OnceLock<AbortReason>,
-    dropper: AsyncDropper<(MvMemory, ExeScheduler<NormalProvider>, Vec<TxEnv>)>,
+    dropper: AsyncDropper<(MvMemory, Scheduler<NormalProvider>, Vec<TxEnv>)>,
     /// The compile work shared with different vm instance.
     #[cfg(feature = "compiler")]
     pub worker: Arc<ExtCompileWorker>,
@@ -156,7 +154,7 @@ impl ParallelExecutor {
 
         let block_size = txs.len();
         let task_provider = NormalProvider::new(block_size);
-        let exe_scheduler = ExeScheduler::new(task_provider);
+        let scheduler = Scheduler::new(task_provider);
 
         let mv_memory = chain.build_mv_memory(&block_env, &txs);
         let vm = Vm::new(
@@ -182,14 +180,14 @@ impl ParallelExecutor {
         thread::scope(|scope| {
             for _ in 0..concurrency_level.into() {
                 scope.spawn(|| {
-                    let mut task = exe_scheduler.next_task();
+                    let mut task = scheduler.next_task();
                     while self.abort_reason.get().is_none() {
                         task = match task {
                             Some(Task::Execution(tx_version)) => {
-                                self.try_execute(&vm, &exe_scheduler, tx_version)
+                                self.try_execute(&vm, &scheduler, tx_version)
                             }
                             Some(Task::Validation(tx_idx)) => {
-                                try_validate(&mv_memory, &exe_scheduler, tx_idx)
+                                try_validate(&mv_memory, &scheduler, tx_idx)
                             }
                             None => None,
                         };
@@ -198,13 +196,13 @@ impl ParallelExecutor {
                             continue;
                         }
 
-                        task = exe_scheduler.next_task();
+                        task = scheduler.next_task();
 
                         if task.is_some() {
                             continue;
                         }
 
-                        if exe_scheduler.is_finish() {
+                        if scheduler.is_finish() {
                             break;
                         }
 
@@ -217,7 +215,7 @@ impl ParallelExecutor {
         if let Some(abort_reason) = self.abort_reason.take() {
             match abort_reason {
                 AbortReason::FallbackToSequential => {
-                    self.dropper.drop((mv_memory, exe_scheduler, Vec::new()));
+                    self.dropper.drop((mv_memory, scheduler, Vec::new()));
                     return execute_revm_sequential(
                         chain,
                         storage,
@@ -229,7 +227,7 @@ impl ParallelExecutor {
                     );
                 }
                 AbortReason::ExecutionError(err) => {
-                    self.dropper.drop((mv_memory, exe_scheduler, txs));
+                    self.dropper.drop((mv_memory, scheduler, txs));
                     return Err(ParallelExecutorError::ExecutionError(err));
                 }
             }
@@ -358,7 +356,7 @@ impl ParallelExecutor {
             }
         }
 
-        self.dropper.drop((mv_memory, exe_scheduler, txs));
+        self.dropper.drop((mv_memory, scheduler, txs));
 
         Ok(fully_evaluated_results)
     }
@@ -366,7 +364,7 @@ impl ParallelExecutor {
     fn try_execute<S: DatabaseRef + Send, C: Chain, T: TaskProvider>(
         &self,
         vm: &Vm<'_, S, C>,
-        exe_scheduler: &ExeScheduler<T>,
+        scheduler: &Scheduler<T>,
         tx_version: TxVersion,
     ) -> Option<Task> {
         loop {
@@ -383,7 +381,7 @@ impl ParallelExecutor {
                     None
                 }
                 Err(VmExecutionError::Blocking(blocking_tx_idx)) => {
-                    if !exe_scheduler.add_dependency(tx_version.tx_idx, blocking_tx_idx)
+                    if !scheduler.add_dependency(tx_version.tx_idx, blocking_tx_idx)
                         && self.abort_reason.get().is_none()
                     {
                         // Retry the execution immediately if the blocking transaction was
@@ -404,25 +402,25 @@ impl ParallelExecutor {
                 }) => {
                     *index_mutex!(self.execution_results, tx_version.tx_idx) =
                         Some(execution_result);
-                    exe_scheduler.finish_execution(tx_version, flags, affected_txs)
+                    scheduler.finish_execution(tx_version, flags, affected_txs)
                 }
             };
         }
     }
 }
 
+#[inline]
 fn try_validate<T: TaskProvider>(
     mv_memory: &MvMemory,
-    scheduler: &ExeScheduler<T>,
+    scheduler: &Scheduler<T>,
     tx_idx: TxIdx,
 ) -> Option<Task> {
     let read_set_valid = mv_memory.validate_read_locations(tx_idx);
     scheduler.finish_validation(tx_idx, !read_set_valid)
 }
 
-/// Execute REVM transactions sequentially.
-// Useful for falling back for (small) blocks with many dependencies.
-// TODO: Use this for a long chain of sequential transactions even in parallel mode.
+/// Execute transactions sequentially.
+/// Useful for falling back for (small) blocks with many dependencies.
 pub fn execute_revm_sequential<DB: DatabaseRef, C: Chain>(
     chain: &C,
     storage: DB,

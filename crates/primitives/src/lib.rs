@@ -85,39 +85,20 @@ impl From<Account> for EvmAccount {
     }
 }
 
-/// Basic information of an account
-// TODO: Reuse something sane from Alloy?
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AccountBasic {
-    /// The balance of the account.
-    pub balance: U256,
-    /// The nonce of the account.
-    pub nonce: u64,
-}
+/// Mapping from address to [`EvmAccount`].
+pub type AccountState = HashMap<Address, EvmAccount, BuildSuffixHasher>;
 
-impl Default for AccountBasic {
-    fn default() -> Self {
-        Self {
-            balance: U256::ZERO,
-            nonce: 0,
-        }
-    }
-}
-
-/// Mapping from address to [`EvmAccount`]
-pub type ChainState = HashMap<Address, EvmAccount, BuildSuffixHasher>;
-
-/// Mapping from code hashes to [`Bytecode`]s
+/// Mapping from code hashes to [`Bytecode`]s.
 pub type Bytecodes = HashMap<B256, Bytecode, BuildSuffixHasher>;
 
-/// Mapping from block numbers to block hashes
+/// Mapping from block numbers to block hashes.
 pub type BlockHashes = HashMap<u64, B256, BuildIdentityHasher>;
 
-/// We use the last 8 bytes of an existing hash like address
+/// Use the last 8 bytes of an existing hash like address
 /// or code hash instead of rehashing it.
-// TODO: Make sure this is acceptable for production
 #[derive(Debug, Default)]
 pub struct SuffixHasher(u64);
+
 impl Hasher for SuffixHasher {
     fn write(&mut self, bytes: &[u8]) {
         let mut suffix = [0u8; 8];
@@ -152,6 +133,7 @@ macro_rules! as_u64_saturated {
 /// transaction indexes, etc.
 #[derive(Debug, Default)]
 pub struct IdentityHasher(u64);
+
 impl Hasher for IdentityHasher {
     fn write_u64(&mut self, id: u64) {
         self.0 = id;
@@ -170,8 +152,7 @@ impl Hasher for IdentityHasher {
 /// Build an identity hasher
 pub type BuildIdentityHasher = BuildHasherDefault<IdentityHasher>;
 
-// TODO: Ensure it's not easy to hand-craft transactions and storage slots
-// that can cause a lot of collisions that destroys pe's performance.
+/// Calculates the hash of a single value.
 #[inline(always)]
 pub fn hash_deterministic<T: Hash>(x: T) -> u64 {
     FxBuildHasher.hash_one(x)

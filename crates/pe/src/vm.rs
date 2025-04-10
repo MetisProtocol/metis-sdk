@@ -163,7 +163,6 @@ struct VmDb<'a, S: DatabaseRef, C: Chain> {
     // Only applied to raw transfers' senders & recipients at the moment.
     is_lazy: bool,
     read_set: ReadSet,
-    // TODO: Clearer type for [AccountBasic] plus code hash
     read_accounts: HashMap<MemoryLocationHash, (AccountInfo, Option<B256>), BuildIdentityHasher>,
 }
 

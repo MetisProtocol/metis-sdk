@@ -41,8 +41,16 @@ num_cpus = "1.16.0"
 alith = { git = "https://github.com/0xLazAI/alith", tag = "v0.5.1", features = ["llamacpp"], optional = true }
 
 [build-dependencies]
+# Reth test dependencies
 reth-exex-test-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 reth-testing-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
+# Revmc dependencies
+revmc-build = { git = "https://github.com/paradigmxyz/revmc", optional = true }
 
 [features]
+default = ["jemalloc"]
+
+jemalloc = ["reth/jemalloc", "metis-pe/jemalloc"]
+optimism = ["metis-pe/optimism"]
+compiler = ["metis-pe/compiler", "dep:revmc-build"]
 inference = ["dep:alith"]
