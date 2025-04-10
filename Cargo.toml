@@ -1,5 +1,10 @@
 [workspace]
-members = ["crates/*"]
+members = [
+    #"bin/reth",
+    "crates/*",
+    "examples/custom_evm"
+]
+
 resolver = "2"
 
 [workspace.lints]
@@ -52,6 +57,8 @@ alloy-trie = { version = "0.7.9", default-features = false }
 alloy-signer = { version = "0.13.0", default-features = false }
 alloy-signer-local = { version = "0.13.0", default-features = false }
 alloy-evm = "0.3.2"
+alloy-genesis = "0.13.0"
+
 revm = { version = "21.0.0", features = ["std", "serde-json"] }
 
 # Reth dependencies

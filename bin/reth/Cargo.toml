@@ -1,0 +1,13 @@
+[package]
+name = "reth"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+exclude.workspace = true
+license.workspace = true
+readme.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

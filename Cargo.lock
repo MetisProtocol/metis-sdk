@@ -3143,6 +3143,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "custom-evm"
+version = "0.1.0"
+dependencies = [
+ "alloy-genesis",
+ "eyre",
+ "metis-chain",
+ "metis-pe",
+ "reth",
+ "reth-ethereum",
+ "reth-tracing",
+ "tokio",
+]
+
+[[package]]
 name = "dagrs"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

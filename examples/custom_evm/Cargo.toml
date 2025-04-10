@@ -1,0 +1,24 @@
+[package]
+name = "custom-evm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+exclude.workspace = true
+license.workspace = true
+readme.workspace = true
+
+[dependencies]
+tokio = "1.44.2"
+eyre = "0.6"
+
+reth.workspace = true
+reth-ethereum.workspace = true
+reth-tracing.workspace = true
+
+metis-pe.workspace = true
+metis-chain.workspace = true
+
+alloy-genesis.workspace = true
+
+[lints]
+workspace = true
