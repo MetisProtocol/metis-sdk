@@ -6,7 +6,7 @@ use crate::{
     vm::{ExecutionError, TxExecutionResult, Vm, VmExecutionError, VmExecutionResult, build_evm},
 };
 use alloy_primitives::{TxNonce, U256};
-use metis_primitives::{Transaction, hash_deterministic};
+use metis_primitives::{KECCAK_EMPTY, Transaction, hash_deterministic};
 #[cfg(feature = "compiler")]
 use metis_vm::ExtCompileWorker;
 #[cfg(feature = "compiler")]
@@ -354,7 +354,7 @@ impl ParallelExecutor {
                         *account = Some(EvmAccount {
                             balance,
                             nonce,
-                            code_hash,
+                            code_hash: code_hash.unwrap_or(KECCAK_EMPTY),
                             code: Some(code.clone()),
                             storage: Default::default(),
                         });

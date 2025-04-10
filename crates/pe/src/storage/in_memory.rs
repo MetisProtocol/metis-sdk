@@ -38,7 +38,7 @@ impl Database for InMemoryStorage {
         Ok(self.accounts.get(&address).map(|account| AccountInfo {
             balance: account.balance,
             nonce: account.nonce,
-            code_hash: account.code_hash.unwrap(),
+            code_hash: account.code_hash,
             code: account.code.clone(),
         }))
     }
@@ -75,7 +75,7 @@ impl DatabaseRef for InMemoryStorage {
         Ok(self.accounts.get(&address).map(|account| AccountInfo {
             balance: account.balance,
             nonce: account.nonce,
-            code_hash: account.code_hash.unwrap_or_default(),
+            code_hash: account.code_hash,
             code: account.code.clone(),
         }))
     }
