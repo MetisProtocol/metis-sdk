@@ -8,15 +8,10 @@ metis-primitives.workspace = true
 metis-pe.workspace = true
 
 # Alloy and Revm dependencies
-alloy-rpc-types-eth.workspace = true
-alloy-consensus.workspace = true
 alloy-primitives.workspace = true
 alloy-evm.workspace = true
 alloy-hardforks.workspace = true
 alloy-eips.workspace = true
-alloy-signer.workspace = true
-alloy-signer-local.workspace = true
-alloy-rlp.workspace = true
 alloy-sol-types.workspace = true
 revm.workspace = true
 
@@ -29,10 +24,7 @@ reth-evm.workspace = true
 reth-primitives.workspace = true
 reth-tracing.workspace = true
 reth-ethereum.workspace = true
-
 reth-cli-util.workspace = true
-reth-ethereum-cli.workspace = true
-reth-node-builder.workspace = true
 
 tokio.workspace = true
 serde.workspace = true
@@ -43,7 +35,6 @@ num_cpus = "1.16.0"
 
 # AI Inference dependencies
 alith = { git = "https://github.com/0xLazAI/alith", tag = "v0.5.1", features = ["llamacpp"], optional = true }
-clap = { version = "4.5.35", features = ["derive"] }
 tracing = "0.1.41"
 
 [build-dependencies]
