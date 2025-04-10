@@ -695,7 +695,7 @@ impl<'a, S: DatabaseRef, C: Chain> Vm<'a, S, C> {
                     tx,
                     U256::from(result_and_state.result.gas_used()),
                     #[cfg(feature = "optimism")]
-                    &mut evm.ctx(),
+                    evm.ctx(),
                 )?;
 
                 drop(evm); // release db
@@ -797,7 +797,7 @@ impl<'a, S: DatabaseRef, C: Chain> Vm<'a, S, C> {
                     let Some(enveloped_tx) = &enveloped else {
                         panic!("[OPTIMISM] Failed to load enveloped transaction.");
                     };
-                    let l1_cost = l1_block_info.calculate_tx_l1_cost(&enveloped_tx, spec);
+                    let l1_cost = l1_block_info.calculate_tx_l1_cost(enveloped_tx, spec);
 
                     smallvec![
                         (
