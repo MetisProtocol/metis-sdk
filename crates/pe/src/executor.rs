@@ -400,8 +400,10 @@ impl ParallelExecutor {
                     flags,
                     affected_txs,
                 }) => {
-                    *index_mutex!(self.execution_results, tx_version.tx_idx) =
-                        Some(execution_result);
+                    {
+                        *index_mutex!(self.execution_results, tx_version.tx_idx) =
+                            Some(execution_result);
+                    }
                     scheduler.finish_execution(tx_version, flags, affected_txs)
                 }
             };
