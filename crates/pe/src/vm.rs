@@ -5,7 +5,7 @@ use crate::{
     mv_memory::MvMemory,
 };
 use alloy_consensus::TxType;
-use alloy_primitives::TxKind;
+use alloy_primitives::{ChainId, TxKind};
 use hashbrown::HashMap;
 #[cfg(feature = "optimism")]
 use metis_primitives::Transaction;
@@ -574,7 +574,12 @@ impl<'a, S: DatabaseRef, C: Chain> Vm<'a, S, C> {
             .map_err(VmExecutionError::from)?;
 
         #[cfg(not(feature = "optimism"))]
-        let mut evm = build_evm(&mut db, self.spec_id, self.block_env.clone());
+        let mut evm = build_evm(
+            &mut db,
+            self.spec_id,
+            self.chain.id(),
+            self.block_env.clone(),
+        );
         #[cfg(feature = "optimism")]
         let mut evm = build_op_evm(&mut db, Default::default());
 
@@ -843,9 +848,14 @@ impl<'a, S: DatabaseRef, C: Chain> Vm<'a, S, C> {
 pub(crate) fn build_evm<DB: Database>(
     db: DB,
     spec_id: SpecId,
+    chain_id: ChainId,
     block_env: BlockEnv,
 ) -> MainnetEvm<MainnetContext<DB>> {
-    let mut evm = MainnetContext::new(db, spec_id).build_mainnet();
+    let mut evm = MainnetContext::new(db, spec_id)
+        .modify_cfg_chained(|cfg| {
+            cfg.chain_id = chain_id;
+        })
+        .build_mainnet();
     evm.set_block(block_env);
     evm
 }

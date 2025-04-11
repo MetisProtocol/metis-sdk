@@ -430,7 +430,7 @@ pub fn execute_revm_sequential<DB: DatabaseRef, C: Chain>(
     #[cfg(feature = "compiler")] worker: Arc<ExtCompileWorker>,
 ) -> ParallelExecutorResult {
     let mut db = CacheDB::new(storage);
-    let mut evm = build_evm(&mut db, spec_id, block_env);
+    let mut evm = build_evm(&mut db, spec_id, chain.id(), block_env);
     let mut results = Vec::with_capacity(txs.len());
     let mut cumulative_gas_used: u64 = 0;
     for tx in txs {
