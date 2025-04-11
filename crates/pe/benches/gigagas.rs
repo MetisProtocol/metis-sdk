@@ -1,11 +1,10 @@
+use alloy_evm::EvmEnv;
 use alloy_primitives::{Address, U160, U256};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use metis_pe::{
-    AccountState, Bytecodes, EvmAccount, InMemoryStorage, ParallelExecutor, chain::Ethereum,
-    execute_revm_sequential,
+    AccountState, Bytecodes, EvmAccount, InMemoryDB, ParallelExecutor, execute_revm_sequential,
 };
-use revm::context::{BlockEnv, TransactTo, TxEnv};
-use revm::primitives::hardfork::SpecId;
+use revm::context::{TransactTo, TxEnv};
 use std::{num::NonZeroUsize, sync::Arc, thread};
 
 #[path = "../tests/common/mod.rs"]
@@ -22,20 +21,15 @@ const GIGA_GAS: u64 = 1_000_000_000;
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 /// Runs a benchmark for executing a set of transactions on a given blockchain state.
-pub fn bench(c: &mut Criterion, name: &str, storage: InMemoryStorage, txs: Vec<TxEnv>) {
+pub fn bench(c: &mut Criterion, name: &str, db: InMemoryDB, txs: Vec<TxEnv>) {
     let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
-    let chain = Ethereum::mainnet();
-    let spec_id = SpecId::PRAGUE;
-    let block_env = BlockEnv::default();
     let mut pe = ParallelExecutor::default();
     let mut group = c.benchmark_group(name);
     group.bench_function("Sequential", |b| {
         b.iter(|| {
             execute_revm_sequential(
-                black_box(&chain),
-                black_box(&storage),
-                black_box(spec_id),
-                black_box(block_env.clone()),
+                black_box(&db),
+                black_box(EvmEnv::default()),
                 black_box(txs.clone()),
                 #[cfg(feature = "compiler")]
                 pe.worker.clone(),
@@ -45,10 +39,8 @@ pub fn bench(c: &mut Criterion, name: &str, storage: InMemoryStorage, txs: Vec<T
     group.bench_function("Parallel", |b| {
         b.iter(|| {
             pe.execute_revm_parallel(
-                black_box(&chain),
-                black_box(&storage),
-                black_box(spec_id),
-                black_box(block_env.clone()),
+                black_box(&db),
+                black_box(EvmEnv::default()),
                 black_box(txs.clone()),
                 black_box(concurrency_level),
             )
@@ -60,10 +52,8 @@ pub fn bench(c: &mut Criterion, name: &str, storage: InMemoryStorage, txs: Vec<T
         group.bench_function("Sequential-With-Compiler", |b| {
             b.iter(|| {
                 execute_revm_sequential(
-                    black_box(&chain),
-                    black_box(&storage),
-                    black_box(spec_id),
-                    black_box(block_env.clone()),
+                    black_box(&db),
+                    black_box(EvmEnv::default()),
                     black_box(txs.clone()),
                     pe.worker.clone(),
                 )
@@ -72,10 +62,8 @@ pub fn bench(c: &mut Criterion, name: &str, storage: InMemoryStorage, txs: Vec<T
         group.bench_function("Parallel-With-Compiler", |b| {
             b.iter(|| {
                 pe.execute_revm_parallel(
-                    black_box(&chain),
-                    black_box(&storage),
-                    black_box(spec_id),
-                    black_box(block_env.clone()),
+                    black_box(&db),
+                    black_box(EvmEnv::default()),
                     black_box(txs.clone()),
                     black_box(concurrency_level),
                 )
@@ -91,7 +79,7 @@ pub fn bench_raw_transfers(c: &mut Criterion) {
     // Skip the built-in precompiled contracts addresses.
     const START_ADDRESS: usize = 1000;
     const MINER_ADDRESS: usize = 0;
-    let storage = InMemoryStorage::new(
+    let db = InMemoryDB::new(
         std::iter::once(MINER_ADDRESS)
             .chain(START_ADDRESS..START_ADDRESS + block_size)
             .map(common::mock_account)
@@ -102,7 +90,7 @@ pub fn bench_raw_transfers(c: &mut Criterion) {
     bench(
         c,
         "Independent Raw Transfers",
-        storage,
+        db,
         (0..block_size)
             .map(|i| {
                 let address = Address::from(U160::from(START_ADDRESS + i));
@@ -127,7 +115,7 @@ pub fn bench_erc20(c: &mut Criterion) {
     bench(
         c,
         "Independent ERC20",
-        InMemoryStorage::new(state, Arc::new(bytecodes), Default::default()),
+        InMemoryDB::new(state, Arc::new(bytecodes), Default::default()),
         txs,
     );
 }
@@ -147,7 +135,7 @@ pub fn bench_uniswap(c: &mut Criterion) {
     bench(
         c,
         "Independent Uniswap",
-        InMemoryStorage::new(final_state, Arc::new(final_bytecodes), Default::default()),
+        InMemoryDB::new(final_state, Arc::new(final_bytecodes), Default::default()),
         final_txs,
     );
 }

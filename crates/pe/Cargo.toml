@@ -24,6 +24,7 @@ alloy-provider.workspace = true
 alloy-rlp.workspace = true
 alloy-rpc-types-eth.workspace = true
 alloy-trie.workspace = true
+alloy-evm.workspace = true
 revm.workspace = true
 
 bitflags.workspace = true

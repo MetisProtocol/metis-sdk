@@ -5,10 +5,16 @@ use std::{
 
 use alloy_primitives::{Address, B256};
 use dashmap::DashMap;
-use metis_primitives::{BuildIdentityHasher, BuildSuffixHasher};
+use hashbrown::HashMap;
+use metis_primitives::{BuildIdentityHasher, BuildSuffixHasher, hash_deterministic};
 use revm::bytecode::Bytecode;
+use revm::context::{BlockEnv, TxEnv};
+use std::fmt::Debug;
 
-use crate::{MemoryEntry, MemoryLocationHash, ReadOrigin, ReadSet, TxIdx, TxVersion, WriteSet};
+use crate::{
+    MemoryEntry, MemoryLocation, MemoryLocationHash, ReadOrigin, ReadSet, TxIdx, TxVersion,
+    WriteSet,
+};
 
 #[derive(Default, Debug)]
 struct LastLocations {
@@ -206,8 +212,6 @@ impl MvMemory {
                             return false;
                         }
                     }
-                    // Read from storage but there is now something
-                    // in between!
                     else if iter.next_back().is_some() {
                         return false;
                     }
@@ -225,4 +229,92 @@ impl MvMemory {
     pub(crate) fn consume_lazy_addresses(&self) -> impl IntoIterator<Item = Address> {
         std::mem::take(&mut *self.lazy_addresses.lock().unwrap()).into_iter()
     }
+}
+
+/// Different chains may have varying reward policies.
+/// This enum specifies which policy to follow, with optional
+/// pre-calculated data to assist in reward calculations.
+#[derive(Debug, Clone)]
+pub enum RewardPolicy {
+    /// Ethereum
+    Ethereum,
+    /// Optimism
+    #[cfg(feature = "optimism")]
+    Optimism {
+        /// L1 Fee Recipient
+        l1_fee_recipient_location_hash: crate::MemoryLocationHash,
+        /// Base Fee Vault
+        base_fee_vault_location_hash: crate::MemoryLocationHash,
+    },
+}
+
+#[cfg(feature = "optimism")]
+#[inline]
+pub fn reward_policy() -> RewardPolicy {
+    RewardPolicy::Optimism {
+        l1_fee_recipient_location_hash: hash_deterministic(MemoryLocation::Basic(
+            op_revm::constants::L1_FEE_RECIPIENT,
+        )),
+        base_fee_vault_location_hash: hash_deterministic(MemoryLocation::Basic(
+            op_revm::constants::BASE_FEE_RECIPIENT,
+        )),
+    }
+}
+
+#[cfg(not(feature = "optimism"))]
+#[inline]
+pub fn reward_policy() -> RewardPolicy {
+    RewardPolicy::Ethereum
+}
+
+#[cfg(feature = "optimism")]
+pub fn build_mv_memory(block_env: &BlockEnv, txs: &[TxEnv]) -> MvMemory {
+    let _beneficiary_location_hash =
+        hash_deterministic(MemoryLocation::Basic(block_env.beneficiary));
+    let l1_fee_recipient_location_hash = hash_deterministic(op_revm::constants::L1_FEE_RECIPIENT);
+    let base_fee_recipient_location_hash =
+        hash_deterministic(op_revm::constants::BASE_FEE_RECIPIENT);
+
+    // TODO: Estimate more locations based on sender, to, etc.
+    let mut estimated_locations = HashMap::with_hasher(BuildIdentityHasher::default());
+    for (index, _tx) in txs.iter().enumerate() {
+        // TODO: Benchmark to check whether adding these estimated
+        // locations helps or harms the performance.
+        estimated_locations
+            .entry(l1_fee_recipient_location_hash)
+            .or_insert_with(|| Vec::with_capacity(1))
+            .push(index);
+        estimated_locations
+            .entry(base_fee_recipient_location_hash)
+            .or_insert_with(|| Vec::with_capacity(1))
+            .push(index);
+    }
+
+    MvMemory::new(
+        txs.len(),
+        estimated_locations,
+        [
+            block_env.beneficiary,
+            op_revm::constants::L1_FEE_RECIPIENT,
+            op_revm::constants::BASE_FEE_RECIPIENT,
+        ],
+    )
+}
+
+#[cfg(not(feature = "optimism"))]
+pub fn build_mv_memory(block_env: &BlockEnv, txs: &[TxEnv]) -> MvMemory {
+    use crate::TxIdx;
+
+    let block_size = txs.len();
+    let beneficiary_location_hash =
+        hash_deterministic(MemoryLocation::Basic(block_env.beneficiary));
+
+    // TODO: Estimate more locations based on sender, to and the bytecode static code analysis, etc.
+    let mut estimated_locations = HashMap::with_hasher(BuildIdentityHasher::default());
+    estimated_locations.insert(
+        beneficiary_location_hash,
+        (0..block_size).collect::<Vec<TxIdx>>(),
+    );
+
+    MvMemory::new(block_size, estimated_locations, [block_env.beneficiary])
 }

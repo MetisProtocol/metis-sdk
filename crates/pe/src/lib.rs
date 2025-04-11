@@ -27,7 +27,6 @@ bitflags! {
     }
 }
 
-pub mod chain;
 pub mod executor;
 pub mod mv_memory;
 pub use mv_memory::MvMemory;
@@ -38,8 +37,8 @@ pub use executor::{
 };
 pub use scheduler::{DAGProvider, NormalProvider};
 pub use types::*;
-pub mod storage;
+pub mod db;
 pub use metis_primitives::{AccountState, BlockHashes, Bytecodes, EvmAccount};
-pub use storage::{InMemoryStorage, StorageError};
+pub use db::{InMemoryDB, DBError};
 pub mod vm;
 pub use vm::{ExecutionError, TxExecutionResult};
