@@ -6498,6 +6498,7 @@ name = "metis-pe"
 version = "0.1.0"
 dependencies = [
  "alloy-consensus",
+ "alloy-evm",
  "alloy-primitives",
  "alloy-provider",
  "alloy-rlp",

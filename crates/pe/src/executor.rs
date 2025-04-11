@@ -1,7 +1,6 @@
 use crate::{
     EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, Task, TxIdx, TxVersion,
-    chain::Chain,
-    mv_memory::MvMemory,
+    mv_memory::{MvMemory, build_mv_memory},
     scheduler::{NormalProvider, Scheduler, TaskProvider},
     vm::{ExecutionError, TxExecutionResult, Vm, VmExecutionError, VmExecutionResult, build_evm},
 };
@@ -14,6 +13,7 @@ use std::{
     thread,
 };
 
+use alloy_evm::EvmEnv;
 use alloy_primitives::{TxNonce, U256};
 use metis_primitives::{KECCAK_EMPTY, Transaction, hash_deterministic};
 #[cfg(feature = "compiler")]
@@ -22,7 +22,7 @@ use metis_vm::ExtCompileWorker;
 use revm::ExecuteEvm;
 use revm::{
     DatabaseCommit,
-    context::{BlockEnv, ContextTr, TxEnv, result::InvalidTransaction},
+    context::{ContextTr, TxEnv, result::InvalidTransaction},
     database::CacheDB,
     primitives::hardfork::SpecId,
 };
@@ -132,21 +132,18 @@ impl ParallelExecutor {
 }
 
 impl ParallelExecutor {
-    /// Execute an REVM block.
+    /// Execute an block.
     /// Ideally everyone would go through the [Alloy] interface. This one is currently
     /// useful for testing, and for users that are heavily tied to Revm like Reth.
-    pub fn execute_revm_parallel<S, C>(
+    pub fn execute_revm_parallel<DB>(
         &mut self,
-        chain: &C,
-        storage: S,
-        spec_id: SpecId,
-        block_env: BlockEnv,
+        db: DB,
+        evm_env: EvmEnv,
         txs: Vec<TxEnv>,
         concurrency_level: NonZeroUsize,
     ) -> ParallelExecutorResult
     where
-        C: Chain + Send + Sync,
-        S: DatabaseRef + Send + Sync,
+        DB: DatabaseRef + Send + Sync,
     {
         if txs.is_empty() {
             return Ok(Vec::new());
@@ -156,14 +153,12 @@ impl ParallelExecutor {
         let task_provider = NormalProvider::new(block_size);
         let scheduler = Scheduler::new(task_provider);
 
-        let mv_memory = chain.build_mv_memory(&block_env, &txs);
+        let mv_memory = build_mv_memory(&evm_env.block_env, &txs);
         let vm = Vm::new(
-            &storage,
+            &db,
             &mv_memory,
-            chain,
-            &block_env,
+            &evm_env,
             &txs,
-            spec_id,
             #[cfg(feature = "compiler")]
             self.worker.clone(),
         );
@@ -217,10 +212,8 @@ impl ParallelExecutor {
                 AbortReason::FallbackToSequential => {
                     self.dropper.drop((mv_memory, scheduler, Vec::new()));
                     return execute_revm_sequential(
-                        chain,
-                        storage,
-                        spec_id,
-                        block_env,
+                        db,
+                        evm_env,
                         txs,
                         #[cfg(feature = "compiler")]
                         self.worker.clone(),
@@ -251,18 +244,18 @@ impl ParallelExecutor {
                 let mut balance = U256::ZERO;
                 let mut nonce = 0;
                 let mut code_hash = KECCAK_EMPTY;
-                // Read from storage if the first multi-version entry is not an absolute value.
+                // Read from DB if the first multi-version entry is not an absolute value.
                 if !matches!(
                     write_history.first_key_value(),
                     Some((_, MemoryEntry::Data(_, MemoryValue::Basic(_))))
                 ) {
-                    if let Ok(Some(account)) = storage.basic_ref(address) {
+                    if let Ok(Some(account)) = db.basic_ref(address) {
                         balance = account.balance;
                         nonce = account.nonce;
                         code_hash = account.code_hash;
                     }
                 }
-                let code = match storage.code_by_hash_ref(code_hash) {
+                let code = match db.code_by_hash_ref(code_hash) {
                     Ok(code) => code,
                     Err(err) => return Err(ParallelExecutorError::StorageError(err.to_string())),
                 };
@@ -328,8 +321,7 @@ impl ParallelExecutor {
                     // SAFETY: The multi-version data structure should not leak an index over block size.
                     let tx_result = unsafe { fully_evaluated_results.get_unchecked_mut(*tx_idx) };
                     let account = tx_result.state.entry(address).or_default();
-                    // TODO: Deduplicate this logic with [TxExecutionResult::from_revm]
-                    if chain.is_eip_161_enabled(spec_id)
+                    if evm_env.cfg_env.spec.is_enabled_in(SpecId::SPURIOUS_DRAGON)
                         && code_hash == KECCAK_EMPTY
                         && nonce == 0
                         && balance == U256::ZERO
@@ -361,9 +353,9 @@ impl ParallelExecutor {
         Ok(fully_evaluated_results)
     }
 
-    fn try_execute<S: DatabaseRef + Send, C: Chain, T: TaskProvider>(
+    fn try_execute<DB: DatabaseRef + Send, T: TaskProvider>(
         &self,
-        vm: &Vm<'_, S, C>,
+        vm: &Vm<'_, DB>,
         scheduler: &Scheduler<T>,
         tx_version: TxVersion,
     ) -> Option<Task> {
@@ -421,16 +413,14 @@ fn try_validate<T: TaskProvider>(
 
 /// Execute transactions sequentially.
 /// Useful for falling back for (small) blocks with many dependencies.
-pub fn execute_revm_sequential<DB: DatabaseRef, C: Chain>(
-    chain: &C,
-    storage: DB,
-    spec_id: SpecId,
-    block_env: BlockEnv,
+pub fn execute_revm_sequential<DB: DatabaseRef>(
+    db: DB,
+    evm_env: EvmEnv,
     txs: Vec<TxEnv>,
     #[cfg(feature = "compiler")] worker: Arc<ExtCompileWorker>,
 ) -> ParallelExecutorResult {
-    let mut db = CacheDB::new(storage);
-    let mut evm = build_evm(&mut db, spec_id, chain.id(), block_env);
+    let mut db = CacheDB::new(db);
+    let mut evm = build_evm(&mut db, evm_env);
     let mut results = Vec::with_capacity(txs.len());
     let mut cumulative_gas_used: u64 = 0;
     for tx in txs {
@@ -456,7 +446,7 @@ pub fn execute_revm_sequential<DB: DatabaseRef, C: Chain>(
         evm.db().commit(result_and_state.state.clone());
 
         let mut execution_result =
-            TxExecutionResult::from_revm(tx_type, chain, spec_id, result_and_state);
+            TxExecutionResult::from_revm(tx_type, evm.cfg.spec, result_and_state);
 
         cumulative_gas_used =
             cumulative_gas_used.saturating_add(execution_result.receipt.cumulative_gas_used);

@@ -1,8 +1,7 @@
 //! Tests for the beneficiary account, especially for the lazy update of its balance to avoid
 //! "implicit" dependency among consecutive transactions.
 
-use metis_pe::InMemoryStorage;
-use metis_pe::chain::Ethereum;
+use metis_pe::InMemoryDB;
 use rand::random;
 use revm::context::{TransactTo, TxEnv};
 use revm::primitives::{Address, U256, alloy_primitives::U160};
@@ -13,9 +12,8 @@ const BLOCK_SIZE: usize = 100_000;
 
 fn test_beneficiary(get_address: fn(usize) -> Address) {
     common::test_execute_revm(
-        &Ethereum::mainnet(),
         // Mock the beneficiary account (`Address:ZERO`) and the next `BLOCK_SIZE` user accounts.
-        InMemoryStorage::new(
+        InMemoryDB::new(
             (0..=BLOCK_SIZE).map(common::mock_account).collect(),
             Default::default(),
             Default::default(),
