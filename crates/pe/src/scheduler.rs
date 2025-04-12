@@ -377,6 +377,7 @@ impl<T: TaskProvider> Scheduler<T> {
         ret
     }
 
+    #[inline]
     pub(crate) fn is_finish(&self) -> bool {
         self.num_validated.load(Ordering::Relaxed) == self.provider.num_tasks()
     }

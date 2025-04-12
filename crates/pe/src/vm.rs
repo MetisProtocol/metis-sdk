@@ -1,10 +1,10 @@
 use crate::{
     EvmAccount, FinishExecFlags, MemoryEntry, MemoryLocation, MemoryLocationHash, MemoryValue,
     ReadOrigin, ReadOrigins, ReadSet, TxIdx, TxVersion, WriteSet,
-    chain::{Chain, RewardPolicy},
-    mv_memory::MvMemory,
+    mv_memory::{MvMemory, RewardPolicy, reward_policy},
 };
 use alloy_consensus::TxType;
+use alloy_evm::EvmEnv;
 use alloy_primitives::TxKind;
 use hashbrown::HashMap;
 #[cfg(feature = "optimism")]
@@ -19,7 +19,6 @@ use op_revm::{DefaultOp, OpBuilder, OpContext, OpEvm, OpSpecId};
 use reth_primitives::Receipt;
 #[cfg(feature = "optimism")]
 use revm::context::Cfg;
-use revm::context_interface::{JournalTr, result::HaltReason};
 #[cfg(feature = "compiler")]
 use revm::handler::FrameInitOrResult;
 use revm::handler::Handler;
@@ -31,7 +30,7 @@ use revm::{
     Database, ExecuteEvm, MainBuilder, MainnetEvm,
     bytecode::Bytecode,
     context::{
-        BlockEnv, ContextTr, DBErrorMarker, TxEnv,
+        ContextTr, DBErrorMarker, TxEnv,
         result::{EVMError, InvalidTransaction, ResultAndState},
     },
     handler::MainnetContext,
@@ -39,6 +38,10 @@ use revm::{
     state::AccountInfo,
 };
 use revm::{DatabaseRef, context::JournalOutput};
+use revm::{
+    MainContext,
+    context_interface::{JournalTr, result::HaltReason},
+};
 use smallvec::{SmallVec, smallvec};
 #[cfg(feature = "compiler")]
 use std::sync::Arc;
@@ -66,9 +69,8 @@ impl TxExecutionResult {
     /// Construct an execution result from a raw Revm result.
     /// Note that [`cumulative_gas_used`] is preset to the gas used in this transaction.
     /// It should be post-processed with the remaining transactions in the block.
-    pub fn from_revm<C: Chain>(
+    pub fn from_revm(
         tx_type: TxType,
-        chain: &C,
         spec_id: SpecId,
         ResultAndState { result, state }: ResultAndState,
     ) -> Self {
@@ -84,7 +86,7 @@ impl TxExecutionResult {
                 .filter(|(_, account)| account.is_touched())
                 .map(|(address, account)| {
                     if account.is_selfdestructed()
-                        || account.is_empty() && chain.is_eip_161_enabled(spec_id)
+                        || account.is_empty() && spec_id.is_enabled_in(SpecId::SPURIOUS_DRAGON)
                     {
                         (address, None)
                     } else {
@@ -152,8 +154,8 @@ pub(crate) struct VmExecutionResult {
 // A database interface that intercepts reads while executing a specific
 // transaction with Revm. It provides values from the multi-version data
 // structure & storage, and tracks the read set of the current execution.
-struct VmDb<'a, S: DatabaseRef, C: Chain> {
-    vm: &'a Vm<'a, S, C>,
+struct VmDB<'a, DB: DatabaseRef> {
+    vm: &'a Vm<'a, DB>,
     tx_idx: TxIdx,
     tx: &'a TxEnv,
     from_hash: MemoryLocationHash,
@@ -166,9 +168,9 @@ struct VmDb<'a, S: DatabaseRef, C: Chain> {
     read_accounts: HashMap<MemoryLocationHash, (AccountInfo, Option<B256>), BuildIdentityHasher>,
 }
 
-impl<'a, S: DatabaseRef, C: Chain> VmDb<'a, S, C> {
+impl<'a, DB: DatabaseRef> VmDB<'a, DB> {
     fn new(
-        vm: &'a Vm<'a, S, C>,
+        vm: &'a Vm<'a, DB>,
         tx_idx: TxIdx,
         tx: &'a TxEnv,
         from_hash: MemoryLocationHash,
@@ -261,7 +263,7 @@ impl<'a, S: DatabaseRef, C: Chain> VmDb<'a, S, C> {
         Self::push_origin(read_origins, ReadOrigin::Storage)?;
         Ok(self
             .vm
-            .storage
+            .db
             .basic_ref(address)
             .map_err(|err| ReadError::StorageError(err.to_string()))?
             .map(|a| a.code_hash))
@@ -270,7 +272,7 @@ impl<'a, S: DatabaseRef, C: Chain> VmDb<'a, S, C> {
 
 impl DBErrorMarker for ReadError {}
 
-impl<S: DatabaseRef, C: Chain> Database for VmDb<'_, S, C> {
+impl<DB: DatabaseRef> Database for VmDB<'_, DB> {
     type Error = ReadError;
 
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
@@ -385,7 +387,7 @@ impl<S: DatabaseRef, C: Chain> Database for VmDb<'_, S, C> {
             {
                 return Err(ReadError::InconsistentRead);
             }
-            final_account = match self.vm.storage.basic_ref(address) {
+            final_account = match self.vm.db.basic_ref(address) {
                 Ok(Some(basic)) => Some(basic),
                 Ok(None) => (balance_addition > U256::ZERO).then_some(AccountInfo::default()),
                 Err(err) => return Err(ReadError::StorageError(err.to_string())),
@@ -428,7 +430,7 @@ impl<S: DatabaseRef, C: Chain> Database for VmDb<'_, S, C> {
                 if let Some(code) = self.vm.mv_memory.new_bytecodes.get(code_hash) {
                     code.clone()
                 } else {
-                    match self.vm.storage.code_by_hash_ref(*code_hash) {
+                    match self.vm.db.code_by_hash_ref(*code_hash) {
                         Ok(code) => code,
                         Err(err) => return Err(ReadError::StorageError(err.to_string())),
                     }
@@ -452,7 +454,7 @@ impl<S: DatabaseRef, C: Chain> Database for VmDb<'_, S, C> {
 
     fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error> {
         self.vm
-            .storage
+            .db
             .code_by_hash_ref(code_hash)
             .map_err(|err| ReadError::StorageError(err.to_string()))
     }
@@ -489,53 +491,47 @@ impl<S: DatabaseRef, C: Chain> Database for VmDb<'_, S, C> {
         // Fall back to storage
         Self::push_origin(read_origins, ReadOrigin::Storage)?;
         self.vm
-            .storage
+            .db
             .storage_ref(address, index)
             .map_err(|err| ReadError::StorageError(err.to_string()))
     }
 
     fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error> {
         self.vm
-            .storage
+            .db
             .block_hash_ref(number)
             .map_err(|err| ReadError::StorageError(err.to_string()))
     }
 }
 
-pub(crate) struct Vm<'a, S: DatabaseRef, C: Chain> {
-    storage: &'a S,
+pub(crate) struct Vm<'a, DB: DatabaseRef> {
+    db: &'a DB,
     mv_memory: &'a MvMemory,
-    chain: &'a C,
-    block_env: &'a BlockEnv,
+    evm_env: &'a EvmEnv,
     txs: &'a [TxEnv],
-    spec_id: SpecId,
     beneficiary_location_hash: MemoryLocationHash,
     reward_policy: RewardPolicy,
     #[cfg(feature = "compiler")]
     worker: Arc<ExtCompileWorker>,
 }
 
-impl<'a, S: DatabaseRef, C: Chain> Vm<'a, S, C> {
+impl<'a, DB: DatabaseRef> Vm<'a, DB> {
     pub(crate) fn new(
-        storage: &'a S,
+        db: &'a DB,
         mv_memory: &'a MvMemory,
-        chain: &'a C,
-        block_env: &'a BlockEnv,
+        evm_env: &'a EvmEnv,
         txs: &'a [TxEnv],
-        spec_id: SpecId,
         #[cfg(feature = "compiler")] worker: Arc<ExtCompileWorker>,
     ) -> Self {
         Self {
-            storage,
+            db,
             mv_memory,
-            chain,
-            block_env,
+            evm_env,
             txs,
-            spec_id,
             beneficiary_location_hash: hash_deterministic(MemoryLocation::Basic(
-                block_env.beneficiary,
+                evm_env.block_env.beneficiary,
             )),
-            reward_policy: chain.get_reward_policy(),
+            reward_policy: reward_policy(),
             #[cfg(feature = "compiler")]
             worker,
         }
@@ -570,11 +566,11 @@ impl<'a, S: DatabaseRef, C: Chain> Vm<'a, S, C> {
             .map(|to| hash_deterministic(MemoryLocation::Basic(*to)));
 
         // Execute
-        let mut db = VmDb::new(self, tx_version.tx_idx, tx, from_hash, to_hash)
+        let mut db = VmDB::new(self, tx_version.tx_idx, tx, from_hash, to_hash)
             .map_err(VmExecutionError::from)?;
 
         #[cfg(not(feature = "optimism"))]
-        let mut evm = build_evm(&mut db, self.spec_id, self.block_env.clone());
+        let mut evm = build_evm(&mut db, self.evm_env.clone());
         #[cfg(feature = "optimism")]
         let mut evm = build_op_evm(&mut db, Default::default());
 
@@ -652,7 +648,11 @@ impl<'a, S: DatabaseRef, C: Chain> Vm<'a, S, C> {
                             // and return a [None], i.e., [LoadedAsNotExisting]. Without
                             // this check it would write then read a [Some] default
                             // account, which may yield a wrong gas fee, etc.
-                            else if !self.chain.is_eip_161_enabled(self.spec_id)
+                            else if !self
+                                .evm_env
+                                .cfg_env
+                                .spec
+                                .is_enabled_in(SpecId::SPURIOUS_DRAGON)
                                 || !account.is_empty()
                             {
                                 write_set.push((
@@ -717,8 +717,7 @@ impl<'a, S: DatabaseRef, C: Chain> Vm<'a, S, C> {
                 Ok(VmExecutionResult {
                     execution_result: TxExecutionResult::from_revm(
                         tx_type,
-                        self.chain,
-                        self.spec_id,
+                        self.evm_env.cfg_env.spec,
                         result_and_state,
                     ),
                     flags,
@@ -751,23 +750,23 @@ impl<'a, S: DatabaseRef, C: Chain> Vm<'a, S, C> {
     }
 
     // Apply rewards (balance increments) to beneficiary accounts, etc.
-    fn apply_rewards<#[cfg(feature = "optimism")] DB: Database>(
+    fn apply_rewards<#[cfg(feature = "optimism")] CtxDB: Database>(
         &self,
         write_set: &mut WriteSet,
         tx: &TxEnv,
         gas_used: U256,
-        #[cfg(feature = "optimism")] op_ctx: &mut op_revm::OpContext<DB>,
+        #[cfg(feature = "optimism")] op_ctx: &mut op_revm::OpContext<CtxDB>,
     ) -> Result<(), VmExecutionError> {
         let mut gas_price = if let Some(priority_fee) = tx.gas_priority_fee {
             std::cmp::min(
                 tx.gas_price,
-                priority_fee.saturating_add(self.block_env.basefee as u128),
+                priority_fee.saturating_add(self.evm_env.block_env.basefee as u128),
             )
         } else {
             tx.gas_price
         };
-        if self.chain.is_eip_1559_enabled(self.spec_id) {
-            gas_price = gas_price.saturating_sub(self.block_env.basefee as u128);
+        if self.evm_env.cfg_env.spec.is_enabled_in(SpecId::LONDON) {
+            gas_price = gas_price.saturating_sub(self.evm_env.block_env.basefee as u128);
         }
         let gas_price = U256::from(gas_price);
         let rewards: SmallVec<[(MemoryLocationHash, U256); 1]> = match self.reward_policy {
@@ -806,7 +805,7 @@ impl<'a, S: DatabaseRef, C: Chain> Vm<'a, S, C> {
                         (l1_fee_recipient_location_hash, l1_cost),
                         (
                             base_fee_vault_location_hash,
-                            U256::from(self.block_env.basefee).saturating_mul(gas_used),
+                            U256::from(self.evm_env.block_env.basefee).saturating_mul(gas_used),
                         ),
                     ]
                 }
@@ -840,14 +839,12 @@ impl<'a, S: DatabaseRef, C: Chain> Vm<'a, S, C> {
 }
 
 #[inline]
-pub(crate) fn build_evm<DB: Database>(
-    db: DB,
-    spec_id: SpecId,
-    block_env: BlockEnv,
-) -> MainnetEvm<MainnetContext<DB>> {
-    let mut evm = MainnetContext::new(db, spec_id).build_mainnet();
-    evm.set_block(block_env);
-    evm
+pub(crate) fn build_evm<DB: Database>(db: DB, evm_env: EvmEnv) -> MainnetEvm<MainnetContext<DB>> {
+    MainnetContext::mainnet()
+        .with_db(db)
+        .with_cfg(evm_env.cfg_env)
+        .with_block(evm_env.block_env)
+        .build_mainnet()
 }
 
 #[cfg(feature = "optimism")]

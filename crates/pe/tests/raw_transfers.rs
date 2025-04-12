@@ -1,6 +1,6 @@
 //! Test raw transfers -- only send some ETH from one account to another without extra data.
 
-use metis_pe::{InMemoryStorage, chain::Ethereum};
+use metis_pe::InMemoryDB;
 use rand::random;
 use revm::context::{TransactTo, TxEnv};
 use revm::primitives::{Address, U256, alloy_primitives::U160};
@@ -11,9 +11,8 @@ pub mod common;
 fn raw_transfers_independent() {
     let block_size = 100_000; // number of transactions
     common::test_execute_revm(
-        &Ethereum::mainnet(),
         // Mock the beneficiary account (`Address:ZERO`) and the next `block_size` user accounts.
-        InMemoryStorage::new(
+        InMemoryDB::new(
             (0..=block_size).map(common::mock_account).collect(),
             Default::default(),
             Default::default(),
@@ -47,9 +46,8 @@ fn raw_transfers_same_sender_multiple_txs() {
     let mut same_sender_nonce: u64 = 0;
 
     common::test_execute_revm(
-        &Ethereum::mainnet(),
         // Mock the beneficiary account (`Address:ZERO`) and the next `block_size` user accounts.
-        InMemoryStorage::new(
+        InMemoryDB::new(
             (0..=block_size).map(common::mock_account).collect(),
             Default::default(),
             Default::default(),

@@ -18,7 +18,7 @@ use reth::{
     providers::BlockExecutionResult,
     revm::db::{State, states::bundle_state::BundleRetention},
 };
-use reth_chainspec::{ChainSpec, EthChainSpec};
+use reth_chainspec::ChainSpec;
 use reth_evm::block::InternalBlockExecutionError;
 use reth_evm::{
     OnStateHook,
@@ -140,7 +140,7 @@ where
     where
         F: OnStateHook + 'static,
     {
-        // only strategy.execute_transaction used the Hook
+        // TODO: state hook
         self.execute_one(block)
     }
 
@@ -161,24 +161,13 @@ where
         &mut self,
         block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
     ) -> Result<BlockExecutionResult<Receipt>, BlockExecutionError> {
-        let env = self.strategy_factory.evm_env(block.header());
-        let chain_spec = self.strategy_factory.chain_spec();
-        let spec_id = *env.spec_id();
-        let block_env = env.block_env;
-
-        let tx_envs = block
-            .transactions_recovered()
-            .map(|recover_tx| recover_tx.into_tx_env())
-            .collect::<Vec<TxEnv>>();
-
-        let chain_id = chain_spec.chain_id();
-        let chain = metis_pe::chain::Ethereum::custom(chain_id);
         let results = self.executor.execute_revm_parallel(
-            &chain,
             StateStorageAdapter::new(&mut self.db),
-            spec_id,
-            block_env,
-            tx_envs,
+            self.strategy_factory.evm_env(block.header()),
+            block
+                .transactions_recovered()
+                .map(|recover_tx| recover_tx.into_tx_env())
+                .collect::<Vec<TxEnv>>(),
             self.concurrency_level,
         );
 

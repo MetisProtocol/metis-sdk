@@ -8,23 +8,23 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
-pub enum StorageError {
+pub enum DBError {
     #[error("Storage error: {0}")]
     StorageNotFound(String),
 }
 
-impl DBErrorMarker for StorageError {}
+impl DBErrorMarker for DBError {}
 
 /// A memory DB that stores the account and bytecode data in memory.
-/// Just for testing.
+/// Just for testing, in the real chain, we used the reth database.
 #[derive(Debug, Clone, Default)]
-pub struct InMemoryStorage {
+pub struct InMemoryDB {
     accounts: AccountState,
     bytecodes: Arc<Bytecodes>,
     block_hashes: Arc<BlockHashes>,
 }
 
-impl InMemoryStorage {
+impl InMemoryDB {
     /// Construct a new [`InMemoryStorage`]
     pub const fn new(
         accounts: AccountState,
@@ -39,8 +39,8 @@ impl InMemoryStorage {
     }
 }
 
-impl DatabaseRef for InMemoryStorage {
-    type Error = StorageError;
+impl DatabaseRef for InMemoryDB {
+    type Error = DBError;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
         Ok(self.accounts.get(&address).map(|account| AccountInfo {
@@ -56,7 +56,7 @@ impl DatabaseRef for InMemoryStorage {
             Ok(Bytecode::default())
         } else {
             self.bytecodes.get(&code_hash).cloned().ok_or_else(|| {
-                StorageError::StorageNotFound(format!("code_hash_not_found {}", code_hash))
+                DBError::StorageNotFound(format!("code_hash_not_found {}", code_hash))
             })
         }
     }

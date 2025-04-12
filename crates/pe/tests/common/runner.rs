@@ -1,8 +1,8 @@
-use metis_pe::{EvmAccount, ParallelExecutor, chain::Chain};
+use alloy_evm::EvmEnv;
+use metis_pe::{EvmAccount, ParallelExecutor};
 use pretty_assertions::assert_eq;
 use revm::DatabaseRef;
-use revm::context::{BlockEnv, TxEnv};
-use revm::primitives::hardfork::SpecId;
+use revm::context::TxEnv;
 use revm::primitives::{Address, U256, alloy_primitives::U160};
 use std::{num::NonZeroUsize, thread};
 
@@ -22,30 +22,20 @@ pub fn mock_account(idx: usize) -> (Address, EvmAccount) {
 
 /// Execute an REVM block sequentially and parallelly with PEVM and assert that
 /// the execution results match.
-pub fn test_execute_revm<C, S>(chain: &C, storage: S, txs: Vec<TxEnv>)
+pub fn test_execute_revm<DB>(db: DB, txs: Vec<TxEnv>)
 where
-    C: Chain + PartialEq + Send + Sync,
-    S: DatabaseRef + Send + Sync,
+    DB: DatabaseRef + Send + Sync,
 {
     let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
     let mut pe = ParallelExecutor::default();
     assert_eq!(
         metis_pe::execute_revm_sequential(
-            chain,
-            &storage,
-            SpecId::PRAGUE,
-            BlockEnv::default(),
+            &db,
+            EvmEnv::default(),
             txs.clone(),
             #[cfg(feature = "compiler")]
             pe.worker.clone(),
         ),
-        pe.execute_revm_parallel(
-            chain,
-            &storage,
-            SpecId::PRAGUE,
-            BlockEnv::default(),
-            txs,
-            concurrency_level,
-        ),
+        pe.execute_revm_parallel(&db, EvmEnv::default(), txs, concurrency_level,),
     );
 }
