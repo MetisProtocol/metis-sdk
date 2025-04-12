@@ -43,7 +43,9 @@ where
     println!("submitted transaction: {hash}");
     println!("expected transaction: {expected}");
 
+    notifications.next().await;
     let head = notifications.next().await.unwrap();
+    println!("got notification head: {:?}", head);
     //let tx = &head.tip().body().transactions().next().unwrap();
     let tx = &head.tip().body().transactions().iter().next().unwrap();
     println!("notification transaction {:?}", tx.tx_hash());

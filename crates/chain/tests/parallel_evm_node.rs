@@ -12,27 +12,37 @@ pub mod common;
 
 #[tokio::test]
 async fn test_custom_dev_node() -> Result<(), Box<dyn Error>> {
-    let tasks = TaskManager::current();
+    let result = async {
+        let tasks = TaskManager::current();
 
-    // create node config
-    let node_config = common::get_test_node_config();
+        // create node config
+        let node_config = common::get_test_node_config();
+        let NodeHandle {
+            node,
+            node_exit_future: _,
+        } = NodeBuilder::new(node_config)
+            .testing_node(tasks.executor())
+            .with_types::<EthereumNode>()
+            .with_components(
+                EthereumNode::components().executor(ParallelExecutorBuilder::default()),
+            )
+            .with_add_ons(EthereumAddOns::default())
+            .launch()
+            .await?;
 
-    let parallel_executor = ParallelExecutorBuilder::default();
-    let default_node = EthereumNode::default();
-    let components_builder = default_node
-        .components_builder()
-        .executor(parallel_executor);
+        common::send_compare_transaction(node).await
+    }
+    .await;
 
-    let NodeHandle {
-        node,
-        node_exit_future: _,
-    } = NodeBuilder::new(node_config)
-        .testing_node(tasks.executor())
-        .with_types::<EthereumNode>()
-        .with_components(components_builder)
-        .with_add_ons(EthereumAddOns::default())
-        .launch()
-        .await?;
-
-    common::send_compare_transaction(node).await
+    match result {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            eprintln!("💣 Error Details:");
+            eprintln!("{:#?}", e);
+            if let Some(io_error) = e.downcast_ref::<std::io::Error>() {
+                eprintln!("🗂️ IO Error: {}", io_error);
+            }
+            panic!("❌ Test failed due to above error");
+        }
+    }
 }

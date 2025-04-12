@@ -157,7 +157,7 @@ impl<DB> ParallelExecutor<DB>
 where
     DB: Database,
 {
-    fn execute_block(
+    pub fn execute_block(
         &mut self,
         block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
     ) -> Result<BlockExecutionResult<Receipt>, BlockExecutionError> {
