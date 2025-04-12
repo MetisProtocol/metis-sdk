@@ -1,6 +1,7 @@
 use alloy_primitives::{B256, b256, hex};
 use futures_util::StreamExt;
 use metis_chain::provider::ParallelExecutorBuilder;
+use reth::builder::Node;
 use reth::{
     builder::{NodeBuilder, NodeHandle},
     rpc::api::EngineEthApiClient,
@@ -28,14 +29,19 @@ async fn test_custom_dev_node() -> Result<(), Box<dyn Error>> {
         .with_rpc(RpcServerArgs::default().with_http())
         .with_chain(common::custom_chain());
 
+    let parallel_executor = ParallelExecutorBuilder::default();
+    let default_node = EthereumNode::default();
+    let components_builder = default_node
+        .components_builder()
+        .executor(parallel_executor);
+
     let NodeHandle {
         node,
         node_exit_future: _,
     } = NodeBuilder::new(node_config)
         .testing_node(tasks.executor())
-        //.node(EthereumNode::default())
         .with_types::<EthereumNode>()
-        .with_components(EthereumNode::components().executor(ParallelExecutorBuilder::default()))
+        .with_components(components_builder)
         .with_add_ons(EthereumAddOns::default())
         .launch()
         .await?;
