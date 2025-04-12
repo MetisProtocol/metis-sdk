@@ -4,10 +4,7 @@ use reth::{
     builder::{NodeBuilder, NodeHandle},
     tasks::TaskManager,
 };
-use reth_ethereum::node::{
-    EthereumNode,
-    core::{args::RpcServerArgs, node_config::NodeConfig},
-};
+use reth_ethereum::node::EthereumNode;
 use reth_node_ethereum::node::EthereumAddOns;
 use std::error::Error;
 
@@ -18,10 +15,7 @@ async fn test_custom_dev_node() -> Result<(), Box<dyn Error>> {
     let tasks = TaskManager::current();
 
     // create node config
-    let node_config = NodeConfig::test()
-        .dev()
-        .with_rpc(RpcServerArgs::default().with_http())
-        .with_chain(common::custom_chain());
+    let node_config = common::get_test_node_config();
 
     let parallel_executor = ParallelExecutorBuilder::default();
     let default_node = EthereumNode::default();

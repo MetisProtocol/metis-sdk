@@ -2,14 +2,22 @@ use alloy_genesis::Genesis;
 use alloy_primitives::{B256, b256, hex};
 use futures_util::StreamExt;
 use reth::api::{EngineTypes, NodeTypes};
+use reth::args::RpcServerArgs;
 use reth::builder::rpc::RethRpcAddOns;
-use reth::builder::{BlockBody, FullNode, FullNodeComponents};
+use reth::builder::{BlockBody, FullNode, FullNodeComponents, NodeConfig};
 use reth::rpc::api::EngineEthApiClient;
 use reth_ethereum::chainspec::ChainSpec;
 use reth_ethereum::primitives::SignedTransaction;
 use reth_ethereum::provider::CanonStateSubscriptions;
 use std::error::Error;
 use std::sync::Arc;
+
+pub fn get_test_node_config() -> NodeConfig<ChainSpec> {
+    NodeConfig::test()
+        .dev()
+        .with_rpc(RpcServerArgs::default().with_http())
+        .with_chain(custom_chain())
+}
 
 pub async fn send_compare_transaction<Node, AddOns, Engine>(
     node: FullNode<Node, AddOns>,
