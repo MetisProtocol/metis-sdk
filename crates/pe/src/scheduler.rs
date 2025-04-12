@@ -220,6 +220,7 @@ impl<T: TaskProvider> Scheduler<T> {
     fn try_execute(&self, tx_idx: TxIdx) -> Option<TxVersion> {
         let tx = self.transactions_status.get(tx_idx).unwrap();
         let old_status = tx.load(Ordering::Relaxed);
+
         if old_status.status == IncarnationStatus::ReadyToExecute {
             let incarnation = old_status.incarnation;
             if tx
@@ -344,7 +345,6 @@ impl<T: TaskProvider> Scheduler<T> {
         affected_transactions: Vec<TxIdx>,
     ) -> Option<Task> {
         self.provider.finish_task(tx_version.tx_idx);
-
         // affected transactions must be re-executed
         for tx_idx in affected_transactions {
             self.add_execution_task(tx_idx);
@@ -352,6 +352,7 @@ impl<T: TaskProvider> Scheduler<T> {
 
         let tx = self.transactions_status.get(tx_version.tx_idx).unwrap();
         let mut old_status = tx.load(Ordering::Relaxed);
+
         debug_assert_eq!(old_status.status, IncarnationStatus::Executing);
         debug_assert_eq!(old_status.incarnation, tx_version.tx_incarnation);
 
@@ -404,7 +405,7 @@ impl<T: TaskProvider> Scheduler<T> {
                 {
                     return Some(Task::Execution(TxVersion {
                         tx_idx,
-                        tx_incarnation: incarnation,
+                        tx_incarnation: incarnation + 1,
                     }));
                 }
                 None

@@ -29,6 +29,7 @@ fn raw_transfers_independent() {
                     value: U256::from(1),
                     gas_limit: common::RAW_TRANSFER_GAS_LIMIT,
                     gas_price: 1_u128,
+                    nonce: 1,
                     ..TxEnv::default()
                 }
             })
