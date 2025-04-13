@@ -211,8 +211,7 @@ impl MvMemory {
                         else {
                             return false;
                         }
-                    }
-                    else if iter.next_back().is_some() {
+                    } else if iter.next_back().is_some() {
                         return false;
                     }
                 }

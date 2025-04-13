@@ -1,6 +1,8 @@
 //! Tests for the beneficiary account, especially for the lazy update of its balance to avoid
 //! "implicit" dependency among consecutive transactions.
 
+use std::collections::HashMap;
+
 use metis_pe::InMemoryDB;
 use rand::random;
 use revm::context::{TransactTo, TxEnv};
@@ -11,6 +13,7 @@ pub mod common;
 const BLOCK_SIZE: usize = 100_000;
 
 fn test_beneficiary(get_address: fn(usize) -> Address) {
+    let mut nonces = HashMap::new();
     common::test_execute_revm(
         // Mock the beneficiary account (`Address:ZERO`) and the next `BLOCK_SIZE` user accounts.
         InMemoryDB::new(
@@ -24,12 +27,14 @@ fn test_beneficiary(get_address: fn(usize) -> Address) {
             .map(|i| {
                 // Randomly insert a beneficiary spending every ~256 txs
                 let address = get_address(i);
+                let nonce = nonces.entry(address).or_insert(0);
+                *nonce += 1;
                 TxEnv {
                     caller: address,
                     kind: TransactTo::Call(address),
                     value: U256::from(1),
                     gas_price: 1_u128,
-                    nonce: 1,
+                    nonce: *nonce,
                     ..TxEnv::default()
                 }
             })

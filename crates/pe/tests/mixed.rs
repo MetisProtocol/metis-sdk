@@ -4,6 +4,7 @@ use metis_pe::{AccountState, Bytecodes, EvmAccount, InMemoryDB};
 use rand::random;
 use revm::context::{TransactTo, TxEnv};
 use revm::primitives::{Address, U256};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 pub mod common;
@@ -20,6 +21,7 @@ fn mixed_block() {
     let mut final_txs = Vec::new();
     // 1 to 10
     let small_random = || (random::<u8>() % 10 + 1) as usize;
+    let mut nonce_nums = HashMap::new();
     while block_size < target_block_size {
         match small_random() % 3 {
             0 => {
@@ -27,6 +29,8 @@ fn mixed_block() {
                 let no_txs = random::<u16>();
                 for _ in 0..no_txs {
                     let (address, account) = common::mock_account(small_random());
+                    let nonce = nonce_nums.entry(address).or_insert(0);
+                    *nonce += 1;
                     final_state.insert(address, account);
                     final_txs.push(TxEnv {
                         caller: address,
@@ -34,6 +38,7 @@ fn mixed_block() {
                         value: U256::from(1),
                         gas_limit: common::RAW_TRANSFER_GAS_LIMIT,
                         gas_price: 1_u128,
+                        nonce: *nonce,
                         ..TxEnv::default()
                     });
                 }
