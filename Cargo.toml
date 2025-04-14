@@ -67,8 +67,11 @@ reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" 
 reth-tracing = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 reth-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8", features = ["full"] }
 reth-cli-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
+reth-chain-state = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 reth-node-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
+reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
+reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
 
 # Allocators
 tikv-jemallocator = "0.6.0"
