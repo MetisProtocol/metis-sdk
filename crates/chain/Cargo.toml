@@ -54,8 +54,8 @@ tokio-stream = "0.1.17"
 
 [build-dependencies]
 # Reth test dependencies
-reth-exex-test-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
-reth-testing-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
+reth-exex-test-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
+reth-testing-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
 # Revmc dependencies
 revmc-build = { git = "https://github.com/paradigmxyz/revmc", optional = true }
 

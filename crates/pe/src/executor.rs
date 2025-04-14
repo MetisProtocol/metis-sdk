@@ -424,7 +424,7 @@ pub fn execute_sequential<DB: DatabaseRef>(
     let mut results = Vec::with_capacity(txs.len());
     let mut cumulative_gas_used: u64 = 0;
     for tx in txs {
-        let tx_type = alloy_consensus::TxType::try_from(tx.tx_type)
+        let tx_type = reth_primitives::TxType::try_from(tx.tx_type)
             .map_err(|_| ParallelExecutorError::UnreachableError)?;
         #[cfg(feature = "compiler")]
         let result_and_state = {

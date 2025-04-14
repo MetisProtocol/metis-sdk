@@ -3,7 +3,6 @@ use crate::{
     ReadOrigins, ReadSet, TxIdx, TxVersion, WriteSet,
     mv_memory::{MvMemory, RewardPolicy, reward_policy},
 };
-use alloy_consensus::TxType;
 use alloy_evm::EvmEnv;
 use alloy_primitives::TxKind;
 use hashbrown::HashMap;
@@ -16,7 +15,7 @@ use metis_vm::ExtCompileWorker;
 use op_revm::OpTransaction;
 #[cfg(feature = "optimism")]
 use op_revm::{DefaultOp, OpBuilder, OpContext, OpEvm, OpSpecId};
-use reth_primitives::Receipt;
+use reth_primitives::{Receipt, TxType};
 #[cfg(feature = "optimism")]
 use revm::context::Cfg;
 #[cfg(feature = "compiler")]
@@ -687,7 +686,7 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
                 };
 
                 let affected_txs = self.mv_memory.record(tx_version, db.read_set, write_set);
-                let tx_type = alloy_consensus::TxType::try_from(tx.tx_type).map_err(|err| {
+                let tx_type = reth_primitives::TxType::try_from(tx.tx_type).map_err(|err| {
                     VmExecutionError::ExecutionError(EVMError::Custom(err.to_string()))
                 })?;
                 Ok(VmExecutionResult {

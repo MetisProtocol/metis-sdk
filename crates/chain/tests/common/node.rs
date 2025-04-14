@@ -42,7 +42,7 @@ where
     println!("submitted transaction: {hash}");
 
     let head = FuturesStreamExt::next(&mut notifications).await.unwrap();
-    let tx = head.tip().body().transactions().get(0).unwrap();
+    let tx = head.tip().body().transactions().first().unwrap();
 
     assert_eq!(*tx.tx_hash(), hash);
     println!("mined transaction: {hash}");

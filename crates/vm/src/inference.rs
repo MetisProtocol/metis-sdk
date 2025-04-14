@@ -52,7 +52,10 @@ fn inference_precompiles() -> &'static Precompiles {
                 if gas_used > gas_limit {
                     Err(PrecompileError::OutOfGas)
                 } else {
-                    Ok(PrecompileOutput::new(gas_used, output.into()))
+                    Ok(PrecompileOutput::new(
+                        gas_used,
+                        output.as_bytes().to_vec().into(),
+                    ))
                 }
             } as PrecompileFn,
         )

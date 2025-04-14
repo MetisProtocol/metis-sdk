@@ -1,6 +1,6 @@
 use std::hash::{BuildHasher, BuildHasherDefault, Hash, Hasher};
 
-pub use alloy_primitives::{PrimitiveSignature, SignatureError, Signed, Uint};
+pub use alloy_primitives::{Signature, SignatureError, Signed, Uint};
 pub use hashbrown::HashMap;
 pub use revm::bytecode::{
     Bytecode,

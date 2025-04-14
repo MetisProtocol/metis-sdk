@@ -33,46 +33,45 @@ metis-chain = { path = "crates/chain" }
 anyhow = "1.0.97"
 
 # alloy
-alloy-chains = "0.1.69"
-alloy-consensus = "0.13.0"
-alloy-primitives = { version = "0.8.25", features = [
+alloy-consensus = "0.14.0"
+alloy-primitives = { version = "1.0.0", features = [
   "asm-keccak",
   "map-fxhash",
 ] }
-alloy-sol-types = { version = "0.8.25", default-features = false, features = [
+alloy-sol-types = { version = "1.0.0", default-features = false, features = [
     "std",
 ] }
-alloy-eips = { version = "0.13.0", default-features = false }
-alloy-provider = "0.13.0"
+alloy-eips = { version = "0.14.0", default-features = false }
+alloy-provider = "0.14.0"
 alloy-rlp = "0.3.10"
-alloy-rpc-types-eth = "0.13.0"
-alloy-transport = "0.13.0"
-alloy-transport-http = "0.13.0"
-alloy-hardforks = "0.1.4"
-alloy-trie = { version = "0.7.9", default-features = false }
-alloy-signer = { version = "0.13.0", default-features = false }
-alloy-signer-local = { version = "0.13.0", default-features = false }
-alloy-evm = "0.3.2"
-alloy-genesis = "0.13.0"
+alloy-rpc-types-eth = "0.14.0"
+alloy-transport = "0.14.0"
+alloy-transport-http = "0.14.0"
+alloy-hardforks = "0.2.0"
+alloy-trie = { version = "0.8.1", default-features = false }
+alloy-signer = { version = "0.14.0", default-features = false }
+alloy-signer-local = { version = "0.14.0", default-features = false }
+alloy-evm = "0.4.0"
+alloy-genesis = "0.14.0"
 
-revm = { version = "21.0.0", features = ["std", "serde-json"] }
+revm = { version = "22.0.0", features = ["std", "serde-json"] }
 
 # Reth dependencies
-reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8", default-features = false }
-reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
-reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
-reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
-reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
-reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
-reth-tracing = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
-reth-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8", features = ["full"] }
-reth-cli-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
-reth-chain-state = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
-reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
-reth-node-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
-reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
-reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
-reth-node-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.8" }
+reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9", default-features = false }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
+reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
+reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
+reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
+reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
+reth-tracing = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
+reth-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9", features = ["full"] }
+reth-cli-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
+reth-chain-state = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
+reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
+reth-node-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
+reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
+reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
+reth-node-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
 
 # Allocators
 tikv-jemallocator = "0.6.0"
