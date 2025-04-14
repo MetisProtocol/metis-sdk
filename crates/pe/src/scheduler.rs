@@ -1,4 +1,4 @@
-use crossbeam::queue::SegQueue;
+use crossbeam::queue::ArrayQueue;
 use std::sync::{
     Mutex,
     atomic::{AtomicUsize, Ordering},
@@ -15,7 +15,7 @@ pub struct TransactionsGraph {
     /// The number of transactions that have been executed.
     num_done: AtomicUsize,
     /// The queue of transactions to execute.
-    transactions_queue: SegQueue<TxIdx>,
+    transactions_queue: ArrayQueue<TxIdx>,
     /// The number of transactions each transaction depends on.
     transactions_degree: Vec<AtomicUsize>,
     /// The list of dependent transactions to resume when the
@@ -29,7 +29,7 @@ impl TransactionsGraph {
         let graph = Self {
             block_size,
             num_done: AtomicUsize::new(0),
-            transactions_queue: SegQueue::new(),
+            transactions_queue: ArrayQueue::new(block_size),
             transactions_degree: (0..block_size).map(|_| AtomicUsize::new(0)).collect(),
             transactions_dependents: (0..block_size).map(|_| Mutex::default()).collect(),
         };
@@ -42,7 +42,7 @@ impl TransactionsGraph {
     pub fn init(&self) {
         for i in 0..self.block_size {
             if self.transactions_degree[i].load(Ordering::Relaxed) == 0 {
-                self.transactions_queue.push(i);
+                self.transactions_queue.push(i).unwrap();
             }
         }
     }
@@ -58,7 +58,7 @@ impl TransactionsGraph {
         for txid in blocking_dependents.iter() {
             let degree = self.transactions_degree[*txid].fetch_sub(1, Ordering::Relaxed);
             if degree == 0 {
-                self.transactions_queue.push(*txid);
+                self.transactions_queue.push(*txid).unwrap();
             }
         }
 
@@ -183,7 +183,7 @@ pub(crate) struct Scheduler<T: TaskProvider> {
     /// The provider of transactions.
     provider: T,
     /// the queue of execution tasks
-    execution_queue: SegQueue<TxIdx>,
+    execution_queue: ArrayQueue<TxIdx>,
     /// The most up-to-date incarnation number (initially 0) and
     /// the status of this incarnation.
     // TODO: Consider packing [TxStatus]s into atomics instead of
@@ -203,7 +203,7 @@ impl<T: TaskProvider> Scheduler<T> {
         let block_size = provider.num_tasks();
         Self {
             provider,
-            execution_queue: SegQueue::new(),
+            execution_queue: ArrayQueue::new(block_size),
             transactions_status: (0..block_size)
                 .map(|_| {
                     AtomicWrapper::new(TxStatus {
@@ -270,6 +270,7 @@ impl<T: TaskProvider> Scheduler<T> {
     pub(crate) fn add_dependency(&self, tx_idx: TxIdx, blocking_tx_idx: TxIdx) -> bool {
         // This is an important lock to prevent a race condition where the blocking
         // transaction completes re-execution before this dependency can be added.
+        let mut blocking_dependents = index_mutex!(self.transactions_dependents, blocking_tx_idx);
         let tx = self.transactions_status.get(blocking_tx_idx).unwrap();
         let old_status = tx.load(Ordering::Relaxed);
         if matches!(
@@ -283,8 +284,6 @@ impl<T: TaskProvider> Scheduler<T> {
         let mut tx_status = tx.load(Ordering::Relaxed);
         tx_status.status = IncarnationStatus::Blocking;
         tx.store(tx_status, Ordering::Relaxed);
-
-        let mut blocking_dependents = index_mutex!(self.transactions_dependents, blocking_tx_idx);
         blocking_dependents.push(tx_idx);
 
         true
@@ -307,7 +306,7 @@ impl<T: TaskProvider> Scheduler<T> {
                 )
                 .is_ok()
         {
-            self.execution_queue.push(tx_idx);
+            self.execution_queue.push(tx_idx).unwrap();
         }
     }
 
@@ -331,7 +330,7 @@ impl<T: TaskProvider> Scheduler<T> {
             )
             .is_ok()
         {
-            self.execution_queue.push(tx_idx);
+            self.execution_queue.push(tx_idx).unwrap();
             if is_validated {
                 self.num_validated.fetch_sub(1, Ordering::Relaxed);
             }
@@ -346,14 +345,6 @@ impl<T: TaskProvider> Scheduler<T> {
         affected_transactions: Vec<TxIdx>,
     ) -> Option<Task> {
         self.provider.finish_task(tx_version.tx_idx);
-        {
-            // Resume dependent transactions
-            let mut dependents = index_mutex!(self.transactions_dependents, tx_version.tx_idx);
-            for tx_idx in dependents.drain(..) {
-                self.add_blocking_task(tx_idx);
-            }
-        }
-
         // affected transactions must be re-executed
         for tx_idx in affected_transactions {
             self.add_execution_task(tx_idx);
@@ -361,20 +352,29 @@ impl<T: TaskProvider> Scheduler<T> {
 
         let tx = self.transactions_status.get(tx_version.tx_idx).unwrap();
         let mut old_status = tx.load(Ordering::Relaxed);
+
         debug_assert_eq!(old_status.status, IncarnationStatus::Executing);
         debug_assert_eq!(old_status.incarnation, tx_version.tx_incarnation);
 
-        if flags.contains(FinishExecFlags::NeedValidation) {
+        let ret = if flags.contains(FinishExecFlags::NeedValidation) {
             old_status.status = IncarnationStatus::Executed;
             tx.store(old_status, Ordering::Relaxed);
-            return Some(Task::Validation(tx_version.tx_idx));
+            Some(Task::Validation(tx_version.tx_idx))
         } else {
             old_status.status = IncarnationStatus::Validated;
             tx.store(old_status, Ordering::Relaxed);
             self.num_validated.fetch_add(1, Ordering::Relaxed);
+            None
+        };
+
+        // Resume dependent transactions
+        let mut dependents = index_mutex!(self.transactions_dependents, tx_version.tx_idx);
+
+        for tx_idx in dependents.drain(..) {
+            self.add_blocking_task(tx_idx);
         }
 
-        None
+        ret
     }
 
     #[inline]
@@ -406,7 +406,7 @@ impl<T: TaskProvider> Scheduler<T> {
                 {
                     return Some(Task::Execution(TxVersion {
                         tx_idx,
-                        tx_incarnation: incarnation,
+                        tx_incarnation: incarnation + 1,
                     }));
                 }
                 None
