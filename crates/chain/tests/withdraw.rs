@@ -1,6 +1,7 @@
 use alloy_consensus::{TxLegacy, constants::ETH_TO_WEI};
-use alloy_eips::eip4788::{BEACON_ROOTS_ADDRESS, BEACON_ROOTS_CODE};
-use alloy_eips::eip7002::WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS;
+use alloy_eips::eip7002::{
+    WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS, WITHDRAWAL_REQUEST_PREDEPLOY_CODE,
+};
 use alloy_evm::block::BlockExecutionResult;
 use alloy_primitives::b256;
 use alloy_primitives::{Bytes, TxKind};
@@ -37,13 +38,16 @@ async fn test_withdraw() -> Result<(), Box<dyn Error>> {
 
     // crate database
     let mut db = CacheDB::new(EmptyDB::default());
-    let beacon_root_contract_account = AccountInfo {
+    let withdrawal_requests_contract_account = AccountInfo {
         balance: U256::ZERO,
-        code_hash: keccak256(BEACON_ROOTS_CODE.clone()),
+        code_hash: keccak256(WITHDRAWAL_REQUEST_PREDEPLOY_CODE.clone()),
         nonce: 1,
-        code: Some(Bytecode::new_raw(BEACON_ROOTS_CODE.clone())),
+        code: Some(Bytecode::new_raw(WITHDRAWAL_REQUEST_PREDEPLOY_CODE.clone())),
     };
-    db.insert_account_info(BEACON_ROOTS_ADDRESS, beacon_root_contract_account);
+    db.insert_account_info(
+        WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS,
+        withdrawal_requests_contract_account,
+    );
 
     // generate user address
     let secp = Secp256k1::new();
