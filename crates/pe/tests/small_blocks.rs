@@ -7,5 +7,5 @@ pub mod common;
 
 #[test]
 fn empty_revm_block() {
-    common::test_execute_revm(InMemoryDB::default(), Vec::new());
+    common::test_execute(InMemoryDB::default(), Vec::new());
 }

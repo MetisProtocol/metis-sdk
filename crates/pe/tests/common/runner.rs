@@ -25,20 +25,20 @@ pub fn mock_account(idx: usize) -> (Address, Account) {
 
 /// Execute an REVM block sequentially and parallelly with PEVM and assert that
 /// the execution results match.
-pub fn test_execute_revm<DB>(db: DB, txs: Vec<TxEnv>)
+pub fn test_execute<DB>(db: DB, txs: Vec<TxEnv>)
 where
     DB: DatabaseRef + Send + Sync,
 {
     let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
     let mut pe = ParallelExecutor::default();
     assert_eq!(
-        metis_pe::execute_revm_sequential(
+        metis_pe::execute_sequential(
             &db,
             EvmEnv::default(),
             txs.clone(),
             #[cfg(feature = "compiler")]
             pe.worker.clone(),
         ),
-        pe.execute_revm_parallel(&db, EvmEnv::default(), txs, concurrency_level,),
+        pe.execute(&db, EvmEnv::default(), txs, concurrency_level,),
     );
 }

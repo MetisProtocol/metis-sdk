@@ -135,7 +135,7 @@ impl ParallelExecutor {
     /// Execute an block.
     /// Ideally everyone would go through the [Alloy] interface. This one is currently
     /// useful for testing, and for users that are heavily tied to Revm like Reth.
-    pub fn execute_revm_parallel<DB>(
+    pub fn execute<DB>(
         &mut self,
         db: DB,
         evm_env: EvmEnv,
@@ -211,7 +211,7 @@ impl ParallelExecutor {
             match abort_reason {
                 AbortReason::FallbackToSequential => {
                     self.dropper.drop((mv_memory, scheduler, Vec::new()));
-                    return execute_revm_sequential(
+                    return execute_sequential(
                         db,
                         evm_env,
                         txs,
@@ -417,7 +417,7 @@ fn try_validate<T: TaskProvider>(
 
 /// Execute transactions sequentially.
 /// Useful for falling back for (small) blocks with many dependencies.
-pub fn execute_revm_sequential<DB: DatabaseRef>(
+pub fn execute_sequential<DB: DatabaseRef>(
     db: DB,
     evm_env: EvmEnv,
     txs: Vec<TxEnv>,

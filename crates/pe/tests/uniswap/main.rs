@@ -34,7 +34,7 @@ fn uniswap_clusters() {
         final_bytecodes.extend(bytecodes);
         final_txs.extend(txs);
     }
-    common::test_execute_revm(
+    common::test_execute(
         InMemoryDB::new(final_state, Arc::new(final_bytecodes), Default::default()),
         final_txs,
     )

@@ -8,7 +8,7 @@ pub mod common;
 #[path = "./mod.rs"]
 pub mod erc20;
 
-use common::test_execute_revm;
+use common::test_execute;
 use erc20::generate_cluster;
 use metis_pe::{Account, AccountState, Bytecodes, InMemoryDB};
 use revm::context::TxEnv;
@@ -20,7 +20,7 @@ fn erc20_independent() {
     const N: usize = 37123;
     let (mut state, bytecodes, txs) = generate_cluster(N, 1, 1);
     state.insert(Address::ZERO, Account::default()); // Beneficiary
-    test_execute_revm(
+    test_execute(
         InMemoryDB::new(state, Arc::new(bytecodes), Default::default()),
         txs,
     );
@@ -47,7 +47,7 @@ fn erc20_clusters() {
         final_bytecodes.extend(bytecodes);
         final_txs.extend(txs);
     }
-    common::test_execute_revm(
+    common::test_execute(
         InMemoryDB::new(final_state, Arc::new(final_bytecodes), Default::default()),
         final_txs,
     )

@@ -62,7 +62,7 @@ fn mixed_block() {
             }
         }
     }
-    common::test_execute_revm(
+    common::test_execute(
         InMemoryDB::new(final_state, Arc::new(final_bytecodes), Default::default()),
         // TODO: Shuffle transactions to scatter dependencies around the block.
         // Note that we'll need to guarantee that the nonces are increasing.

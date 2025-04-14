@@ -33,7 +33,7 @@ pub use mv_memory::MvMemory;
 pub mod scheduler;
 pub mod types;
 pub use executor::{
-    ParallelExecutor, ParallelExecutorError, ParallelExecutorResult, execute_revm_sequential,
+    ParallelExecutor, ParallelExecutorError, ParallelExecutorResult, execute_sequential,
 };
 pub use scheduler::{DAGProvider, NormalProvider};
 pub use types::*;

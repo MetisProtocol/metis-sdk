@@ -1,7 +1,7 @@
 /// runner module
 pub mod runner;
 /// runner module imports
-pub use runner::{mock_account, test_execute_revm};
+pub use runner::{mock_account, test_execute};
 /// storage module
 pub mod storage;
 /// The gas limit for a basic transfer transaction.
