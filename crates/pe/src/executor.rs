@@ -1,5 +1,5 @@
 use crate::{
-    EvmAccount, MemoryEntry, MemoryLocation, MemoryValue, Task, TxIdx, TxVersion,
+    MemoryEntry, MemoryLocation, MemoryValue, Task, TxIdx, TxVersion,
     mv_memory::{MvMemory, build_mv_memory},
     scheduler::{NormalProvider, Scheduler, TaskProvider},
     vm::{ExecutionError, TxExecutionResult, Vm, VmExecutionError, VmExecutionResult, build_evm},
@@ -15,7 +15,7 @@ use std::{
 
 use alloy_evm::EvmEnv;
 use alloy_primitives::{TxNonce, U256};
-use metis_primitives::{KECCAK_EMPTY, Transaction, hash_deterministic};
+use metis_primitives::{Account, AccountInfo, KECCAK_EMPTY, Transaction, hash_deterministic};
 #[cfg(feature = "compiler")]
 use metis_vm::ExtCompileWorker;
 #[cfg(feature = "compiler")]
@@ -331,17 +331,19 @@ impl ParallelExecutor {
                         // Explicit write: only overwrite the account info in case there are storage changes
                         // Code cannot change midblock here as we're falling back to sequential execution
                         // on reading a self-destructed contract.
-                        account.balance = balance;
-                        account.nonce = nonce;
+                        account.info.balance = balance;
+                        account.info.nonce = nonce;
                     } else {
                         // Implicit write: e.g. gas payments to the beneficiary account,
                         // which doesn't have explicit writes in [tx_result.state]
-                        *account = Some(EvmAccount {
-                            balance,
-                            nonce,
-                            code_hash,
-                            code: Some(code.clone()),
-                            storage: Default::default(),
+                        *account = Some(Account {
+                            info: AccountInfo {
+                                balance,
+                                nonce,
+                                code_hash,
+                                code: Some(code.clone()),
+                            },
+                            ..Default::default()
                         });
                     }
                 }

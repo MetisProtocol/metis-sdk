@@ -39,6 +39,6 @@ pub use scheduler::{DAGProvider, NormalProvider};
 pub use types::*;
 pub mod db;
 pub use db::{DBError, InMemoryDB};
-pub use metis_primitives::{AccountState, BlockHashes, Bytecodes, EvmAccount};
+pub use metis_primitives::{Account, AccountInfo, AccountState, BlockHashes, Bytecodes};
 pub mod vm;
 pub use vm::{ExecutionError, TxExecutionResult};

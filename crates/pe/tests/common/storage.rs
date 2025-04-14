@@ -1,13 +1,12 @@
-use hashbrown::HashMap;
-use metis_primitives::FxBuildHasher;
+use metis_primitives::StorageSlot;
 use revm::primitives::{
-    Address, B256, I256, U256, alloy_primitives::U160, keccak256, ruint::UintTryFrom,
+    Address, B256, HashMap, I256, U256, alloy_primitives::U160, keccak256, ruint::UintTryFrom,
 };
 
 /// A builder for constructing storage mappings, using `U256` keys and values.
 #[derive(Debug, Default)]
 pub struct StorageBuilder {
-    dict: HashMap<U256, U256, FxBuildHasher>,
+    dict: HashMap<U256, U256>,
 }
 
 impl StorageBuilder {
@@ -51,8 +50,12 @@ impl StorageBuilder {
     }
 
     /// Returns the constructed `HashMap` from the storage builder.
-    pub fn build(self) -> HashMap<U256, U256, FxBuildHasher> {
+    #[inline]
+    pub fn build(self) -> HashMap<U256, StorageSlot> {
         self.dict
+            .iter()
+            .map(|(k, v)| (*k, StorageSlot::new(*v)))
+            .collect()
     }
 }
 

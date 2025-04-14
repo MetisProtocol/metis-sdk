@@ -5,7 +5,7 @@ pub mod contract;
 
 use crate::erc20::contract::ERC20Token;
 use contract::{SingleSwap, SwapRouter, UniswapV3Factory, UniswapV3Pool, WETH9};
-use metis_pe::{AccountState, Bytecodes, EvmAccount};
+use metis_pe::{Account, AccountInfo, AccountState, Bytecodes};
 use revm::context::{TransactTo, TxEnv};
 use revm::primitives::{Address, B256, Bytes, U256, fixed_bytes, uint};
 
@@ -121,9 +121,12 @@ pub fn generate_cluster(
     for person in &people_addresses {
         state.insert(
             *person,
-            EvmAccount {
-                balance: uint!(4_567_000_000_000_000_000_000_U256),
-                ..EvmAccount::default()
+            Account {
+                info: AccountInfo {
+                    balance: uint!(4_567_000_000_000_000_000_000_U256),
+                    ..Default::default()
+                },
+                ..Default::default()
             },
         );
     }
@@ -176,9 +179,9 @@ pub fn generate_cluster(
 
     let mut bytecodes = Bytecodes::default();
     for account in state.values_mut() {
-        let code = account.code.take();
+        let code = account.info.code.take();
         if let Some(code) = code {
-            bytecodes.insert(account.code_hash, code);
+            bytecodes.insert(account.info.code_hash, code);
         }
     }
 

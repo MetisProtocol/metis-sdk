@@ -106,7 +106,7 @@ async fn test_withdraw() -> Result<(), Box<dyn Error>> {
 
     let BlockExecutionResult {
         receipts, requests, ..
-    } = executor.execute_one(&recovered_block).unwrap();
+    } = executor.execute_one(recovered_block).unwrap();
 
     let receipt = receipts.first().unwrap();
     println!("receipt {:?}", receipt);
