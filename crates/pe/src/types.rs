@@ -211,4 +211,4 @@ pub type ReadSet = HashMap<MemoryLocationHash, ReadOrigins, BuildIdentityHasher>
 
 /// The updates made by this transaction incarnation, which is applied
 /// to the multi-version data structure at the end of execution.
-pub type WriteSet = Vec<(MemoryLocationHash, MemoryValue)>;
+pub type WriteSet = HashMap<MemoryLocationHash, MemoryValue, BuildIdentityHasher>;
