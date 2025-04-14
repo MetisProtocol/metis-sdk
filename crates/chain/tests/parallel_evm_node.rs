@@ -10,7 +10,7 @@ use std::error::Error;
 pub mod common;
 
 #[tokio::test]
-async fn test_custom_dev_node() -> Result<(), Box<dyn Error>> {
+async fn test_sequential_evm_node() -> Result<(), Box<dyn Error>> {
     let result = async {
         let tasks = TaskManager::current();
 

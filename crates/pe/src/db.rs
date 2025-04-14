@@ -7,6 +7,7 @@ use revm::state::AccountInfo;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+/// Memory Database error definitions
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum DBError {
     #[error("Storage error: {0}")]
@@ -25,7 +26,7 @@ pub struct InMemoryDB {
 }
 
 impl InMemoryDB {
-    /// Construct a new [`InMemoryStorage`]
+    /// Construct a new [`InMemoryDB`]
     pub const fn new(
         accounts: AccountState,
         bytecodes: Arc<Bytecodes>,
