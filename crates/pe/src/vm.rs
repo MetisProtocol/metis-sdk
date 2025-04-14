@@ -589,16 +589,17 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
             Ok(result_and_state) => {
                 // There are at least three locations most of the time: the sender,
                 // the recipient, and the beneficiary accounts.
-                let mut write_set = WriteSet::with_capacity(3);
+                let mut write_set =
+                    WriteSet::with_capacity_and_hasher(100, BuildIdentityHasher::default());
                 for (address, account) in &result_and_state.state {
                     if account.is_selfdestructed() {
                         // TODO: Also write [SelfDestructed] to the basic location?
                         // For now we are betting on [code_hash] triggering the sequential
                         // fallback when we read a self-destructed contract.
-                        write_set.push((
+                        write_set.insert(
                             hash_deterministic(MemoryLocation::CodeHash(*address)),
                             MemoryValue::SelfDestructed,
-                        ));
+                        );
                         continue;
                     }
 
@@ -629,15 +630,15 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
                             let is_lazy = evm.0.db().is_lazy;
                             if is_lazy {
                                 if account_location_hash == from_hash {
-                                    write_set.push((
+                                    write_set.insert(
                                         account_location_hash,
                                         MemoryValue::LazySender(U256::MAX - account.info.balance),
-                                    ));
+                                    );
                                 } else if Some(account_location_hash) == to_hash {
-                                    write_set.push((
+                                    write_set.insert(
                                         account_location_hash,
                                         MemoryValue::LazyRecipient(tx.value),
-                                    ));
+                                    );
                                 }
                             }
                             // We don't register empty accounts after [SPURIOUS_DRAGON]
@@ -655,7 +656,7 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
                                 .is_enabled_in(SpecId::SPURIOUS_DRAGON)
                                 || !account.is_empty()
                             {
-                                write_set.push((
+                                write_set.insert(
                                     account_location_hash,
                                     MemoryValue::Basic(AccountInfo {
                                         balance: account.info.balance,
@@ -663,16 +664,16 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
                                         code_hash: account.info.code_hash,
                                         code: account.info.code.clone(),
                                     }),
-                                ));
+                                );
                             }
                         }
 
                         // Write new contract
                         if is_new_code {
-                            write_set.push((
+                            write_set.insert(
                                 hash_deterministic(MemoryLocation::CodeHash(*address)),
                                 MemoryValue::CodeHash(account.info.code_hash),
-                            ));
+                            );
                             self.mv_memory
                                 .new_bytecodes
                                 .entry(account.info.code_hash)
@@ -682,10 +683,10 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
 
                     // TODO: We should move this changed check to our read set like for account info?
                     for (slot, value) in account.changed_storage_slots() {
-                        write_set.push((
+                        write_set.insert(
                             hash_deterministic(MemoryLocation::Storage(*address, *slot)),
                             MemoryValue::Storage(value.present_value),
-                        ));
+                        );
                     }
                 }
 
@@ -813,10 +814,7 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
         };
 
         for (recipient, amount) in rewards {
-            if let Some((_, value)) = write_set
-                .iter_mut()
-                .find(|(location, _)| location == &recipient)
-            {
+            if let Some(value) = write_set.get_mut(&recipient) {
                 match value {
                     MemoryValue::Basic(basic) => {
                         basic.balance = basic.balance.saturating_add(amount)
@@ -830,7 +828,7 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
                     _ => return Err(ReadError::InvalidMemoryValueType.into()),
                 }
             } else {
-                write_set.push((recipient, MemoryValue::LazyRecipient(amount)));
+                write_set.insert(recipient, MemoryValue::LazyRecipient(amount));
             }
         }
 
