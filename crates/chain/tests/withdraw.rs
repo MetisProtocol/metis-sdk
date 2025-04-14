@@ -10,7 +10,8 @@ pub mod common;
 
 #[tokio::test]
 async fn test_withdraw() -> Result<(), Box<dyn Error>> {
-    let (chain_spec, db, recovered_block) = common::get_test_withdraw_config();
+    let (keypair, sender) = common::get_random_keypair();
+    let (chain_spec, db, recovered_block) = common::get_test_withdraw_config(sender, keypair);
     let config = EthEvmConfig::new(chain_spec);
     let provider = BlockParallelExecutorProvider::new(config);
     let mut executor = provider.executor(db);
