@@ -1,6 +1,6 @@
 use crate::{
-    EvmAccount, FinishExecFlags, MemoryEntry, MemoryLocation, MemoryLocationHash, MemoryValue,
-    ReadOrigin, ReadOrigins, ReadSet, TxIdx, TxVersion, WriteSet,
+    FinishExecFlags, MemoryEntry, MemoryLocation, MemoryLocationHash, MemoryValue, ReadOrigin,
+    ReadOrigins, ReadSet, TxIdx, TxVersion, WriteSet,
     mv_memory::{MvMemory, RewardPolicy, reward_policy},
 };
 use alloy_consensus::TxType;
@@ -35,7 +35,7 @@ use revm::{
     },
     handler::MainnetContext,
     primitives::{Address, B256, KECCAK_EMPTY, U256, hardfork::SpecId},
-    state::AccountInfo,
+    state::{Account, AccountInfo},
 };
 use revm::{DatabaseRef, context::JournalOutput};
 use revm::{
@@ -53,7 +53,7 @@ pub type ExecutionError = EVMError<ReadError>;
 /// Represents the state transitions of the EVM accounts after execution.
 /// If the value is [None], it indicates that the account is marked for removal.
 /// If the value is [`Some(new_state)`], it indicates that the account has become [`new_state`].
-type EvmStateTransitions = HashMap<Address, Option<EvmAccount>, BuildSuffixHasher>;
+type EvmStateTransitions = HashMap<Address, Option<Account>, BuildSuffixHasher>;
 
 /// Execution result of a transaction
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,7 +90,7 @@ impl TxExecutionResult {
                     {
                         (address, None)
                     } else {
-                        (address, Some(EvmAccount::from(account)))
+                        (address, Some(account))
                     }
                 })
                 .collect(),

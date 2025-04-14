@@ -4,7 +4,7 @@
 pub mod contract;
 
 use contract::ERC20Token;
-use metis_pe::{AccountState, Bytecodes, EvmAccount};
+use metis_pe::{Account, AccountInfo, AccountState, Bytecodes};
 use rand::Rng;
 use revm::context::{TransactTo, TxEnv};
 use revm::primitives::{Address, U256, uint};
@@ -47,9 +47,12 @@ pub fn generate_cluster(
     for person in &people_addresses {
         state.insert(
             *person,
-            EvmAccount {
-                balance: uint!(4_567_000_000_000_000_000_000_U256),
-                ..EvmAccount::default()
+            Account {
+                info: AccountInfo {
+                    balance: uint!(4_567_000_000_000_000_000_000_U256),
+                    ..Default::default()
+                },
+                ..Default::default()
             },
         );
     }
@@ -76,9 +79,9 @@ pub fn generate_cluster(
 
     let mut bytecodes = Bytecodes::default();
     for account in state.values_mut() {
-        let code = account.code.take();
+        let code = account.info.code.take();
         if let Some(code) = code {
-            bytecodes.insert(account.code_hash, code);
+            bytecodes.insert(account.info.code_hash, code);
         }
     }
 

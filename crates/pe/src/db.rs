@@ -43,12 +43,10 @@ impl DatabaseRef for InMemoryDB {
     type Error = DBError;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
-        Ok(self.accounts.get(&address).map(|account| AccountInfo {
-            balance: account.balance,
-            nonce: account.nonce,
-            code_hash: account.code_hash,
-            code: account.code.clone(),
-        }))
+        Ok(self
+            .accounts
+            .get(&address)
+            .map(|account| account.info.clone()))
     }
 
     fn code_by_hash_ref(&self, code_hash: B256) -> Result<Bytecode, Self::Error> {
@@ -65,8 +63,7 @@ impl DatabaseRef for InMemoryDB {
         Ok(self
             .accounts
             .get(&address)
-            .and_then(|account| account.storage.get(&index))
-            .copied()
+            .and_then(|account| account.storage.get(&index).map(|v| v.present_value))
             .unwrap_or_default())
     }
 

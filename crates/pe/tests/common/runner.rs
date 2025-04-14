@@ -1,5 +1,5 @@
 use alloy_evm::EvmEnv;
-use metis_pe::{EvmAccount, ParallelExecutor};
+use metis_pe::{Account, AccountInfo, ParallelExecutor};
 use pretty_assertions::assert_eq;
 use revm::DatabaseRef;
 use revm::context::TxEnv;
@@ -8,14 +8,17 @@ use std::{num::NonZeroUsize, thread};
 
 /// Mock an account from an integer index that is used as the address.
 /// Useful for mock iterations.
-pub fn mock_account(idx: usize) -> (Address, EvmAccount) {
+pub fn mock_account(idx: usize) -> (Address, Account) {
     let address = Address::from(U160::from(idx));
-    let account = EvmAccount {
-        // Filling half full accounts to have enough tokens for tests without worrying about
-        // the corner case of balance not going beyond [U256::MAX].
-        balance: U256::MAX.div_ceil(U256::from(2)),
-        nonce: 1,
-        ..EvmAccount::default()
+    let account = Account {
+        info: AccountInfo {
+            // Filling half full accounts to have enough tokens for tests without worrying about
+            // the corner case of balance not going beyond [U256::MAX].
+            balance: U256::MAX.div_ceil(U256::from(2)),
+            nonce: 1,
+            ..Default::default()
+        },
+        ..Default::default()
     };
     (address, account)
 }

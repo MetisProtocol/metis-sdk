@@ -1,5 +1,4 @@
 use metis_chain::provider::ParallelExecutorBuilder;
-use reth::builder::Node;
 use reth::{
     builder::{NodeBuilder, NodeHandle},
     tasks::TaskManager,

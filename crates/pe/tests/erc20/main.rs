@@ -10,7 +10,7 @@ pub mod erc20;
 
 use common::test_execute_revm;
 use erc20::generate_cluster;
-use metis_pe::{AccountState, Bytecodes, EvmAccount, InMemoryDB};
+use metis_pe::{Account, AccountState, Bytecodes, InMemoryDB};
 use revm::context::TxEnv;
 use revm::primitives::Address;
 use std::sync::Arc;
@@ -19,7 +19,7 @@ use std::sync::Arc;
 fn erc20_independent() {
     const N: usize = 37123;
     let (mut state, bytecodes, txs) = generate_cluster(N, 1, 1);
-    state.insert(Address::ZERO, EvmAccount::default()); // Beneficiary
+    state.insert(Address::ZERO, Account::default()); // Beneficiary
     test_execute_revm(
         InMemoryDB::new(state, Arc::new(bytecodes), Default::default()),
         txs,
@@ -34,7 +34,7 @@ fn erc20_clusters() {
     const NUM_TRANSFERS_PER_PERSON: usize = 15;
 
     let mut final_state = AccountState::default();
-    final_state.insert(Address::ZERO, EvmAccount::default()); // Beneficiary
+    final_state.insert(Address::ZERO, Account::default()); // Beneficiary
     let mut final_bytecodes = Bytecodes::default();
     let mut final_txs = Vec::<TxEnv>::new();
     for _ in 0..NUM_CLUSTERS {

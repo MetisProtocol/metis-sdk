@@ -1,6 +1,6 @@
 //! Test raw transfers -- A block with random raw transfers, ERC-20 transfers, and Uniswap swaps.
 
-use metis_pe::{AccountState, Bytecodes, EvmAccount, InMemoryDB};
+use metis_pe::{Account, AccountState, Bytecodes, InMemoryDB};
 use rand::random;
 use revm::context::{TransactTo, TxEnv};
 use revm::primitives::{Address, U256};
@@ -16,7 +16,7 @@ fn mixed_block() {
     let target_block_size = 100_000; // number of transactions
     let mut block_size = 0;
     let mut final_state = AccountState::default();
-    final_state.insert(Address::ZERO, EvmAccount::default()); // Beneficiary
+    final_state.insert(Address::ZERO, Account::default()); // Beneficiary
     let mut final_bytecodes = Bytecodes::default();
     let mut final_txs = Vec::new();
     // 1 to 10

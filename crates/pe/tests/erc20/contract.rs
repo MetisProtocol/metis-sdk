@@ -1,5 +1,6 @@
 use crate::common::storage::{StorageBuilder, from_address, from_indices, from_short_string};
-use metis_primitives::{BuildSuffixHasher, EvmAccount};
+use metis_pe::AccountInfo;
+use metis_primitives::{Account, BuildSuffixHasher};
 use revm::bytecode::Bytecode;
 use revm::primitives::{
     Address, B256, Bytes, HashMap, U256, fixed_bytes, hex::FromHex, ruint::UintTryFrom,
@@ -64,7 +65,7 @@ impl ERC20Token {
     /// | _name        | string                                          | 3    | 0      | 32    |
     /// | _symbol      | string                                          | 4    | 0      | 32    |
     /// | _decimals    | uint8                                           | 5    | 0      | 1     |
-    pub fn build(&self) -> EvmAccount {
+    pub fn build(&self) -> Account {
         let hex = ERC20_TOKEN.trim();
         let bytecode = Bytecode::new_raw(Bytes::from_hex(hex).unwrap());
 
@@ -87,12 +88,15 @@ impl ERC20Token {
             );
         }
 
-        EvmAccount {
-            balance: U256::ZERO,
-            nonce: 1u64,
-            code_hash: bytecode.hash_slow(),
-            code: Some(bytecode),
+        Account {
+            info: AccountInfo {
+                balance: U256::ZERO,
+                nonce: 1u64,
+                code_hash: bytecode.hash_slow(),
+                code: Some(bytecode),
+            },
             storage: store.build(),
+            ..Default::default()
         }
     }
 

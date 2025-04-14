@@ -39,54 +39,9 @@ pub use revm::state::{
     Account, AccountInfo, AccountStatus, EvmState, EvmStorageSlot as StorageSlot,
 };
 pub use rustc_hash::FxBuildHasher;
-use serde::{Deserialize, Serialize};
 
-/// An EVM account.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EvmAccount {
-    /// The account's balance.
-    pub balance: U256,
-    /// The account's nonce.
-    pub nonce: u64,
-    /// The code hash of the account.
-    pub code_hash: B256,
-    /// The account's optional code.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub code: Option<Bytecode>,
-    /// The account's storage.
-    pub storage: HashMap<U256, U256, FxBuildHasher>,
-}
-
-impl Default for EvmAccount {
-    fn default() -> Self {
-        Self {
-            balance: Default::default(),
-            nonce: Default::default(),
-            code_hash: KECCAK_EMPTY,
-            code: Some(Bytecode::default()),
-            storage: Default::default(),
-        }
-    }
-}
-
-impl From<Account> for EvmAccount {
-    fn from(account: Account) -> Self {
-        Self {
-            balance: account.info.balance,
-            nonce: account.info.nonce,
-            code_hash: account.info.code_hash,
-            code: account.info.code,
-            storage: account
-                .storage
-                .into_iter()
-                .map(|(k, v)| (k, v.present_value))
-                .collect(),
-        }
-    }
-}
-
-/// Mapping from address to [`EvmAccount`].
-pub type AccountState = HashMap<Address, EvmAccount, BuildSuffixHasher>;
+/// Mapping from address to [`Account`].
+pub type AccountState = HashMap<Address, Account, BuildSuffixHasher>;
 
 /// Mapping from code hashes to [`Bytecode`]s.
 pub type Bytecodes = HashMap<B256, Bytecode, BuildSuffixHasher>;

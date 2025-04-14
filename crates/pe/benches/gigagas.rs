@@ -2,7 +2,7 @@ use alloy_evm::EvmEnv;
 use alloy_primitives::{Address, U160, U256};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use metis_pe::{
-    AccountState, Bytecodes, EvmAccount, InMemoryDB, ParallelExecutor, execute_revm_sequential,
+    Account, AccountState, Bytecodes, InMemoryDB, ParallelExecutor, execute_revm_sequential,
 };
 use revm::context::{TransactTo, TxEnv};
 use std::{num::NonZeroUsize, sync::Arc, thread};
@@ -111,7 +111,7 @@ pub fn bench_raw_transfers(c: &mut Criterion) {
 pub fn bench_erc20(c: &mut Criterion) {
     let block_size = (GIGA_GAS as f64 / erc20::ESTIMATED_GAS_USED as f64).ceil() as usize;
     let (mut state, bytecodes, txs) = erc20::generate_cluster(block_size, 1, 1);
-    state.insert(Address::ZERO, EvmAccount::default()); // Beneficiary
+    state.insert(Address::ZERO, Account::default()); // Beneficiary
     bench(
         c,
         "Independent ERC20",
@@ -123,7 +123,7 @@ pub fn bench_erc20(c: &mut Criterion) {
 /// Benchmarks the execution time of Uniswap V3 swap transactions.
 pub fn bench_uniswap(c: &mut Criterion) {
     let block_size = (GIGA_GAS as f64 / uniswap::ESTIMATED_GAS_USED as f64).ceil() as usize;
-    let mut final_state = AccountState::from_iter([(Address::ZERO, EvmAccount::default())]); // Beneficiary
+    let mut final_state = AccountState::from_iter([(Address::ZERO, Account::default())]); // Beneficiary
     let mut final_bytecodes = Bytecodes::default();
     let mut final_txs = Vec::<TxEnv>::new();
     for _ in 0..block_size {
