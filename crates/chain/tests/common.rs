@@ -4,7 +4,7 @@ use alloy_eips::eip7002::{
     WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS, WITHDRAWAL_REQUEST_PREDEPLOY_CODE,
 };
 use alloy_genesis::Genesis;
-use alloy_primitives::{B256, b256, hex};
+use alloy_primitives::{Address, B256, b256, hex};
 use alloy_primitives::{Bytes, TxKind};
 use alloy_primitives::{U256, fixed_bytes, keccak256};
 use futures_util::StreamExt;
@@ -33,7 +33,10 @@ use secp256k1::Keypair;
 use secp256k1::Secp256k1;
 use std::error::Error;
 use std::sync::Arc;
-pub fn get_test_withdraw_config() -> (Arc<ChainSpec>, CacheDB<EmptyDB>, RecoveredBlock<Block>) {
+pub fn get_test_withdraw_config(
+    sender: Address,
+    keypair: Keypair,
+) -> (Arc<ChainSpec>, CacheDB<EmptyDB>, RecoveredBlock<Block>) {
     // crate eip 7002 chain spec
     let chain_spec = Arc::new(
         ChainSpecBuilder::from(&*MAINNET)
@@ -56,13 +59,8 @@ pub fn get_test_withdraw_config() -> (Arc<ChainSpec>, CacheDB<EmptyDB>, Recovere
         withdrawal_requests_contract_account,
     );
 
-    // generate user address
-    let secp = Secp256k1::new();
-    let sender_key_pair = Keypair::new(&secp, &mut rand::thread_rng());
-    let sender_address = public_key_to_address(sender_key_pair.public_key());
-
     db.insert_account_info(
-        sender_address,
+        sender,
         AccountInfo {
             nonce: 1,
             balance: U256::from(ETH_TO_WEI),
@@ -70,6 +68,22 @@ pub fn get_test_withdraw_config() -> (Arc<ChainSpec>, CacheDB<EmptyDB>, Recovere
         },
     );
 
+    let block = get_test_block_with_single_withdraw_tx(&chain_spec, &keypair);
+    (chain_spec, db, block)
+}
+
+pub fn get_random_keypair() -> (Keypair, Address) {
+    let secp = Secp256k1::new();
+    let sender_key_pair = Keypair::new(&secp, &mut rand::thread_rng());
+    let sender_address = public_key_to_address(sender_key_pair.public_key());
+
+    (sender_key_pair, sender_address)
+}
+
+pub fn get_test_block_with_single_withdraw_tx(
+    chain_spec: &ChainSpec,
+    sender_key_pair: &Keypair,
+) -> RecoveredBlock<Block> {
     // https://github.com/lightclient/sys-asm/blob/9282bdb9fd64e024e27f60f507486ffb2183cba2/test/Withdrawal.t.sol.in#L36
     let validator_public_key = fixed_bytes!(
         "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
@@ -88,7 +102,7 @@ pub fn get_test_withdraw_config() -> (Arc<ChainSpec>, CacheDB<EmptyDB>, Recovere
         b256!("0xb31a3e47b902e9211c4d349af4e4c5604ce388471e79ca008907ae4616bb0ed3");
 
     let tx = sign_tx_with_key_pair(
-        sender_key_pair,
+        *sender_key_pair,
         Transaction::Legacy(TxLegacy {
             chain_id: Some(chain_spec.chain.id()),
             nonce: 1,
@@ -101,19 +115,15 @@ pub fn get_test_withdraw_config() -> (Arc<ChainSpec>, CacheDB<EmptyDB>, Recovere
         }),
     );
 
-    (
-        chain_spec,
-        db,
-        Block {
-            header,
-            body: BlockBody {
-                transactions: vec![tx],
-                ..Default::default()
-            },
-        }
-        .try_into_recovered()
-        .unwrap(),
-    )
+    Block {
+        header,
+        body: BlockBody {
+            transactions: vec![tx],
+            ..Default::default()
+        },
+    }
+    .try_into_recovered()
+    .unwrap()
 }
 
 pub fn sign_tx_with_key_pair(key_pair: Keypair, tx: Transaction) -> TransactionSigned {
