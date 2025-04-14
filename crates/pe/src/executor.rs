@@ -15,16 +15,16 @@ use std::{
 
 use alloy_evm::EvmEnv;
 use alloy_primitives::{TxNonce, U256};
-use metis_primitives::{Account, AccountInfo, KECCAK_EMPTY, Transaction, hash_deterministic};
+use metis_primitives::{
+    Account, AccountInfo, KECCAK_EMPTY, SpecId, Transaction, hash_deterministic,
+};
 #[cfg(feature = "compiler")]
 use metis_vm::ExtCompileWorker;
 #[cfg(feature = "compiler")]
 use revm::ExecuteEvm;
 use revm::{
-    DatabaseCommit,
-    context::{ContextTr, TxEnv, result::InvalidTransaction},
+    context::{TxEnv, result::InvalidTransaction},
     database::CacheDB,
-    primitives::hardfork::SpecId,
 };
 
 use revm::DatabaseRef;
@@ -33,9 +33,9 @@ use revm::DatabaseRef;
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum ParallelExecutorError {
     /// Transactions lack information for execution.
-    #[error("Transactions lack information for execution")]
+    #[error("The transaction data is missing")]
     MissingTransactionData,
-    /// Nonce too low or too high
+    /// Nonce mismatch error including nonce too low and nonce too high errors.
     #[error("Nonce mismatch for tx #{tx_idx}. Expected {executed_nonce}, got {tx_nonce}")]
     NonceMismatch {
         /// Transaction index
@@ -45,18 +45,14 @@ pub enum ParallelExecutorError {
         /// Nonce from state and execution
         executed_nonce: TxNonce,
     },
-    /// Storage error.
     #[error("Storage error: {0}")]
     StorageError(String),
-    /// EVM execution error.
     #[error("Execution error")]
     ExecutionError(
         #[source]
         #[from]
         ExecutionError,
     ),
-    /// Impractical errors that should be unreachable.
-    /// The library has bugs if this is yielded.
     #[error("Unreachable error")]
     UnreachableError,
 }
@@ -94,9 +90,9 @@ impl<T> AsyncDropper<T> {
     }
 }
 
-// TODO2: Add ExeScheduler to the dropper
+// TODO: Add Scheduler to the dropper
 // TODO: Port more recyclable resources into here.
-/// The main executor struct that executes blocks.
+/// The main executor struct that executes blocks with Block-STM algorithm.
 #[derive(Debug)]
 #[cfg_attr(not(feature = "compiler"), derive(Default))]
 pub struct ParallelExecutor {
@@ -121,7 +117,7 @@ impl Default for ParallelExecutor {
 }
 
 impl ParallelExecutor {
-    /// New a parrallel VM with the compiler feature.
+    /// New a parrallel VM with the compiler feature. The default compiler is an AOT-based one.
     #[cfg(feature = "compiler")]
     pub fn compiler() -> Self {
         Self {
@@ -132,9 +128,7 @@ impl ParallelExecutor {
 }
 
 impl ParallelExecutor {
-    /// Execute an block.
-    /// Ideally everyone would go through the [Alloy] interface. This one is currently
-    /// useful for testing, and for users that are heavily tied to Revm like Reth.
+    /// Execute an block with the block env and transactions.
     pub fn execute<DB>(
         &mut self,
         db: DB,
@@ -318,33 +312,35 @@ impl ParallelExecutor {
                             });
                         }
                     }
-                    // SAFETY: The multi-version data structure should not leak an index over block size.
+                    // SAFETY
                     let tx_result = unsafe { fully_evaluated_results.get_unchecked_mut(*tx_idx) };
-                    let account = tx_result.state.entry(address).or_default();
+                    let contains_account = tx_result.state.contains_key(&address);
+
                     if evm_env.cfg_env.spec.is_enabled_in(SpecId::SPURIOUS_DRAGON)
                         && code_hash == KECCAK_EMPTY
                         && nonce == 0
                         && balance == U256::ZERO
                     {
-                        *account = None;
-                    } else if let Some(account) = account {
-                        // Explicit write: only overwrite the account info in case there are storage changes
-                        // Code cannot change midblock here as we're falling back to sequential execution
-                        // on reading a self-destructed contract.
+                        // Do nothing for the empty account.
+                    } else if contains_account {
+                        // Only update the information except the code and code hash.
+                        let account = tx_result.state.entry(address).or_default();
                         account.info.balance = balance;
                         account.info.nonce = nonce;
                     } else {
-                        // Implicit write: e.g. gas payments to the beneficiary account,
-                        // which doesn't have explicit writes in [tx_result.state]
-                        *account = Some(Account {
-                            info: AccountInfo {
-                                balance,
-                                nonce,
-                                code_hash,
-                                code: Some(code.clone()),
+                        // Insert a new account.
+                        tx_result.state.insert(
+                            address,
+                            Account {
+                                info: AccountInfo {
+                                    balance,
+                                    nonce,
+                                    code_hash,
+                                    code: Some(code.clone()),
+                                },
+                                ..Default::default()
                             },
-                            ..Default::default()
-                        });
+                        );
                     }
                 }
             }
@@ -439,7 +435,6 @@ pub fn execute_sequential<DB: DatabaseRef>(
             t.run(&mut evm)
                 .map_err(|err| ExecutionError::Custom(err.to_string()))?
         };
-        // TODO: complex error " method cannot be called due to unsatisfied trait bounds"
         #[cfg(not(feature = "compiler"))]
         let result_and_state = {
             use revm::ExecuteEvm;
@@ -447,10 +442,8 @@ pub fn execute_sequential<DB: DatabaseRef>(
             evm.transact(tx)
                 .map_err(|err| ExecutionError::Custom(err.to_string()))?
         };
-        evm.db().commit(result_and_state.state.clone());
 
-        let mut execution_result =
-            TxExecutionResult::from_revm(tx_type, evm.cfg.spec, result_and_state);
+        let mut execution_result = TxExecutionResult::from_raw(tx_type, result_and_state);
 
         cumulative_gas_used =
             cumulative_gas_used.saturating_add(execution_result.receipt.cumulative_gas_used);

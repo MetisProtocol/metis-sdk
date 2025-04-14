@@ -9,7 +9,7 @@ use alloy_primitives::TxKind;
 use hashbrown::HashMap;
 #[cfg(feature = "optimism")]
 use metis_primitives::Transaction;
-use metis_primitives::{BuildIdentityHasher, BuildSuffixHasher, hash_deterministic};
+use metis_primitives::{BuildIdentityHasher, EvmState, hash_deterministic};
 #[cfg(feature = "compiler")]
 use metis_vm::ExtCompileWorker;
 #[cfg(feature = "optimism")]
@@ -35,7 +35,7 @@ use revm::{
     },
     handler::MainnetContext,
     primitives::{Address, B256, KECCAK_EMPTY, U256, hardfork::SpecId},
-    state::{Account, AccountInfo},
+    state::AccountInfo,
 };
 use revm::{DatabaseRef, context::JournalOutput};
 use revm::{
@@ -46,34 +46,21 @@ use smallvec::{SmallVec, smallvec};
 #[cfg(feature = "compiler")]
 use std::sync::Arc;
 
-/// The execution error from the underlying EVM executor.
-// Will there be DB errors outside of read?
+/// The execution error from the underlying EVM error.
 pub type ExecutionError = EVMError<ReadError>;
-
-/// Represents the state transitions of the EVM accounts after execution.
-/// If the value is [None], it indicates that the account is marked for removal.
-/// If the value is [`Some(new_state)`], it indicates that the account has become [`new_state`].
-type EvmStateTransitions = HashMap<Address, Option<Account>, BuildSuffixHasher>;
 
 /// Execution result of a transaction
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TxExecutionResult {
-    /// Receipt of execution
-    // TODO: Consider promoting to [ReceiptEnvelope] if there is high demand
+    /// Receipt of the execution
     pub receipt: Receipt,
     /// State that got updated
-    pub state: EvmStateTransitions,
+    pub state: EvmState,
 }
 
 impl TxExecutionResult {
-    /// Construct an execution result from a raw Revm result.
-    /// Note that [`cumulative_gas_used`] is preset to the gas used in this transaction.
-    /// It should be post-processed with the remaining transactions in the block.
-    pub fn from_revm(
-        tx_type: TxType,
-        spec_id: SpecId,
-        ResultAndState { result, state }: ResultAndState,
-    ) -> Self {
+    /// Construct an execution result from the raw result and state.
+    pub fn from_raw(tx_type: TxType, ResultAndState { result, state }: ResultAndState) -> Self {
         Self {
             receipt: Receipt {
                 tx_type,
@@ -81,19 +68,7 @@ impl TxExecutionResult {
                 cumulative_gas_used: result.gas_used(),
                 logs: result.into_logs(),
             },
-            state: state
-                .into_iter()
-                .filter(|(_, account)| account.is_touched())
-                .map(|(address, account)| {
-                    if account.is_selfdestructed()
-                        || account.is_empty() && spec_id.is_enabled_in(SpecId::SPURIOUS_DRAGON)
-                    {
-                        (address, None)
-                    } else {
-                        (address, Some(account))
-                    }
-                })
-                .collect(),
+            state,
         }
     }
 }
@@ -716,11 +691,7 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
                     VmExecutionError::ExecutionError(EVMError::Custom(err.to_string()))
                 })?;
                 Ok(VmExecutionResult {
-                    execution_result: TxExecutionResult::from_revm(
-                        tx_type,
-                        self.evm_env.cfg_env.spec,
-                        result_and_state,
-                    ),
+                    execution_result: TxExecutionResult::from_raw(tx_type, result_and_state),
                     flags,
                     affected_txs,
                 })

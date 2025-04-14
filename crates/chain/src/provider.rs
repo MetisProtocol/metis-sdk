@@ -179,12 +179,7 @@ where
             })?
             .into_iter()
             .map(|r| {
-                let commit_state = r
-                    .state
-                    .into_iter()
-                    .filter_map(|(addr, opt_account)| opt_account.map(|account| (addr, account)))
-                    .collect();
-                self.db.commit(commit_state);
+                self.db.commit(r.state);
                 total_gas_used += &r.receipt.cumulative_gas_used;
                 r.receipt
             })
