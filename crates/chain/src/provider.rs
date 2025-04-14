@@ -26,6 +26,7 @@ use reth_evm::{
 };
 use reth_evm_ethereum::EthEvmConfig;
 use reth_primitives::{NodePrimitives, RecoveredBlock};
+use revm::DatabaseCommit;
 use std::fmt::Debug;
 use std::num::NonZeroUsize;
 
@@ -178,6 +179,12 @@ where
             })?
             .into_iter()
             .map(|r| {
+                let commit_state = r
+                    .state
+                    .into_iter()
+                    .filter_map(|(addr, opt_account)| opt_account.map(|account| (addr, account)))
+                    .collect();
+                self.db.commit(commit_state);
                 total_gas_used += &r.receipt.cumulative_gas_used;
                 r.receipt
             })
@@ -235,7 +242,7 @@ where
         block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
     ) -> Result<Requests, BlockExecutionError> {
         let spec = self.strategy_factory.chain_spec();
-        let data: Requests = if spec.is_prague_active_at_timestamp(block.timestamp) {
+        let requests = if spec.is_prague_active_at_timestamp(block.timestamp) {
             // Collect all EIP-6110 deposits
             let deposit_requests = eip6110::parse_deposits_from_receipts(spec, &receipts)?;
 
@@ -249,14 +256,14 @@ where
                 .strategy_factory
                 .executor_for_block(&mut self.db, block);
             let evm = strategy.evm_mut();
-            let mut system_caller = SystemCaller::new(spec);
+            let mut system_caller = SystemCaller::new(spec.clone());
             requests.extend(system_caller.apply_post_execution_changes(evm)?);
             requests
         } else {
             Requests::default()
         };
 
-        Ok(data)
+        Ok(requests)
     }
 }
 
