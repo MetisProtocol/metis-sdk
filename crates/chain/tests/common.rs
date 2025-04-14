@@ -8,7 +8,6 @@ use alloy_primitives::{Address, B256, b256, hex};
 use alloy_primitives::{Bytes, TxKind};
 use alloy_primitives::{U256, fixed_bytes, keccak256};
 use futures_util::StreamExt;
-pub use rand::Rng;
 use reth::api::{EngineTypes, NodeTypes};
 use reth::args::RpcServerArgs;
 use reth::builder::rpc::RethRpcAddOns;
@@ -33,6 +32,7 @@ use secp256k1::Keypair;
 use secp256k1::Secp256k1;
 use std::error::Error;
 use std::sync::Arc;
+
 pub fn get_test_withdraw_config(
     sender: Address,
     keypair: Keypair,

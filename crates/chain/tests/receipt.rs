@@ -1,5 +1,6 @@
 use alloy_evm::block::BlockExecutionResult;
 use metis_chain::provider::BlockParallelExecutorProvider;
+use pretty_assertions::assert_eq;
 use reth_evm::execute::{BasicBlockExecutorProvider, BlockExecutorProvider, Executor};
 use reth_evm_ethereum::EthEvmConfig;
 use std::error::Error;
@@ -29,11 +30,7 @@ async fn test_compare_receipt() -> Result<(), Box<dyn Error>> {
         receipts.first().unwrap().clone()
     };
 
-    println!(
-        "parallel receipt {:?}, \r\n custom receipt {:?}",
-        parallel_receipt, custom_receipt
-    );
-    //assert!(parallel_receipt.eq(custom_receipt));
+    assert_eq!(parallel_receipt, custom_receipt);
 
     Ok(())
 }

@@ -5,8 +5,6 @@ use reth_evm_ethereum::EthEvmConfig;
 use std::error::Error;
 
 pub mod common;
-// #[path = "../../pe/tests/common/mod.rs"]
-// pub mod common;
 
 #[tokio::test]
 async fn test_withdraw() -> Result<(), Box<dyn Error>> {
@@ -18,7 +16,7 @@ async fn test_withdraw() -> Result<(), Box<dyn Error>> {
 
     let BlockExecutionResult {
         receipts, requests, ..
-    } = executor.execute_one(recovered_block).unwrap();
+    } = executor.execute_one(&recovered_block).unwrap();
 
     let receipt = receipts.first().unwrap();
 
