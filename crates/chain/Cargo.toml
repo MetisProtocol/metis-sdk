@@ -14,6 +14,7 @@ alloy-hardforks.workspace = true
 alloy-eips.workspace = true
 alloy-sol-types.workspace = true
 alloy-genesis.workspace = true
+alloy-consensus.workspace = true
 
 revm.workspace = true
 
@@ -28,6 +29,8 @@ reth-tracing.workspace = true
 reth-ethereum = { workspace = true, features = ["node", "test-utils"] }
 reth-cli-util.workspace = true
 reth-chain-state = {workspace = true, features = ["test-utils"]}
+reth-primitives-traits.workspace = true
+reth-ethereum-primitives.workspace = true
 
 tokio.workspace = true
 serde.workspace = true
@@ -37,12 +40,14 @@ eyre = "0.6"
 actix-web = "4.10.2"
 num_cpus = "1.16.0"
 pretty_assertions = "1"
+secp256k1 = { version = "0.30", default-features = false, features = ["global-context", "recovery"] }
 
 # AI Inference dependencies
 alith = { git = "https://github.com/0xLazAI/alith", tag = "v0.5.1", features = ["llamacpp"], optional = true }
 tracing = "0.1.41"
 serde_json = "1.0.140"
 futures-util = "0.3.31"
+rand = "0.8.5"
 
 [build-dependencies]
 # Reth test dependencies

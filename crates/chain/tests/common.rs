@@ -1,6 +1,8 @@
+use alloy_consensus::SignableTransaction;
 use alloy_genesis::Genesis;
 use alloy_primitives::{B256, b256, hex};
 use futures_util::StreamExt;
+pub use rand::Rng;
 use reth::api::{EngineTypes, NodeTypes};
 use reth::args::RpcServerArgs;
 use reth::builder::rpc::RethRpcAddOns;
@@ -9,8 +11,21 @@ use reth::rpc::api::EngineEthApiClient;
 use reth_ethereum::chainspec::ChainSpec;
 use reth_ethereum::primitives::SignedTransaction;
 use reth_ethereum::provider::CanonStateSubscriptions;
+use reth_primitives::{Transaction, TransactionSigned};
+use reth_primitives_traits::crypto::secp256k1::sign_message;
+use secp256k1::Keypair;
 use std::error::Error;
 use std::sync::Arc;
+
+pub fn sign_tx_with_key_pair(key_pair: Keypair, tx: Transaction) -> TransactionSigned {
+    let signature = sign_message(
+        B256::from_slice(&key_pair.secret_bytes()[..]),
+        tx.signature_hash(),
+    )
+    .unwrap();
+
+    TransactionSigned::new_unhashed(tx, signature)
+}
 
 pub fn get_test_node_config() -> NodeConfig<ChainSpec> {
     NodeConfig::test()
