@@ -10,7 +10,7 @@ pub mod common;
 #[test]
 fn raw_transfers_independent() {
     let block_size = 100_000; // number of transactions
-    common::test_execute_revm(
+    common::test_execute(
         // Mock the beneficiary account (`Address:ZERO`) and the next `block_size` user accounts.
         InMemoryDB::new(
             (0..=block_size).map(common::mock_account).collect(),
@@ -45,7 +45,7 @@ fn raw_transfers_same_sender_multiple_txs() {
     let same_sender_address = Address::from(U160::from(1));
     let mut same_sender_nonce: u64 = 0;
 
-    common::test_execute_revm(
+    common::test_execute(
         // Mock the beneficiary account (`Address:ZERO`) and the next `block_size` user accounts.
         InMemoryDB::new(
             (0..=block_size).map(common::mock_account).collect(),

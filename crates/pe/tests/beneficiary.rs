@@ -14,7 +14,7 @@ const BLOCK_SIZE: usize = 100_000;
 
 fn test_beneficiary(get_address: fn(usize) -> Address) {
     let mut nonces = HashMap::new();
-    common::test_execute_revm(
+    common::test_execute(
         // Mock the beneficiary account (`Address:ZERO`) and the next `BLOCK_SIZE` user accounts.
         InMemoryDB::new(
             (0..=BLOCK_SIZE).map(common::mock_account).collect(),

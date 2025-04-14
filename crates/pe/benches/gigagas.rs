@@ -2,7 +2,7 @@ use alloy_evm::EvmEnv;
 use alloy_primitives::{Address, U160, U256};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use metis_pe::{
-    Account, AccountState, Bytecodes, InMemoryDB, ParallelExecutor, execute_revm_sequential,
+    Account, AccountState, Bytecodes, InMemoryDB, ParallelExecutor, execute_sequential,
 };
 use revm::context::{TransactTo, TxEnv};
 use std::{num::NonZeroUsize, sync::Arc, thread};
@@ -27,7 +27,7 @@ pub fn bench(c: &mut Criterion, name: &str, db: InMemoryDB, txs: Vec<TxEnv>) {
     let mut group = c.benchmark_group(name);
     group.bench_function("Sequential", |b| {
         b.iter(|| {
-            execute_revm_sequential(
+            execute_sequential(
                 black_box(&db),
                 black_box(EvmEnv::default()),
                 black_box(txs.clone()),
@@ -38,7 +38,7 @@ pub fn bench(c: &mut Criterion, name: &str, db: InMemoryDB, txs: Vec<TxEnv>) {
     });
     group.bench_function("Parallel", |b| {
         b.iter(|| {
-            pe.execute_revm_parallel(
+            pe.execute(
                 black_box(&db),
                 black_box(EvmEnv::default()),
                 black_box(txs.clone()),
@@ -51,7 +51,7 @@ pub fn bench(c: &mut Criterion, name: &str, db: InMemoryDB, txs: Vec<TxEnv>) {
         let mut pe = ParallelExecutor::compiler();
         group.bench_function("Sequential-With-Compiler", |b| {
             b.iter(|| {
-                execute_revm_sequential(
+                execute_sequential(
                     black_box(&db),
                     black_box(EvmEnv::default()),
                     black_box(txs.clone()),
@@ -61,7 +61,7 @@ pub fn bench(c: &mut Criterion, name: &str, db: InMemoryDB, txs: Vec<TxEnv>) {
         });
         group.bench_function("Parallel-With-Compiler", |b| {
             b.iter(|| {
-                pe.execute_revm_parallel(
+                pe.execute(
                     black_box(&db),
                     black_box(EvmEnv::default()),
                     black_box(txs.clone()),

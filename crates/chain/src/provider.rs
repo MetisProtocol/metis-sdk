@@ -161,7 +161,7 @@ where
         &mut self,
         block: &RecoveredBlock<<<Self as Executor<DB>>::Primitives as NodePrimitives>::Block>,
     ) -> Result<BlockExecutionResult<Receipt>, BlockExecutionError> {
-        let results = self.executor.execute_revm_parallel(
+        let results = self.executor.execute(
             StateStorageAdapter::new(&mut self.db),
             self.strategy_factory.evm_env(block.header()),
             block
