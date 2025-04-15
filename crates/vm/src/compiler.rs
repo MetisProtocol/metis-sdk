@@ -98,7 +98,7 @@ impl<'ctx> Compiler<'ctx> {
             self.compiler
                 .jit(
                     &name,
-                    &bytecode,
+                    &bytecode.to_vec(),
                     transmute::<metis_primitives::SpecId, revmc::primitives::SpecId>(spec_id),
                 )
                 .map_err(|err| Error::Compile(err.to_string()))
@@ -125,7 +125,7 @@ impl<'ctx> Compiler<'ctx> {
 
         // Compile.
         let _f_id = compiler
-            .translate(&name, &bytecode, unsafe {
+            .translate(&name, &bytecode.to_vec(), unsafe {
                 transmute::<metis_primitives::SpecId, revmc::primitives::SpecId>(spec_id)
             })
             .map_err(|err| Error::Compile(err.to_string()))?;
