@@ -1,8 +1,8 @@
-<h1 align="center">MetisVM: An AI-Native and High-Performance Virtual Machine for Smart Contracts</h1>
+# MetisVM: An AI-Native and High-Performance Virtual Machine for Smart Contracts
 
 ## Introduction
 
-The core of Metis Hyperion (HYPE) is the high-performance virtual machine MetisVM, which is compatible with Ethereum and provides corresponding infrastructure support for AI applications. It offers unparalleled efficiency and performance for the execution of smart contracts such as in DeFi, on-chain gaming, and AI inference. MetisVM's multi-layered architecture ensures three critical elements: uncompromising security, seamless scalability, and enterprise-grade reliability. Optimizing for both traditional smart contracts and AI-specific operations enables MetisVM to create the foundation that powers the Metis Hyperion ecosystem.
+MetisVM is compatible with Ethereum and provides corresponding infrastructure support for AI applications. It offers unparalleled efficiency and performance for the execution of smart contracts such as in DeFi, on-chain gaming, and AI inference. Optimizing for both traditional smart contracts and AI-specific operations enables MetisVM to create the foundation that powers the AI and Web3 ecosystem.
 
 ## Technical Breakthroughs and Innovation Achievements
 
@@ -12,15 +12,15 @@ MetisVM achieves exceptional performance through two key optimizations: advanced
 
 #### JIT/AOT Compilation Optimization
 
-MetisVM employs a sophisticated dynamic opcode optimization mechanism that analyzes the bytecode of smart contracts in real time. It can identify frequently-used opcodes and apply Just In Time (JIT) and Ahead Of Time (AOT) compilation techniques to reduce execution costs. This not only enhances contract efficiency but also minimizes users' gas consumption. For example, in complex DeFi smart contracts with a large amount of computation like Aave, the optimized opcodes can shorten the execution time by up to 30%, thus saving a significant amount of cost for developers and users.
+MetisVM employs a sophisticated dynamic opcode optimization mechanism that analyzes the bytecode of smart contracts in real time. It can identify frequently-used opcodes and apply Just In Time (JIT) and Ahead Of Time (AOT) compilation techniques to reduce execution costs. This not only enhances contract efficiency but also minimizes users' gas consumption. Besides, MetisVM saves time on repeated compilation through compilation pooling and caching technology.
 
-#### Instruction Extension
+#### Instruction and Precompile Extension
 
-MetisVM development environment, while being compatible with the EVM, supports customizable extended opcodes (such as floating point numbers of different precisions to support AI quantization models with different precision requirements for inference). It also supports dynamically updating the instruction set through onchain governance while maintaining backward compatibility.
+MetisVM development environment, while being compatible with the EVM, supports customizable extended opcodes (such as floating point numbers of different precisions to support AI quantization models with different precision requirements for inference through WASM).
 
 ### Speculative & Parallel Execution
 
-The speculative and parallel execution of MetisVM utilizes advanced predictive algorithms to forecast the results of certain contract operations. Based on these predictions, it can execute multiple transactions in parallel, thereby significantly increasing transaction throughput. The optimized resource allocation ensures that the system can handle a large number of concurrent transactions without compromising security or accuracy. In high-volume decentralized trading scenarios, this can increase the transaction processing speed by more than 50%, enabling faster transaction settlement and a smoother user experience.
+The speculative and parallel execution of MetisVM utilizes advanced predictive algorithms including static code analysis to forecast the results of certain contract operations. Based on these predictions, it can execute multiple transactions in parallel, thereby significantly increasing transaction throughput. The optimized resource allocation ensures that the system can handle a large number of concurrent transactions without compromising security or accuracy.
 
 ### State-Aware Caching
 
@@ -28,7 +28,7 @@ MetisVM State-aware caching intelligently caches the frequently-accessed state v
 
 ### AI Infrastructure Support
 
-MetisVM provides foundational support for on-chain AI applications through three critical innovations. By optimizing inference engines, leveraging hardware acceleration, and incorporating zero-knowledge proofs, MetisVM establishes an environment where AI models can operate efficiently and securely within blockchain infrastructure.
+MetisVM provides foundational support for on-chain AI applications through three critical innovations. By optimizing inference engines, leveraging hardware acceleration, and incorporating TEE and zero-knowledge proofs, MetisVM establishes an environment where AI models can operate efficiently and securely within blockchain infrastructure.
 
 #### Inference Engine Optimization
 
@@ -38,17 +38,13 @@ MetisVM optimizes and supports compute-intensive on-chain inference AI applicati
 
 Machine learning inference often requires a large amount of computing resources, and MetisVM can utilize various hardware accelerators such as SIMD (e.g., AVX512), GPU, TPU, and FPGA. Through hardware acceleration, the inference performance can be significantly enhanced, thereby speeding up the operation of applications and accomplishing functions like on-chain model inference.
 
-#### zkVM Integration
-
-MetisVM also supports integration with zkVM, which can generate zero-knowledge proofs for the AI inference process to achieve more secure AI functions. This integration makes it possible to execute AI-related computations in a zero-knowledge environment, thus ensuring the privacy and security of sensitive data used in AI applications. For example, in a decentralized AI-driven lending platform, the integration of zkVM and MetisVM can protect the financial data of borrowers while still allowing AI models to make accurate credit assessment decisions.
-
 ### Developer Ecosystem Construction
 
-MetisVM delivers a comprehensive toolkit designed to streamline AI integration for blockchain developers. Combining familiar EVM development tools with specialized AI capabilities, creates an increased accessibility for builders where both traditional smart contract developers and AI engineers can build sophisticated applications without sacrificing performance or compatibility.
+MetisVM will deliver a comprehensive toolkit designed to streamline AI integration for blockchain developers. Combining familiar EVM development tools with specialized AI capabilities, creates an increased accessibility for builders where both traditional smart contract developers and AI engineers can build sophisticated applications without sacrificing performance or compatibility.
 
 The ecosystem includes industry-standard model interfaces, multi-language support, and seamless integration with popular machine learning frameworks. This hybrid approach enables developers to deploy complex AI applications - from real-time financial derivatives and onchain games to intelligent risk management systems - all while maintaining the security and transparency of blockchain infrastructure.
 
-#### EVM compatible Toolkit
+#### EVM Compatible Toolkit
 
 Developers can use EVM compatible tool chains such as Foundry, Hardhat, etc. to complete contract development, testing, debugging and deployment.
 

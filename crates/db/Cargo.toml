@@ -1,0 +1,4 @@
+[package]
+name = "metis-db"
+version.workspace = true
+edition.workspace = true
