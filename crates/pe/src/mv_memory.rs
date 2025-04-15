@@ -118,12 +118,11 @@ impl MvMemory {
         }
         last_locations.read = read_set;
 
-        // TODO2: DOCs
+        // locations that were modified, added or removed
         let mut changed_locations = Vec::new();
 
         // TODO: Group updates by shard to avoid locking operations.
         // Remove old locations that aren't written to anymore.
-        // TODO2: USE hashset for write_set
         let mut last_location_idx = 0;
         while last_location_idx < last_locations.write.len() {
             let prev_location = unsafe { last_locations.write.get_unchecked(last_location_idx) };

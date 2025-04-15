@@ -20,7 +20,6 @@ pub struct TransactionsGraph {
     transactions_degree: Vec<AtomicUsize>,
     /// The list of dependent transactions to resume when the
     /// key transaction is re-executed.
-    // TODO2: USE Graph or other data structure to store the dependencies
     transactions_dependents: Vec<Mutex<Vec<TxIdx>>>,
 }
 
@@ -152,7 +151,6 @@ impl TaskProvider for NormalProvider {
     }
 }
 
-// TODO2：use one scheduler for both execution and validation
 // The parallel executor collaborative scheduler coordinates execution & validation
 // tasks among work threads.
 //
@@ -188,11 +186,10 @@ pub(crate) struct Scheduler<T: TaskProvider> {
     /// the status of this incarnation.
     // TODO: Consider packing [TxStatus]s into atomics instead of
     // [Mutex] given how small they are.
-    // TODO2: use AtomicUsize
     transactions_status: Vec<AtomicWrapper<TxStatus>>,
     /// The list of dependent transactions to resume when the
     /// key transaction is re-executed.
-    // TODO2: USE Graph or other data structure to store the dependencies
+    // TODO: USE Graph or other data structure to store the dependencies
     transactions_dependents: Vec<Mutex<SmallVec<[TxIdx; 1]>>>,
     /// The number of validated transactions
     num_validated: AtomicUsize,
