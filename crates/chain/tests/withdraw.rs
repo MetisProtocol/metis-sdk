@@ -7,9 +7,9 @@ use std::error::Error;
 pub mod common;
 
 #[tokio::test]
-async fn test_eip7702_withdraw() -> Result<(), Box<dyn Error>> {
-    let (keypair, sender) = common::get_random_keypair();
-    let (chain_spec, db, recovered_block) = common::get_test_withdraw_config(sender, keypair);
+async fn test_withdraw() -> Result<(), Box<dyn Error>> {
+    let (keypair, sender) = common::keypair::get_random_keypair();
+    let (chain_spec, db, recovered_block) = common::tx::get_test_withdraw_config(sender, keypair);
     let config = EthEvmConfig::new(chain_spec);
     let provider = BlockParallelExecutorProvider::new(config);
     let mut executor = provider.executor(db);

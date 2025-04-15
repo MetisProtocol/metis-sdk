@@ -10,12 +10,12 @@ use std::error::Error;
 pub mod common;
 
 #[tokio::test]
-async fn test_sequential_evm_node() -> Result<(), Box<dyn Error>> {
+async fn test_custom_dev_node() -> Result<(), Box<dyn Error>> {
     let result = async {
         let tasks = TaskManager::current();
 
         // create node config
-        let node_config = common::get_test_node_config();
+        let node_config = common::node::get_test_node_config();
         let NodeHandle {
             node,
             node_exit_future: _,
@@ -29,7 +29,7 @@ async fn test_sequential_evm_node() -> Result<(), Box<dyn Error>> {
             .launch()
             .await?;
 
-        common::send_compare_transaction(node).await
+        common::node::send_compare_transaction(node).await
     }
     .await;
 

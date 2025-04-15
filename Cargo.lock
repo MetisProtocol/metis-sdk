@@ -6476,6 +6476,7 @@ dependencies = [
  "futures",
  "futures-util",
  "hashbrown 0.15.2",
+ "jsonrpsee",
  "metis-pe",
  "metis-primitives",
  "num_cpus",
@@ -6490,6 +6491,7 @@ dependencies = [
  "reth-evm",
  "reth-evm-ethereum",
  "reth-exex-test-utils",
+ "reth-node-api",
  "reth-node-ethereum",
  "reth-primitives",
  "reth-primitives-traits",
@@ -6501,6 +6503,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tokio-stream",
  "tracing",
 ]
 
