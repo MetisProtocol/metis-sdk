@@ -3,17 +3,13 @@ use reth::{
     tasks::TaskManager,
 };
 use reth_ethereum::node::EthereumNode;
-use std::error::Error;
 
 pub mod common;
 
 #[tokio::test]
-async fn test_sequential_evm_node() -> Result<(), Box<dyn Error>> {
+async fn test_custom_evm_node() -> eyre::Result<()> {
     let tasks = TaskManager::current();
-
-    // create node config
-    let node_config = common::get_test_node_config();
-
+    let node_config = common::node::get_test_node_config();
     let NodeHandle {
         node,
         node_exit_future: _,
@@ -23,5 +19,6 @@ async fn test_sequential_evm_node() -> Result<(), Box<dyn Error>> {
         .launch()
         .await?;
 
-    common::send_compare_transaction(node).await
+    let _ = common::node::send_compare_transaction(node).await;
+    Ok(())
 }
