@@ -62,7 +62,7 @@ reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
 reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
 reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
 reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
-reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
+reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10" }
 reth-tracing = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
 reth-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9", features = ["full"] }
 reth-cli-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
