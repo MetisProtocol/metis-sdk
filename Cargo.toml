@@ -57,7 +57,7 @@ alloy-genesis = "0.14.0"
 revm = { version = "22.0.0", features = ["std", "serde-json"] }
 
 # Reth dependencies
-reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9", default-features = false }
+reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false }
 reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
 reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
 reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.9" }
