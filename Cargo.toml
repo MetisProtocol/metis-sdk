@@ -59,7 +59,7 @@ revm = { version = "22.0.1", features = ["std", "serde-json"] }
 # Reth dependencies
 reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false }
 reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10" }
-reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10" }
+reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.12" }
 reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10" }
 reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10" }
 reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10" }
