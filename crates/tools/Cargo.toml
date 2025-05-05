@@ -29,7 +29,7 @@ indicatif = "0.17"
 walkdir = "2.5"
 clap = { version = "4.5.36", features = ["derive"] }
 
-hash-db = "0.15"
+hash-db = "0.16"
 plain_hasher = "0.2"
 triehash = "0.8"
 k256 = { version = "0.13.3", features = ["ecdsa"] }
