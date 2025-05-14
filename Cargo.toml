@@ -46,7 +46,7 @@ alloy-provider = { version = "0.14.0", features = [
   "reqwest",
 ], default-features = false }
 alloy-rlp = { version = "0.3.11", features = ["arrayvec"] }
-alloy-rpc-types-eth = "0.14.0"
+alloy-rpc-types-eth = "0.15.9"
 alloy-transport = "0.14.0"
 alloy-transport-http = { version = "0.14.0", features = [
   "reqwest-rustls-tls",
