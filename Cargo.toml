@@ -33,7 +33,7 @@ metis-chain = { path = "crates/chain" }
 anyhow = "1.0.97"
 
 # Alloy and Revm dependencies
-alloy-consensus = "0.14.0"
+alloy-consensus = "0.15.9"
 alloy-primitives = { version = "1.0.0", features = [
   "asm-keccak",
   "map-fxhash",
