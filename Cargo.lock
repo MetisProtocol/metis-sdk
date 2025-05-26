@@ -1012,7 +1012,7 @@ dependencies = [
  "alloy-rpc-types-eth 1.0.3",
  "alloy-signer 1.0.3",
  "alloy-sol-types",
- "alloy-transport 1.0.3",
+ "alloy-transport 1.0.7",
  "alloy-transport-http 1.0.3",
  "alloy-transport-ipc",
  "alloy-transport-ws",
@@ -1044,7 +1044,7 @@ checksum = "cfbb328bc2538e10b17570eae25e5ecb2cdb97b729caa115617e124b05e9463e"
 dependencies = [
  "alloy-json-rpc 1.0.3",
  "alloy-primitives 1.1.0",
- "alloy-transport 1.0.3",
+ "alloy-transport 1.0.7",
  "bimap",
  "futures",
  "parking_lot",
@@ -1111,7 +1111,7 @@ dependencies = [
  "alloy-json-rpc 1.0.3",
  "alloy-primitives 1.1.0",
  "alloy-pubsub",
- "alloy-transport 1.0.3",
+ "alloy-transport 1.0.7",
  "alloy-transport-http 1.0.3",
  "alloy-transport-ipc",
  "alloy-transport-ws",
@@ -1485,9 +1485,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-transport"
-version = "1.0.3"
+version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4f91badc9371554f9f5e1c4d0731c208fcfb14cfd1583af997425005a962689"
+checksum = "ca9b645fe4f4e6582cfbb4a8d20cedcf5aa23548e92eacbdacac6278b425e023"
 dependencies = [
  "alloy-json-rpc 1.0.3",
  "alloy-primitives 1.1.0",
@@ -1523,7 +1523,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ca577cff7579e39d3b4312dcd68809bd1ca693445cfdcf53f4f466a9b6b3df3"
 dependencies = [
  "alloy-json-rpc 1.0.3",
- "alloy-transport 1.0.3",
+ "alloy-transport 1.0.7",
  "reqwest 0.12.15",
  "serde_json",
  "tower 0.5.2",
@@ -1539,7 +1539,7 @@ checksum = "aed6f489a90092929a480cbe30d16a147fa89f859f8d9ef26f60555681503c8b"
 dependencies = [
  "alloy-json-rpc 1.0.3",
  "alloy-pubsub",
- "alloy-transport 1.0.3",
+ "alloy-transport 1.0.7",
  "bytes",
  "futures",
  "interprocess",
@@ -1558,7 +1558,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "30aa80247a43d71bf683294907e74c634be7b4307d02530c856fac7fc4c2566a"
 dependencies = [
  "alloy-pubsub",
- "alloy-transport 1.0.3",
+ "alloy-transport 1.0.7",
  "futures",
  "http 1.3.1",
  "rustls 0.23.26",
@@ -14376,7 +14376,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
