@@ -93,7 +93,7 @@ reth-stages = { git = "https://github.com/paradigmxyz/reth", tag = "v1.4.3" }
 
 # Reth test dependencies
 reth-exex-test-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.4.3" }
-reth-testing-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.4.3" }
+reth-testing-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.4.6" }
 
 # Revmc dependencies
 revmc = { git = "https://github.com/paradigmxyz/revmc", features = [
