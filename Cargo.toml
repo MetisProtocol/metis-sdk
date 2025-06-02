@@ -85,7 +85,7 @@ reth-node-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.4.3" }
 reth-node-core = { git = "https://github.com/paradigmxyz/reth", tag = "v1.4.3" }
 reth-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.4.3" }
 reth-db-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.4.3" }
-reth-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.4.3", features = [
+reth-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.4.6", features = [
   "test-utils",
 ] }
 reth-ethereum-consensus = { git = "https://github.com/paradigmxyz/reth", tag = "v1.4.3" }
