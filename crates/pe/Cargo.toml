@@ -6,12 +6,6 @@ version.workspace = true
 [features]
 default = ["async-dropper"]
 
-optimism = [
-  "dep:op-alloy-consensus",
-  "dep:op-alloy-network",
-  "dep:op-alloy-rpc-types",
-  "dep:op-revm",
-]
 compiler = ["metis-vm/compiler", "dep:revmc-build"]
 jemalloc = ["dep:tikv-jemallocator"]
 asm-keccak = [
@@ -44,10 +38,10 @@ thiserror.workspace = true
 crossbeam.workspace = true
 
 # OP Alloy and OP Revm dependencies
-op-alloy-consensus = { workspace = true, optional = true }
-op-alloy-network = { workspace = true, optional = true }
-op-alloy-rpc-types = { workspace = true, optional = true }
-op-revm = { workspace = true, optional = true }
+op-alloy-consensus.workspace = true
+op-alloy-network.workspace = true
+op-alloy-rpc-types.workspace = true
+op-revm.workspace = true
 
 # Reth dependencies
 reth-primitives.workspace = true

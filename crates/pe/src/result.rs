@@ -1,7 +1,7 @@
 use crate::{FinishExecFlags, TxIdx};
 use alloy_consensus::TxType;
 use metis_primitives::{
-    DBErrorMarker, EVMError, EvmState, InvalidTransaction, ResultAndState, TxNonce,
+    DBErrorMarker, DatabaseRef, EVMError, EvmState, InvalidTransaction, ResultAndState, TxNonce,
 };
 use reth_primitives::Receipt;
 
@@ -133,4 +133,28 @@ impl TxExecutionResult {
 pub(crate) struct VmExecutionResult {
     pub(crate) execution_result: TxExecutionResult,
     pub(crate) flags: FinishExecFlags,
+}
+
+/// Execution result of a block
+pub type ParallelExecutorResult = Result<Vec<TxExecutionResult>, ParallelExecutorError>;
+
+#[derive(Debug)]
+pub(crate) enum AbortReason {
+    FallbackToSequential,
+    ExecutionError(ExecutionError),
+}
+
+#[inline]
+pub(crate) fn evm_err_to_exec_error<DB: DatabaseRef>(
+    err: EVMError<DB::Error>,
+) -> ParallelExecutorError {
+    match err {
+        EVMError::Transaction(err) => ExecutionError::Transaction(err).into(),
+        EVMError::Header(err) => ExecutionError::Header(err).into(),
+        EVMError::Custom(err) => ExecutionError::Custom(err).into(),
+        // Note that parallel execution requires recording the wrapper DB for read-write sets,
+        // so DB errors of parallel and sequential executor are different. So we convert the
+        // database error to the custom error.
+        EVMError::Database(err) => ExecutionError::Custom(err.to_string()).into(),
+    }
 }

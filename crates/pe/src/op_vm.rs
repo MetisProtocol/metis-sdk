@@ -1,31 +1,29 @@
 use crate::{
     AccountMeta, Entry, FinishExecFlags, Location, LocationHash, LocationValue, ReadOrigin,
     ReadOrigins, ReadSet, TxIdx, TxVersion, WriteSet,
-    mv_memory::{MvMemory, RewardPolicy, reward_policy},
+    mv_memory::MvMemory,
+    mv_memory::{OpRewardPolicy, op_reward_policy},
     result::{ReadError, TxExecutionResult, VmExecutionError, VmExecutionResult},
+    vm::WithoutRewardBeneficiaryHandler,
 };
 use alloy_evm::EvmEnv;
 use alloy_primitives::TxKind;
-use metis_primitives::{BuildIdentityHasher, HashMap, I257, hash_deterministic};
+use metis_primitives::{BuildIdentityHasher, HashMap, I257, Transaction, hash_deterministic};
 #[cfg(feature = "compiler")]
 use metis_vm::ExtCompileWorker;
+use op_revm::{DefaultOp, OpBuilder, OpContext, OpEvm, OpSpecId, OpTransaction};
 #[cfg(feature = "compiler")]
 use revm::handler::FrameInitOrResult;
-use revm::handler::Handler;
-use revm::handler::instructions::InstructionProvider;
-use revm::handler::{EthFrame, EvmTr, FrameResult, PrecompileProvider};
-use revm::interpreter::InterpreterResult;
-use revm::interpreter::interpreter::EthInterpreter;
 use revm::{
-    Database, DatabaseRef, ExecuteEvm, MainBuilder, MainContext, MainnetEvm,
+    Database, DatabaseRef, ExecuteEvm,
     bytecode::Bytecode,
-    context::JournalOutput,
+    context::Cfg,
     context::{
         ContextTr, TxEnv,
         result::{EVMError, InvalidTransaction},
     },
-    context_interface::{JournalTr, result::HaltReason},
-    handler::MainnetContext,
+    handler::EvmTr,
+    handler::Handler,
     primitives::{Address, B256, KECCAK_EMPTY, U256, hardfork::SpecId},
     state::AccountInfo,
 };
@@ -36,8 +34,8 @@ use std::sync::Arc;
 // A database interface that intercepts reads while executing a specific
 // transaction. It provides values from the multi-version data structure
 // and storage, and tracks the read set of the current execution.
-struct VmDB<'a, DB: DatabaseRef> {
-    vm: &'a Vm<'a, DB>,
+struct OpVmDB<'a, DB: DatabaseRef> {
+    vm: &'a OpVm<'a, DB>,
     tx_idx: TxIdx,
     tx: &'a TxEnv,
     from_hash: LocationHash,
@@ -50,9 +48,9 @@ struct VmDB<'a, DB: DatabaseRef> {
     read_accounts: HashMap<LocationHash, AccountMeta, BuildIdentityHasher>,
 }
 
-impl<'a, DB: DatabaseRef> VmDB<'a, DB> {
+impl<'a, DB: DatabaseRef> OpVmDB<'a, DB> {
     fn new(
-        vm: &'a Vm<'a, DB>,
+        vm: &'a OpVm<'a, DB>,
         tx_idx: TxIdx,
         tx: &'a TxEnv,
         from_hash: LocationHash,
@@ -147,8 +145,7 @@ impl<'a, DB: DatabaseRef> VmDB<'a, DB> {
             .map(|a| a.code_hash))
     }
 }
-
-impl<DB: DatabaseRef> Database for VmDB<'_, DB> {
+impl<DB: DatabaseRef> Database for OpVmDB<'_, DB> {
     type Error = ReadError;
 
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
@@ -377,18 +374,18 @@ impl<DB: DatabaseRef> Database for VmDB<'_, DB> {
     }
 }
 
-pub(crate) struct Vm<'a, DB: DatabaseRef> {
+pub(crate) struct OpVm<'a, DB: DatabaseRef> {
     db: &'a DB,
     mv_memory: &'a MvMemory,
     evm_env: &'a EvmEnv,
     txs: &'a [TxEnv],
     beneficiary_location_hash: LocationHash,
-    reward_policy: RewardPolicy,
+    op_reward_policy: OpRewardPolicy,
     #[cfg(feature = "compiler")]
     worker: Arc<ExtCompileWorker>,
 }
 
-impl<'a, DB: DatabaseRef> Vm<'a, DB> {
+impl<'a, DB: DatabaseRef> OpVm<'a, DB> {
     pub(crate) fn new(
         db: &'a DB,
         mv_memory: &'a MvMemory,
@@ -404,7 +401,7 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
             beneficiary_location_hash: hash_deterministic(Location::Basic(
                 evm_env.block_env.beneficiary,
             )),
-            reward_policy: reward_policy(),
+            op_reward_policy: op_reward_policy(),
             #[cfg(feature = "compiler")]
             worker,
         }
@@ -439,13 +436,12 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
             .map(|to| hash_deterministic(Location::Basic(*to)));
 
         // Execute
-        let mut db = VmDB::new(self, tx_version.tx_idx, tx, from_hash, to_hash)
+        let mut db = OpVmDB::new(self, tx_version.tx_idx, tx, from_hash, to_hash)
             .map_err(VmExecutionError::from)?;
-
-        let mut evm = build_evm(&mut db, self.evm_env.clone());
+        let mut evm = build_op_evm(&mut db, Default::default());
 
         let result_and_state = {
-            evm.set_tx(tx.clone());
+            evm.set_tx(OpTransaction::new(tx.clone()));
             #[cfg(feature = "compiler")]
             let mut t = WithoutRewardBeneficiaryHandler::new(self.worker.clone());
             #[cfg(not(feature = "compiler"))]
@@ -472,8 +468,12 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
                     if account.is_touched() {
                         let account_location_hash = hash_deterministic(Location::Basic(*address));
 
-                        let read_account =
-                            evm.db().read_accounts.get(&account_location_hash).cloned();
+                        let read_account = evm
+                            .0
+                            .db()
+                            .read_accounts
+                            .get(&account_location_hash)
+                            .cloned();
 
                         let has_code = !account.info.is_empty_code_hash();
                         let is_new_code = has_code
@@ -488,7 +488,7 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
                                 meta != AccountMeta::CA((account.info.balance, account.info.nonce)) && meta != AccountMeta::EOA((account.info.balance, account.info.nonce))
                             })
                         {
-                            let is_lazy = evm.db().is_lazy;
+                            let is_lazy = evm.0.db().is_lazy;
                             if is_lazy {
                                 if account_location_hash == from_hash {
                                     write_set.insert(
@@ -554,6 +554,7 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
                     &mut write_set,
                     tx,
                     U256::from(result_and_state.result.gas_used()),
+                    evm.ctx(),
                 )?;
 
                 // Drop the vm instance and the database instance.
@@ -602,11 +603,12 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
     }
 
     // Apply rewards (balance increments) to beneficiary accounts, etc.
-    fn apply_rewards(
+    fn apply_rewards<CtxDB: Database>(
         &self,
         write_set: &mut WriteSet,
         tx: &TxEnv,
         gas_used: U256,
+        op_ctx: &mut op_revm::OpContext<CtxDB>,
     ) -> Result<(), VmExecutionError> {
         let mut gas_price = if let Some(priority_fee) = tx.gas_priority_fee {
             std::cmp::min(
@@ -620,12 +622,39 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
             gas_price = gas_price.saturating_sub(self.evm_env.block_env.basefee as u128);
         }
         let gas_price = U256::from(gas_price);
-        let rewards: SmallVec<[(LocationHash, U256); 1]> = match self.reward_policy {
-            RewardPolicy::Ethereum => {
-                smallvec![(
-                    self.beneficiary_location_hash,
-                    gas_price.saturating_mul(gas_used)
-                )]
+        let rewards: SmallVec<[(LocationHash, U256); 1]> = match self.op_reward_policy {
+            OpRewardPolicy::Optimism {
+                l1_fee_recipient_location_hash,
+                base_fee_vault_location_hash,
+            } => {
+                use op_revm::transaction::OpTxTr;
+                use op_revm::transaction::deposit::DEPOSIT_TRANSACTION_TYPE;
+
+                let is_deposit = op_ctx.tx().tx_type() == DEPOSIT_TRANSACTION_TYPE;
+                if is_deposit {
+                    SmallVec::new()
+                } else {
+                    let enveloped = op_ctx.tx().enveloped_tx().cloned();
+                    let spec = op_ctx.cfg().spec();
+                    let l1_block_info = op_ctx.chain();
+
+                    let Some(enveloped_tx) = &enveloped else {
+                        panic!("[OPTIMISM] Failed to load enveloped transaction.");
+                    };
+                    let l1_cost = l1_block_info.calculate_tx_l1_cost(enveloped_tx, spec);
+
+                    smallvec![
+                        (
+                            self.beneficiary_location_hash,
+                            gas_price.saturating_mul(gas_used)
+                        ),
+                        (l1_fee_recipient_location_hash, l1_cost),
+                        (
+                            base_fee_vault_location_hash,
+                            U256::from(self.evm_env.block_env.basefee).saturating_mul(gas_used),
+                        ),
+                    ]
+                }
             }
         };
 
@@ -653,115 +682,11 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
 }
 
 #[inline]
-pub(crate) fn build_evm<DB: Database>(db: DB, evm_env: EvmEnv) -> MainnetEvm<MainnetContext<DB>> {
-    MainnetContext::mainnet()
-        .with_db(db)
-        .with_cfg(evm_env.cfg_env)
-        .with_block(evm_env.block_env)
-        .build_mainnet()
-}
+pub(crate) fn build_op_evm<DB: Database>(db: DB, spec_id: OpSpecId) -> OpEvm<OpContext<DB>, ()> {
+    use revm::Context;
 
-pub struct WithoutRewardBeneficiaryHandler<EVM> {
-    _phantom: core::marker::PhantomData<EVM>,
-    #[cfg(feature = "compiler")]
-    worker: Arc<metis_vm::ExtCompileWorker>,
-}
-
-impl<EVM> Handler for WithoutRewardBeneficiaryHandler<EVM>
-where
-    EVM: EvmTr<
-            Context: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput>>,
-            Precompiles: PrecompileProvider<EVM::Context, Output = InterpreterResult>,
-            Instructions: InstructionProvider<
-                Context = EVM::Context,
-                InterpreterTypes = EthInterpreter,
-            >,
-        >,
-{
-    type Evm = EVM;
-    type Error = EVMError<<<EVM::Context as ContextTr>::Db as Database>::Error, InvalidTransaction>;
-    type Frame = EthFrame<
-        EVM,
-        EVMError<<<EVM::Context as ContextTr>::Db as Database>::Error, InvalidTransaction>,
-        <EVM::Instructions as InstructionProvider>::InterpreterTypes,
-    >;
-    type HaltReason = HaltReason;
-
-    fn reward_beneficiary(
-        &self,
-        _evm: &mut Self::Evm,
-        _exec_result: &mut FrameResult,
-    ) -> Result<(), Self::Error> {
-        // Skip beneficiary reward
-        Ok(())
-    }
-
-    #[cfg(feature = "compiler")]
-    fn frame_call(
-        &mut self,
-        frame: &mut Self::Frame,
-        evm: &mut Self::Evm,
-    ) -> Result<FrameInitOrResult<Self::Frame>, Self::Error> {
-        let interpreter = &mut frame.interpreter;
-        let code_hash = interpreter.bytecode.hash();
-        let next_action = match code_hash {
-            Some(code_hash) => {
-                match self.worker.get_function(&code_hash) {
-                    Ok(metis_vm::FetchedFnResult::NotFound) => {
-                        use revm::context::Cfg;
-                        // Compile the code
-                        let spec_id = evm.ctx().cfg().spec().into();
-                        let bytecode = interpreter.bytecode.bytes();
-                        let _res = self.worker.spawn(spec_id, code_hash, bytecode);
-                        evm.run_interpreter(interpreter)
-                    }
-                    Ok(metis_vm::FetchedFnResult::Found(_f)) => {
-                        // TODO: sync revmc and revm structures for the compiler
-                        // https://github.com/paradigmxyz/revmc/issues/75
-                        // f.call_with_interpreter_and_memory(interpreter, memory, context)
-                        evm.run_interpreter(interpreter)
-                    }
-                    Err(_) => {
-                        // Fallback to the interpreter
-                        evm.run_interpreter(interpreter)
-                    }
-                }
-            }
-            None => {
-                // Fallback to the interpreter
-                evm.run_interpreter(interpreter)
-            }
-        };
-        frame.process_next_action(evm, next_action)
-    }
-}
-
-#[cfg(not(feature = "compiler"))]
-impl<EVM> Default for WithoutRewardBeneficiaryHandler<EVM> {
-    fn default() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
-}
-
-#[cfg(feature = "compiler")]
-impl<EVM> Default for WithoutRewardBeneficiaryHandler<EVM> {
-    fn default() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-            worker: Arc::new(metis_vm::ExtCompileWorker::disable()),
-        }
-    }
-}
-
-#[cfg(feature = "compiler")]
-impl<EVM> WithoutRewardBeneficiaryHandler<EVM> {
-    #[inline]
-    pub fn new(worker: Arc<metis_vm::ExtCompileWorker>) -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-            worker,
-        }
-    }
+    let op_ctx = Context::op().with_db(db).modify_cfg_chained(|cfg| {
+        cfg.spec = spec_id;
+    });
+    op_ctx.build_op()
 }

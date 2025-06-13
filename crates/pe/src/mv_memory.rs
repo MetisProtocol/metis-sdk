@@ -183,8 +183,12 @@ impl MvMemory {
 pub enum RewardPolicy {
     /// Ethereum
     Ethereum,
+}
+
+/// Optimism chain reward policies.
+#[derive(Debug, Clone)]
+pub enum OpRewardPolicy {
     /// Optimism
-    #[cfg(feature = "optimism")]
     Optimism {
         /// L1 Fee Recipient
         l1_fee_recipient_location_hash: crate::LocationHash,
@@ -193,10 +197,9 @@ pub enum RewardPolicy {
     },
 }
 
-#[cfg(feature = "optimism")]
 #[inline]
-pub fn reward_policy() -> RewardPolicy {
-    RewardPolicy::Optimism {
+pub fn op_reward_policy() -> OpRewardPolicy {
+    OpRewardPolicy::Optimism {
         l1_fee_recipient_location_hash: hash_deterministic(Location::Basic(
             op_revm::constants::L1_FEE_RECIPIENT,
         )),
@@ -206,14 +209,12 @@ pub fn reward_policy() -> RewardPolicy {
     }
 }
 
-#[cfg(not(feature = "optimism"))]
 #[inline]
 pub fn reward_policy() -> RewardPolicy {
     RewardPolicy::Ethereum
 }
 
-#[cfg(feature = "optimism")]
-pub fn build_mv_memory(block_env: &BlockEnv, txs: &[TxEnv]) -> MvMemory {
+pub fn build_op_mv_memory(block_env: &BlockEnv, txs: &[TxEnv]) -> MvMemory {
     let _beneficiary_location_hash = hash_deterministic(Location::Basic(block_env.beneficiary));
     let l1_fee_recipient_location_hash = hash_deterministic(op_revm::constants::L1_FEE_RECIPIENT);
     let base_fee_recipient_location_hash =
@@ -243,7 +244,6 @@ pub fn build_mv_memory(block_env: &BlockEnv, txs: &[TxEnv]) -> MvMemory {
     )
 }
 
-#[cfg(not(feature = "optimism"))]
 pub fn build_mv_memory(block_env: &BlockEnv, txs: &[TxEnv]) -> MvMemory {
     use crate::TxIdx;
 

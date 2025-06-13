@@ -96,7 +96,6 @@ default = []
 
 # Note: No jemalloc on Windows
 jemalloc = ["reth/jemalloc", "metis-pe/jemalloc"]
-optimism = ["metis-pe/optimism"]
 compiler = ["metis-pe/compiler", "dep:revmc-build"]
 inference = ["dep:alith"]
 asm-keccak = [
