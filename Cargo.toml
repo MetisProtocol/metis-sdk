@@ -58,7 +58,7 @@ alloy-trie = { version = "0.8.1", default-features = false }
 alloy-signer = { version = "1.0.9", default-features = false }
 alloy-signer-local = { version = "1.0.9", default-features = false }
 alloy-evm = { version = "0.10", default-features = false }
-alloy-genesis = { version = "1.0.9", default-features = false }
+alloy-genesis = { version = "1.0.12", default-features = false }
 revm = { version = "24.0.1", default-features = false, features = [
   "std",
   "serde-json",
