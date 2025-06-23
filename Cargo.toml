@@ -43,7 +43,7 @@ alloy-primitives = { version = "1.2.1", default-features = false, features = [
 alloy-sol-types = { version = "1.1.0", default-features = false, features = [
   "std",
 ] }
-alloy-eips = { version = "1.0.9", default-features = false }
+alloy-eips = { version = "1.0.12", default-features = false }
 alloy-provider = { version = "1.0.9", features = [
   "reqwest",
 ], default-features = false }
