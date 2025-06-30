@@ -163,7 +163,7 @@ eyre = "0.6"
 actix-web = "4.10.2"
 num_cpus = "1.16.0"
 pretty_assertions = "1"
-secp256k1 = { version = "0.30", default-features = false, features = [
+secp256k1 = { version = "0.31", default-features = false, features = [
   "global-context",
   "recovery",
 ] }
