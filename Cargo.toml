@@ -86,7 +86,7 @@ reth-cli-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
 reth-chain-state = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
 reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
 reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
-reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
+reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.1" }
 reth-node-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
 reth-node-core = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
 reth-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
