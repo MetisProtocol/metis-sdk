@@ -2090,7 +2090,7 @@ dependencies = [
  "bitflags 2.9.1",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "regex",
@@ -6691,7 +6691,7 @@ dependencies = [
  "reth-chainspec 1.5.0",
  "reth-db",
  "reth-db-api",
- "reth-ethereum-consensus",
+ "reth-ethereum-consensus 1.5.1",
  "reth-evm-ethereum",
  "reth-primitives",
  "reth-provider",
@@ -8026,7 +8026,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.12.1",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.104",
@@ -9465,7 +9465,7 @@ dependencies = [
  "reth-consensus-common 1.5.0",
  "reth-db",
  "reth-eth-wire",
- "reth-ethereum-consensus",
+ "reth-ethereum-consensus 1.5.0",
  "reth-ethereum-primitives 1.5.0",
  "reth-evm",
  "reth-evm-ethereum",
@@ -9562,6 +9562,22 @@ dependencies = [
  "reth-consensus-common 1.5.0",
  "reth-execution-types 1.5.0",
  "reth-primitives-traits 1.5.0",
+ "tracing",
+]
+
+[[package]]
+name = "reth-ethereum-consensus"
+version = "1.5.1"
+source = "git+https://github.com/paradigmxyz/reth?tag=v1.5.1#dbe7ee9c21392f360ff01f6307480f5d7dd73a3a"
+dependencies = [
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-primitives 1.2.1",
+ "reth-chainspec 1.5.1",
+ "reth-consensus 1.5.1",
+ "reth-consensus-common 1.5.1",
+ "reth-execution-types 1.5.1",
+ "reth-primitives-traits 1.5.1",
  "tracing",
 ]
 
@@ -10286,7 +10302,7 @@ dependencies = [
  "reth-chainspec 1.5.0",
  "reth-consensus 1.5.0",
  "reth-engine-primitives",
- "reth-ethereum-consensus",
+ "reth-ethereum-consensus 1.5.0",
  "reth-ethereum-engine-primitives",
  "reth-ethereum-payload-builder",
  "reth-ethereum-primitives 1.5.0",
