@@ -2090,7 +2090,7 @@ dependencies = [
  "bitflags 2.9.1",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "regex",
@@ -6690,7 +6690,7 @@ dependencies = [
  "reqwest 0.12.22",
  "reth-chainspec 1.5.0",
  "reth-db",
- "reth-db-api",
+ "reth-db-api 1.5.1",
  "reth-ethereum-consensus",
  "reth-evm-ethereum",
  "reth-primitives",
@@ -8026,7 +8026,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.12.1",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.104",
@@ -8719,7 +8719,7 @@ dependencies = [
  "reth-config",
  "reth-consensus 1.5.0",
  "reth-db",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "reth-db-common",
  "reth-discv4",
  "reth-discv5",
@@ -8947,7 +8947,7 @@ dependencies = [
  "metrics",
  "page_size",
  "parking_lot",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "reth-fs-util",
  "reth-libmdbx",
  "reth-metrics",
@@ -8991,6 +8991,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "reth-db-api"
+version = "1.5.1"
+source = "git+https://github.com/paradigmxyz/reth?tag=v1.5.1#dbe7ee9c21392f360ff01f6307480f5d7dd73a3a"
+dependencies = [
+ "alloy-consensus",
+ "alloy-genesis",
+ "alloy-primitives 1.2.1",
+ "bytes",
+ "derive_more 2.0.1",
+ "metrics",
+ "modular-bitfield",
+ "parity-scale-codec",
+ "reth-codecs 1.5.1",
+ "reth-db-models 1.5.1",
+ "reth-ethereum-primitives 1.5.1",
+ "reth-primitives-traits 1.5.1",
+ "reth-prune-types 1.5.1",
+ "reth-stages-types 1.5.1",
+ "reth-storage-errors 1.5.1",
+ "reth-trie-common 1.5.1",
+ "roaring",
+ "serde",
+]
+
+[[package]]
 name = "reth-db-common"
 version = "1.5.0"
 source = "git+https://github.com/paradigmxyz/reth?tag=v1.5.0#61e38f9af154fe91e776d8f5e449d20a1571e8cf"
@@ -9003,7 +9028,7 @@ dependencies = [
  "reth-chainspec 1.5.0",
  "reth-codecs 1.5.0",
  "reth-config",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "reth-etl",
  "reth-fs-util",
  "reth-node-types",
@@ -9042,6 +9067,8 @@ dependencies = [
  "alloy-eips",
  "alloy-primitives 1.2.1",
  "bytes",
+ "modular-bitfield",
+ "reth-codecs 1.5.1",
  "reth-primitives-traits 1.5.1",
  "serde",
 ]
@@ -9138,7 +9165,7 @@ dependencies = [
  "reth-config",
  "reth-consensus 1.5.0",
  "reth-db",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "reth-ethereum-primitives 1.5.0",
  "reth-metrics",
  "reth-network-p2p",
@@ -9378,7 +9405,7 @@ dependencies = [
  "alloy-rlp",
  "eyre",
  "futures-util",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "reth-era",
  "reth-era-downloader",
  "reth-ethereum-primitives 1.5.0",
@@ -9513,7 +9540,7 @@ dependencies = [
  "reth-config",
  "reth-consensus 1.5.0",
  "reth-db",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "reth-downloaders",
  "reth-errors",
  "reth-ethereum-payload-builder",
@@ -9663,6 +9690,8 @@ dependencies = [
  "alloy-eips",
  "alloy-primitives 1.2.1",
  "alloy-rlp",
+ "modular-bitfield",
+ "reth-codecs 1.5.1",
  "reth-primitives-traits 1.5.1",
  "reth-zstd-compressors 1.5.1",
  "serde",
@@ -9675,7 +9704,7 @@ version = "1.5.0"
 source = "git+https://github.com/paradigmxyz/reth?tag=v1.5.0#61e38f9af154fe91e776d8f5e449d20a1571e8cf"
 dependencies = [
  "rayon",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "tempfile",
 ]
 
@@ -10143,7 +10172,7 @@ dependencies = [
  "eyre",
  "reth-basic-payload-builder",
  "reth-consensus 1.5.0",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "reth-engine-primitives",
  "reth-evm",
  "reth-network-api",
@@ -10183,7 +10212,7 @@ dependencies = [
  "reth-consensus 1.5.0",
  "reth-consensus-debug-client",
  "reth-db",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "reth-db-common",
  "reth-downloaders",
  "reth-engine-local",
@@ -10361,7 +10390,7 @@ version = "1.5.0"
 source = "git+https://github.com/paradigmxyz/reth?tag=v1.5.0#61e38f9af154fe91e776d8f5e449d20a1571e8cf"
 dependencies = [
  "reth-chainspec 1.5.0",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "reth-engine-primitives",
  "reth-payload-primitives",
  "reth-primitives-traits 1.5.0",
@@ -10415,7 +10444,7 @@ dependencies = [
  "reth-cli-runner",
  "reth-consensus 1.5.0",
  "reth-db",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "reth-db-common",
  "reth-downloaders",
  "reth-execution-types 1.5.0",
@@ -10731,7 +10760,7 @@ dependencies = [
  "alloy-consensus",
  "alloy-primitives 1.2.1",
  "reth-chainspec 1.5.0",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "reth-node-api",
  "reth-optimism-primitives 1.5.0",
  "reth-primitives-traits 1.5.0",
@@ -10907,8 +10936,10 @@ dependencies = [
  "alloy-rpc-types-eth",
  "alloy-trie",
  "auto_impl",
+ "byteorder",
  "bytes",
  "derive_more 2.0.1",
+ "modular-bitfield",
  "once_cell",
  "op-alloy-consensus",
  "reth-codecs 1.5.1",
@@ -10941,7 +10972,7 @@ dependencies = [
  "reth-chainspec 1.5.0",
  "reth-codecs 1.5.0",
  "reth-db",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "reth-errors",
  "reth-ethereum-engine-primitives",
  "reth-ethereum-primitives 1.5.0",
@@ -10979,7 +11010,7 @@ dependencies = [
  "rayon",
  "reth-chainspec 1.5.0",
  "reth-config",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "reth-errors",
  "reth-exex-types",
  "reth-metrics",
@@ -11015,6 +11046,8 @@ source = "git+https://github.com/paradigmxyz/reth?tag=v1.5.1#dbe7ee9c21392f360ff
 dependencies = [
  "alloy-primitives 1.2.1",
  "derive_more 2.0.1",
+ "modular-bitfield",
+ "reth-codecs 1.5.1",
  "serde",
  "thiserror 2.0.12",
 ]
@@ -11409,7 +11442,7 @@ dependencies = [
  "reth-config",
  "reth-consensus 1.5.0",
  "reth-db",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "reth-era",
  "reth-era-downloader",
  "reth-era-utils",
@@ -11486,6 +11519,8 @@ source = "git+https://github.com/paradigmxyz/reth?tag=v1.5.1#dbe7ee9c21392f360ff
 dependencies = [
  "alloy-primitives 1.2.1",
  "bytes",
+ "modular-bitfield",
+ "reth-codecs 1.5.1",
  "reth-trie-common 1.5.1",
  "serde",
 ]
@@ -11499,7 +11534,7 @@ dependencies = [
  "parking_lot",
  "rayon",
  "reth-codecs 1.5.0",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "reth-primitives-traits 1.5.0",
  "reth-provider",
  "reth-prune-types 1.5.0",
@@ -11544,7 +11579,7 @@ dependencies = [
  "alloy-rpc-types-engine",
  "auto_impl",
  "reth-chainspec 1.5.0",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "reth-db-models 1.5.0",
  "reth-ethereum-primitives 1.5.0",
  "reth-execution-types 1.5.0",
@@ -11775,6 +11810,7 @@ dependencies = [
  "derive_more 2.0.1",
  "itertools 0.14.0",
  "nybbles",
+ "reth-codecs 1.5.1",
  "reth-primitives-traits 1.5.1",
  "revm-database 7.0.1",
  "serde",
@@ -11787,7 +11823,7 @@ version = "1.5.0"
 source = "git+https://github.com/paradigmxyz/reth?tag=v1.5.0#61e38f9af154fe91e776d8f5e449d20a1571e8cf"
 dependencies = [
  "alloy-primitives 1.2.1",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "reth-execution-errors",
  "reth-primitives-traits 1.5.0",
  "reth-trie",
@@ -11805,7 +11841,7 @@ dependencies = [
  "itertools 0.14.0",
  "metrics",
  "rayon",
- "reth-db-api",
+ "reth-db-api 1.5.0",
  "reth-execution-errors",
  "reth-metrics",
  "reth-provider",

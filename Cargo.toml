@@ -90,7 +90,7 @@ reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", tag = 
 reth-node-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
 reth-node-core = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
 reth-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
-reth-db-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0" }
+reth-db-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.1" }
 reth-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.5.0", features = [
   "test-utils",
 ] }
