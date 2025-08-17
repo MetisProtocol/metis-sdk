@@ -6514,7 +6514,7 @@ dependencies = [
 
 [[package]]
 name = "metis-chain"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "actix-web",
  "alith",
@@ -6578,11 +6578,11 @@ dependencies = [
 
 [[package]]
 name = "metis-db"
-version = "0.5.0"
+version = "0.5.1"
 
 [[package]]
 name = "metis-pe"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "alloy-consensus",
  "alloy-evm",
@@ -6622,7 +6622,7 @@ dependencies = [
 
 [[package]]
 name = "metis-primitives"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "alloy-evm",
  "revm",
@@ -6632,7 +6632,7 @@ dependencies = [
 
 [[package]]
 name = "metis-tools"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6676,7 +6676,7 @@ dependencies = [
 
 [[package]]
 name = "metis-vm"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "alith",
  "alloy-sol-types",
