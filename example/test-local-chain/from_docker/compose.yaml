@@ -18,7 +18,6 @@ services:
     command:
       - "node"
       - "-vvvvv"
-      - "-d"
       - "--datadir=/data/reth/execution-data"
       - "--chain=/root/assets/genesis.json"
       - "--http"
@@ -32,6 +31,8 @@ services:
       - "--metrics=0.0.0.0:9001"
       - "--discovery.port=30303"
       - "--port=30303"
+      - "--bootnodes=enode://89e9cf2c4fee0b682a40158e1dd5192a0a87572457ed098ee111638b42090bdc751cb6dd7197659005249b61be8ddc4a59799a4c259ec152cc5835fbbd01a459@reth0:30303"
+      - "--txpool.max-account-slots=10000"
       # - "--builder.gaslimit=3600000000" # default * 100
       # - "--builder.interval=10ms"
       # - "--builder.deadline=1" # The deadline in seconds for when the payload builder job should resolve
@@ -50,8 +51,8 @@ services:
       - "18545:8545"
       - "18551:8551"
       - "9101:9001"
-      - "40303:40303"
-      - "40303:40303/udp"
+      - "40303:30303"
+      - "40303:30303/udp"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -59,7 +60,6 @@ services:
     command:
       - "node"
       - "-vvvvv"
-      - "-d"
       - "--datadir=/data/reth/execution-data"
       - "--chain=/root/assets/genesis.json"
       - "--http"
@@ -71,8 +71,10 @@ services:
       - "--authrpc.port=8551"
       - "--authrpc.jwtsecret=/root/assets/jwtsecret"
       - "--metrics=0.0.0.0:9001"
-      - "--discovery.port=40303"
-      - "--port=40303"
+      - "--discovery.port=30303"
+      - "--port=30303"
+      - "--bootnodes=enode://89e9cf2c4fee0b682a40158e1dd5192a0a87572457ed098ee111638b42090bdc751cb6dd7197659005249b61be8ddc4a59799a4c259ec152cc5835fbbd01a459@reth0:30303"
+      - "--txpool.max-account-slots=10000"
       # - "--builder.gaslimit=3600000000" # default * 100
       # - "--builder.interval=10ms"
       # - "--builder.deadline=1" # The deadline in seconds for when the payload builder job should resolve
@@ -91,8 +93,8 @@ services:
       - "28545:8545"
       - "28551:8551"
       - "9102:9001"
-      - "50303:50303"
-      - "50303:50303/udp"
+      - "50303:30303"
+      - "50303:30303/udp"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -100,7 +102,6 @@ services:
     command:
       - "node"
       - "-vvvvv"
-      - "-d"
       - "--datadir=/data/reth/execution-data"
       - "--chain=/root/assets/genesis.json"
       - "--http"
@@ -112,8 +113,10 @@ services:
       - "--authrpc.port=8551"
       - "--authrpc.jwtsecret=/root/assets/jwtsecret"
       - "--metrics=0.0.0.0:9001"
-      - "--discovery.port=50303"
-      - "--port=50303"
+      - "--discovery.port=30303"
+      - "--port=30303"
+      - "--bootnodes=enode://89e9cf2c4fee0b682a40158e1dd5192a0a87572457ed098ee111638b42090bdc751cb6dd7197659005249b61be8ddc4a59799a4c259ec152cc5835fbbd01a459@reth0:30303"
+      - "--txpool.max-account-slots=10000"
       # - "--builder.gaslimit=3600000000" # default * 100
       # - "--builder.interval=10ms"
       # - "--builder.deadline=1" # The deadline in seconds for when the payload builder job should resolve
