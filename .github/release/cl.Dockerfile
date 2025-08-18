@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Clone project code
-RUN git clone -b main https://github.com/MetisProtocol/malachite.git
+RUN git clone -b dev-096 https://github.com/MetisProtocol/malachite.git
 RUN git clone -b main https://github.com/MetisProtocol/malaketh-layered.git
 
 WORKDIR /app/malaketh-layered
