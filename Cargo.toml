@@ -180,7 +180,7 @@ either = "1.15.0"
 # comefbft abci
 tendermint = "*"
 tendermint-rpc = { version = "*", features = ["secp256k1", "http-client", "websocket-client"] }
-async-trait = "0.1.88"
+async-trait = "0.1.89"
 tower = "0.5.2"
 tower-abci = "*"
 async-stm = "0.5.0"
