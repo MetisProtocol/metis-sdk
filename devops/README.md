@@ -23,6 +23,9 @@ ls nodes/0/config/priv_validator_key.json
 ### 4. configs/assets/jwtsecret
 Replace with the `jwtsecret` file corresponding to the target chain you want to connect to.
 
+### 5. compose.yaml
+Replace the "bootnodes" value to the target chain you want to connect to
+
 ## Optional Modifications
 
 ### 1. compose.yaml
