@@ -164,7 +164,7 @@ secp256k1 = { version = "0.30", default-features = false, features = [
   "recovery",
 ] }
 jsonrpsee = "0.25.1"
-indexmap = { version = "2.10.0", features = ["serde"] }
+indexmap = { version = "2.11.0", features = ["serde"] }
 
 tokio-stream = "0.1.17"
 hex = "0.4.3"
