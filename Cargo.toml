@@ -150,7 +150,7 @@ serde = "1.0.217"
 serde_json = "1.0.142"
 smallvec = "1.15.1"
 thiserror = "2.0.12"
-tokio = { version = "1.45.0", features = ["full"] }
+tokio = { version = "1.47.1", features = ["full"] }
 walkdir = "2.5.0"
 crossbeam = "0.8.4"
 futures = "0.3"
