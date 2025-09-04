@@ -1,6 +1,6 @@
 services:
   mala0:
-    image: ghcr.io/metisprotocol/malachitebft
+    image: ghcr.io/metisprotocol/malachitebft:latest
     container_name: mala0
     network_mode: host
     volumes:
@@ -16,7 +16,7 @@ services:
       - "--home"
       - "/data"
   mala1:
-    image: ghcr.io/metisprotocol/malachitebft
+    image: ghcr.io/metisprotocol/malachitebft:latest
     container_name: mala1
     network_mode: host
     volumes:
@@ -34,7 +34,7 @@ services:
       - "--home"
       - "/data"
   mala2:
-    image: ghcr.io/metisprotocol/malachitebft
+    image: ghcr.io/metisprotocol/malachitebft:latest
     container_name: mala2
     network_mode: host
     volumes:

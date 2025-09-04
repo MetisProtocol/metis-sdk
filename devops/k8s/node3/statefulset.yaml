@@ -71,7 +71,7 @@ spec:
             - name: genesis
               mountPath: /genesis
         - name: mala
-          image: ghcr.io/metisprotocol/malachitebft
+          image: ghcr.io/metisprotocol/malachitebft:latest
           ports:
             - containerPort: 27000
               name: p2p
