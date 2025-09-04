@@ -1,5 +1,11 @@
 moniker = "example-0"
 
+[engine]
+engine_url = "http://localhost:8551"
+eth_url = "http://localhost:8545"
+wt_path = "./assets/jwtsecret"
+block_interval = "1s"
+
 [logging]
 log_level = "debug"
 log_format = "plaintext"
@@ -11,8 +17,9 @@ timeout_prevote = "1s"
 timeout_prevote_delta = "500ms"
 timeout_precommit = "1s"
 timeout_precommit_delta = "500ms"
-timeout_commit = "0s"
-timeout_step = "30s"
+timeout_rebroadcast = "5s"
+value_payload = "proposal-and-parts"
+queue_capacity = 100
 
 [consensus.p2p]
 listen_addr = "/ip4/0.0.0.0/tcp/27000"
@@ -20,7 +27,6 @@ persistent_peers = [
     "/ip4/mala1/tcp/27001",
     "/ip4/mala2/tcp/27002",
 ]
-transport = "tcp"
 pubsub_max_size = "4.2 MB"
 rpc_max_size = "10.5 MB"
 
@@ -30,6 +36,7 @@ bootstrap_protocol = "full"
 selector = "random"
 num_outbound_peers = 20
 num_inbound_peers = 20
+max_connections_per_peer = 5
 ephemeral_connection_timeout = "5s"
 
 [consensus.p2p.protocol]
@@ -39,39 +46,15 @@ mesh_n_high = 12
 mesh_n_low = 4
 mesh_outbound_min = 2
 
-[mempool]
-max_tx_count = 10000
-gossip_batch_size = 0
-
-[mempool.p2p]
-listen_addr = "/ip4/127.0.0.1/tcp/28000"
-persistent_peers = [
-    "/ip4/127.0.0.1/tcp/28001",
-    "/ip4/127.0.0.1/tcp/28002",
-]
-transport = "tcp"
-pubsub_max_size = "4.2 MB"
-rpc_max_size = "10.5 MB"
-
-[mempool.p2p.discovery]
-enabled = false
-bootstrap_protocol = "full"
-selector = "random"
-num_outbound_peers = 20
-num_inbound_peers = 20
-ephemeral_connection_timeout = "5s"
-
-[mempool.p2p.protocol]
-type = "gossipsub"
-mesh_n = 6
-mesh_n_high = 12
-mesh_n_low = 4
-mesh_outbound_min = 2
-
-[sync]
+[value_sync]
 enabled = true
 status_update_interval = "10s"
 request_timeout = "10s"
+max_request_size = "1048.6 KB"
+max_response_size = "536.9 MB"
+parallel_requests = 5
+scoring_strategy = "ema"
+inactive_threshold = "1m"
 
 [metrics]
 enabled = true
@@ -80,15 +63,6 @@ listen_addr = "127.0.0.1:29000"
 [runtime]
 flavor = "single_threaded"
 
-[test]
-max_block_size = "1048.6 KB"
-value_payload = "parts-only"
-tx_size = "1.0 KB"
-txs_per_part = 256
-time_allowance_factor = 0.5
-exec_time_per_tx = "1ms"
-max_retain_blocks = 1000
-
-[test.vote_extensions]
-enabled = false
-size = "0 B"
+[prune]
+enabled = true
+retain_heights = 5000
