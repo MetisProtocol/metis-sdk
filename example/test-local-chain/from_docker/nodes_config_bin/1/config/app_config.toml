@@ -1,5 +1,0 @@
-#engine_url = "http://reth1:8551"
-engine_url = "http://127.0.0.1:18551"
-#eth_url = "http://reth1:8545"
-eth_url = "http://127.0.0.1:18545"
-wt_path = "/data/jwtsecret"

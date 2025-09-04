@@ -1,8 +1,8 @@
-moniker = "example-0"
+moniker = "app-3"
 
 [engine]
-engine_url = "http://localhost:8551"
-eth_url = "http://localhost:8545"
+engine_url = "http://localhost:38551"
+eth_url = "http://localhost:38545"
 wt_path = "./assets/jwtsecret"
 block_interval = "1s"
 
@@ -22,16 +22,17 @@ value_payload = "proposal-and-parts"
 queue_capacity = 100
 
 [consensus.p2p]
-listen_addr = "/ip4/0.0.0.0/tcp/27000"
+listen_addr = "/ip4/0.0.0.0/tcp/27003"
 persistent_peers = [
-    "/ip4/mala1/tcp/27001",
-    "/ip4/mala2/tcp/27002",
+    "/ip4/127.0.0.1/tcp/27000",
+    "/ip4/127.0.0.1/tcp/27001",
+    "/ip4/127.0.0.1/tcp/27002",
 ]
 pubsub_max_size = "4.2 MB"
 rpc_max_size = "10.5 MB"
 
 [consensus.p2p.discovery]
-enabled = true
+enabled = false
 bootstrap_protocol = "full"
 selector = "random"
 num_outbound_peers = 20
@@ -58,7 +59,7 @@ inactive_threshold = "1m"
 
 [metrics]
 enabled = true
-listen_addr = "127.0.0.1:29000"
+listen_addr = "127.0.0.1:29003"
 
 [runtime]
 flavor = "single_threaded"
