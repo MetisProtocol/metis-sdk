@@ -10,7 +10,7 @@ data:
     [engine]
     engine_url = "http://localhost:8551"
     eth_url = "http://localhost:8545"
-    wt_path = "./assets/jwtsecret"
+    wt_path = "/data/jwt.hex"
     block_interval = "1s"
 
     [logging]
