@@ -53,7 +53,7 @@ alloy-transport = "1.0.23"
 alloy-transport-http = { version = "1.0.23", features = [
   "reqwest-rustls-tls",
 ], default-features = false }
-alloy-hardforks = "0.2.7"
+alloy-hardforks = "0.2.13"
 alloy-trie = { version = "0.9.1", default-features = false }
 alloy-signer = { version = "1.0.25", default-features = false }
 alloy-signer-local = { version = "1.0.23", default-features = false }
