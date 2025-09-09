@@ -32,7 +32,7 @@ metis-primitives = { path = "crates/primitives" }
 metis-pe = { path = "crates/pe" }
 metis-chain = { path = "crates/chain" }
 
-anyhow = "1.0.97"
+anyhow = "1.0.99"
 
 # Alloy and Revm dependencies
 alloy-consensus = { version = "1.0.23", default-features = false }
