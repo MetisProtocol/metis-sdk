@@ -213,6 +213,7 @@ fn execute_test(path: &Path) -> Result<(), TestError> {
             )
             .build();
         // Check sequential execute results
+        let start_sequential = std::time::Instant::now();
         let sequential_results = execute_sequential(
             StateStorageAdapter::new(&mut state),
             env.clone(),
@@ -221,6 +222,11 @@ fn execute_test(path: &Path) -> Result<(), TestError> {
             executor.worker.clone(),
         )
         .unwrap();
+        let duration_sequential = start_sequential.elapsed();
+        println!(
+            "Sequential execution completed in {:?}",
+            duration_sequential
+        );
         check_execute_results(&sequential_results, name, suite);
         // Clone the state for execution.
         let mut cache = cache_state.clone();
@@ -241,6 +247,7 @@ fn execute_test(path: &Path) -> Result<(), TestError> {
         // Check parallel execute results
         let concurrency_level =
             NonZeroUsize::new(num_cpus::get()).unwrap_or(NonZeroUsize::new(1).unwrap());
+        let start_parallel = std::time::Instant::now();
         let parallel_results = executor
             .execute(
                 StateStorageAdapter::new(&mut state),
@@ -249,6 +256,8 @@ fn execute_test(path: &Path) -> Result<(), TestError> {
                 concurrency_level,
             )
             .unwrap();
+        let duration_parallel = start_parallel.elapsed();
+        println!("Parallel execution completed in {:?}", duration_parallel);
         check_execute_results(&parallel_results, name, suite);
         // Check sequential and parallel results are same.
         for (s_res, p_res) in sequential_results.iter().zip(&parallel_results) {
