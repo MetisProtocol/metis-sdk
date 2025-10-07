@@ -143,11 +143,11 @@ When you use metis chain for deployment, you can expose this ports
 
 ## CLI Reference
 
-Metis chain is built on reth, they use almost the same CLI parameters, you can find more CLI information [here](https://reth.rs/cli/reth.html).
+Metis chain is built on reth, they use almost the same CLI parameters, you can find more CLI information [here](https://reth.rs/cli/reth).
 
 ## Interacting with Metis Chain over JSON-RPC
 
-Metis chain is built on reth, they both have the same ETH compatible JSON-RPC, you can find more JSON-RPC information [here](https://reth.rs/jsonrpc/intro.html).
+Metis chain is built on reth, they both have the same ETH compatible JSON-RPC, you can find more JSON-RPC information [here](https://reth.rs/jsonrpc/intro).
 
 ## Core Components
 
