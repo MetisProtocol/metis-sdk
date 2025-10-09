@@ -30,7 +30,7 @@ jobs:
           - name: 'Build and push hyperion image, tag as "latest"'
             command: 'make PROFILE=maxperf docker-build-push-latest'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: rui314/setup-mold@v1
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
@@ -57,7 +57,7 @@ jobs:
       packages: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
       - uses: rui314/setup-mold@v1
