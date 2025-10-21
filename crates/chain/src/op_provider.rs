@@ -15,14 +15,17 @@ use reth::builder::{
     BuilderContext, Node, NodeAdapter, NodeComponentsBuilder, components::ExecutorBuilder,
 };
 use reth::revm::{Inspector, context::TxEnv};
-use reth_evm::ConfigureEvm;
+use reth_evm::{ConfigureEvm, ConfigureEngineEvm, EvmEnvFor, ExecutionCtxFor, ExecutableTxIterator,};
 use reth_node_api::FullNodeTypes;
 use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_evm::{OpEvmConfig, OpRethReceiptBuilder};
 use reth_optimism_primitives::{OpPrimitives, OpReceipt, OpTransactionSigned};
 use reth_primitives::SealedBlock;
 use reth_primitives_traits::SealedHeader;
-use revm::database::State;
+use revm::{
+    context::result::{ResultAndState},
+    database::State,
+};
 
 use crate::state::StateStorageAdapter;
 use alloy_eips::eip7685::Requests;
@@ -38,6 +41,8 @@ use reth_optimism_node::node::{
 use reth_optimism_node::{OpEngineApiBuilder, OpNode, args::RollupArgs};
 use reth_optimism_rpc::eth::OpEthApiBuilder;
 use std::{fmt::Debug, num::NonZeroUsize, sync::Arc};
+use op_alloy_consensus::EIP1559ParamError;
+use op_alloy_rpc_types_engine::OpExecutionData;
 
 /// Optimism-related EVM configuration with the parallel executor.
 #[derive(Debug, Clone)]
@@ -99,7 +104,7 @@ impl ConfigureEvm for OpParallelEvmConfig {
         self.config.block_assembler()
     }
 
-    fn evm_env(&self, header: &Header) -> EvmEnv<OpSpecId> {
+    fn evm_env(&self, header: &Header) -> Result<EvmEnv<OpSpecId>, EIP1559ParamError> {
         self.config.evm_env(header)
     }
 
@@ -114,7 +119,7 @@ impl ConfigureEvm for OpParallelEvmConfig {
     fn context_for_block(
         &self,
         block: &SealedBlock<Block<OpTransactionSigned>>,
-    ) -> OpBlockExecutionCtx {
+    ) -> Result<OpBlockExecutionCtx, EIP1559ParamError> {
         self.config.context_for_block(block)
     }
 
@@ -122,8 +127,22 @@ impl ConfigureEvm for OpParallelEvmConfig {
         &self,
         parent: &SealedHeader,
         attributes: Self::NextBlockEnvCtx,
-    ) -> OpBlockExecutionCtx {
+    ) -> Result<OpBlockExecutionCtx, EIP1559ParamError> {
         self.config.context_for_next_block(parent, attributes)
+    }
+}
+
+impl ConfigureEngineEvm<OpExecutionData> for OpParallelEvmConfig {
+    fn evm_env_for_payload(&self, payload: &OpExecutionData) -> EvmEnvFor<Self> {
+        self.config.evm_env_for_payload(payload)
+    }
+
+    fn context_for_payload<'a>(&self, payload: &'a OpExecutionData) -> ExecutionCtxFor<'a, Self> {
+        self.config.context_for_payload(payload)
+    }
+
+    fn tx_iterator_for_payload(&self, payload: &OpExecutionData) -> impl ExecutableTxIterator<Self> {
+        self.config.tx_iterator_for_payload(payload)
     }
 }
 
@@ -191,6 +210,21 @@ where
         self.apply_pre_execution_changes()?;
         self.execute_transactions(transactions)
     }
+
+    fn execute_transaction_without_commit(
+        &mut self,
+        tx: impl ExecutableTx<Self>,
+    ) -> Result<ResultAndState<<Self::Evm as Evm>::HaltReason>, BlockExecutionError> {
+        self.inner.execute_transaction_without_commit(tx)
+    }
+
+    fn commit_transaction(
+        &mut self,
+        output: ResultAndState<<Self::Evm as Evm>::HaltReason>,
+        tx: impl ExecutableTx<Self>,
+    ) -> Result<u64, BlockExecutionError> {
+        self.inner.commit_transaction(output, tx)
+    }
 }
 
 impl<'db, DB, E, Spec> OpParallelBlockExecutor<E, Spec>
@@ -238,7 +272,7 @@ where
             evm_env,
             transactions
                 .into_iter()
-                .map(|tx| tx.into_tx_env().base)
+                .map(|tx| tx.to_tx_env().base)
                 .collect::<Vec<TxEnv>>(),
             NonZeroUsize::new(num_cpus::get()).unwrap_or(NonZeroUsize::new(1).unwrap()),
         );
@@ -311,7 +345,7 @@ impl OpParallelNode {
 impl NodeTypes for OpParallelNode {
     type Primitives = <OpNode as NodeTypes>::Primitives;
     type ChainSpec = <OpNode as NodeTypes>::ChainSpec;
-    type StateCommitment = <OpNode as NodeTypes>::StateCommitment;
+    // type StateCommitment = <OpNode as NodeTypes>::StateCommitment;
     type Storage = <OpNode as NodeTypes>::Storage;
     type Payload = <OpNode as NodeTypes>::Payload;
 }

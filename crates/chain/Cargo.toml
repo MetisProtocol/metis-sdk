@@ -53,6 +53,9 @@ reth-optimism-evm.workspace = true
 reth-optimism-payload-builder.workspace = true
 reth-optimism-primitives.workspace = true
 reth-optimism-forks.workspace = true
+op-alloy-consensus.workspace = true
+alloy-rpc-types-engine.workspace = true
+op-alloy-rpc-types-engine.workspace = true
 
 tokio.workspace = true
 serde.workspace = true
