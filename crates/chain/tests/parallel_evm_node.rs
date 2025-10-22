@@ -1,6 +1,7 @@
 use metis_chain::provider::ParallelExecutorBuilder;
 use reth::{
-    builder::{NodeBuilder, NodeHandle},
+    builder::{DebugNodeLauncher, EngineNodeLauncher, NodeBuilder, NodeHandle},
+    providers::providers::BlockchainProvider,
     tasks::TaskManager,
 };
 use reth_ethereum::node::EthereumNode;
@@ -9,8 +10,7 @@ use std::error::Error;
 
 pub mod common;
 
-// TODO: fix the parallel executor with the reth 1.6
-// #[tokio::test]
+#[tokio::test]
 async fn _test_parallel_evm_node() -> Result<(), Box<dyn Error>> {
     let result = async {
         let tasks = TaskManager::current();
@@ -22,12 +22,20 @@ async fn _test_parallel_evm_node() -> Result<(), Box<dyn Error>> {
             node_exit_future: _,
         } = NodeBuilder::new(node_config)
             .testing_node(tasks.executor())
-            .with_types::<EthereumNode>()
+            .with_types_and_provider::<EthereumNode, BlockchainProvider<_>>()
             .with_components(
                 EthereumNode::components().executor(ParallelExecutorBuilder::default()),
             )
             .with_add_ons(EthereumAddOns::default())
-            .launch()
+            .launch_with_fn(|builder| {
+                let engine_launcher = EngineNodeLauncher::new(
+                    builder.task_executor().clone(),
+                    builder.config().datadir(),
+                    Default::default(),
+                );
+                let launcher = DebugNodeLauncher::new(engine_launcher);
+                builder.launch_with(launcher)
+            })
             .await?;
 
         common::node::send_compare_transaction(node).await

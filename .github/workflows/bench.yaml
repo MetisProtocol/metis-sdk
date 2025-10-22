@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -32,7 +32,7 @@ jobs:
           components: clippy, rustfmt
 
       - name: Checkout base
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.base_ref || 'main' }}
           fetch-depth: 2
@@ -45,7 +45,7 @@ jobs:
       - name: Save benchmark baseline
         run: JEMALLOC_SYS_WITH_MALLOC_CONF="thp:always,metadata_thp:always" cargo bench -p metis-pe --features jemalloc
       - name: Checkout PR
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           clean: false
       - name: Compare PR benchmarks
