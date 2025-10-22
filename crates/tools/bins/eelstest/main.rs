@@ -21,7 +21,8 @@ use reth_ethereum_consensus::EthBeaconConsensus;
 use reth_primitives::{Account as RethAccount, Bytecode, SealedHeader, StorageEntry};
 use reth_primitives::{BlockBody, SealedBlock, StaticFileSegment};
 use reth_provider::{
-    providers::StaticFileWriter, test_utils::create_test_provider_factory_with_chain_spec, DatabaseProviderFactory, ProviderError, StaticFileProviderFactory
+    DatabaseProviderFactory, ProviderError, StaticFileProviderFactory, providers::StaticFileWriter,
+    test_utils::create_test_provider_factory_with_chain_spec,
 };
 use reth_stages::{ExecInput, Stage, stages::ExecutionStage};
 use serde::Deserialize;
@@ -642,7 +643,7 @@ fn execute_test(path: &Path) -> Result<(), TestError> {
                 (None, Some(_expected_state_root)) => {
                     // Insert state hashes into the provider based on the expected state root.
                     let _last_block = last_block.unwrap_or_default();
-                    
+
                     // todo no insert_hashes function in provider
                     // provider.insert_hashes(
                     //     0..=last_block.number,

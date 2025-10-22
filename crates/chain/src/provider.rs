@@ -9,6 +9,7 @@ use alloy_evm::eth::dao_fork::DAO_HARDFORK_BENEFICIARY;
 use alloy_evm::eth::{dao_fork, eip6110};
 use alloy_evm::{Database, FromRecoveredTx, FromTxWithEncoded};
 use alloy_hardforks::EthereumHardfork;
+use alloy_rpc_types_engine::ExecutionData;
 use metis_primitives::{CfgEnv, ExecutionResult, SpecId, TxEnv};
 use reth::api::{FullNodeTypes, NodeTypes};
 use reth::builder::BuilderContext;
@@ -17,25 +18,23 @@ use reth::{providers::BlockExecutionResult, revm::db::State};
 use reth_chainspec::{ChainSpec, EthChainSpec, Hardforks};
 use reth_ethereum_primitives::{Block, EthPrimitives, Receipt, TransactionSigned};
 use reth_evm::TransactionEnv;
-use reth_evm::{ConfigureEvm, ConfigureEngineEvm, EvmEnvFor, ExecutionCtxFor, ExecutableTxIterator,};
 use reth_evm::block::{ExecutableTx, InternalBlockExecutionError};
 use reth_evm::eth::spec::EthExecutorSpec;
 use reth_evm::eth::{EthBlockExecutionCtx, EthBlockExecutor, EthBlockExecutorFactory};
 use reth_evm::precompiles::PrecompilesMap;
-use reth_evm::{OnStateHook, execute::BlockExecutor};
+use reth_evm::{
+    ConfigureEngineEvm, ConfigureEvm, EvmEnvFor, ExecutableTxIterator, ExecutionCtxFor,
+};
 use reth_evm::{EthEvmFactory, Evm, EvmEnv, EvmFactory, NextBlockEnvAttributes};
+use reth_evm::{OnStateHook, execute::BlockExecutor};
 pub use reth_evm_ethereum::EthEvmConfig;
 use reth_evm_ethereum::{EthBlockAssembler, RethReceiptBuilder};
 use reth_primitives_traits::{SealedBlock, SealedHeader};
-use revm::{
-    context::result::{ResultAndState},
-    DatabaseCommit,
-};
+use revm::{DatabaseCommit, context::result::ResultAndState};
 use std::convert::Infallible;
 use std::fmt::Debug;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
-use alloy_rpc_types_engine::ExecutionData;
 
 /// Ethereum-related EVM configuration with the parallel executor.
 #[derive(Debug, Clone)]
@@ -93,7 +92,10 @@ where
         self.config.next_evm_env(parent, attributes)
     }
 
-    fn context_for_block<'a>(&self, block: &'a SealedBlock<Block>) -> Result<EthBlockExecutionCtx<'a>, Self::Error> {
+    fn context_for_block<'a>(
+        &self,
+        block: &'a SealedBlock<Block>,
+    ) -> Result<EthBlockExecutionCtx<'a>, Self::Error> {
         self.config.context_for_block(block)
     }
 

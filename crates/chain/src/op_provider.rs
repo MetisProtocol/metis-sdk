@@ -15,23 +15,24 @@ use reth::builder::{
     BuilderContext, Node, NodeAdapter, NodeComponentsBuilder, components::ExecutorBuilder,
 };
 use reth::revm::{Inspector, context::TxEnv};
-use reth_evm::{ConfigureEvm, ConfigureEngineEvm, EvmEnvFor, ExecutionCtxFor, ExecutableTxIterator,};
+use reth_evm::{
+    ConfigureEngineEvm, ConfigureEvm, EvmEnvFor, ExecutableTxIterator, ExecutionCtxFor,
+};
 use reth_node_api::FullNodeTypes;
 use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_evm::{OpEvmConfig, OpRethReceiptBuilder};
 use reth_optimism_primitives::{OpPrimitives, OpReceipt, OpTransactionSigned};
 use reth_primitives::SealedBlock;
 use reth_primitives_traits::SealedHeader;
-use revm::{
-    context::result::{ResultAndState},
-    database::State,
-};
+use revm::{context::result::ResultAndState, database::State};
 
 use crate::state::StateStorageAdapter;
 use alloy_eips::eip7685::Requests;
 use alloy_evm::block::{
     BlockValidationError, InternalBlockExecutionError, state_changes::post_block_balance_increments,
 };
+use op_alloy_consensus::EIP1559ParamError;
+use op_alloy_rpc_types_engine::OpExecutionData;
 use reth::builder::components::{BasicPayloadServiceBuilder, ComponentsBuilder};
 use reth_optimism_forks::OpHardforks;
 use reth_optimism_node::node::{
@@ -41,8 +42,6 @@ use reth_optimism_node::node::{
 use reth_optimism_node::{OpEngineApiBuilder, OpNode, args::RollupArgs};
 use reth_optimism_rpc::eth::OpEthApiBuilder;
 use std::{fmt::Debug, num::NonZeroUsize, sync::Arc};
-use op_alloy_consensus::EIP1559ParamError;
-use op_alloy_rpc_types_engine::OpExecutionData;
 
 /// Optimism-related EVM configuration with the parallel executor.
 #[derive(Debug, Clone)]
@@ -141,7 +140,10 @@ impl ConfigureEngineEvm<OpExecutionData> for OpParallelEvmConfig {
         self.config.context_for_payload(payload)
     }
 
-    fn tx_iterator_for_payload(&self, payload: &OpExecutionData) -> impl ExecutableTxIterator<Self> {
+    fn tx_iterator_for_payload(
+        &self,
+        payload: &OpExecutionData,
+    ) -> impl ExecutableTxIterator<Self> {
         self.config.tx_iterator_for_payload(payload)
     }
 }
