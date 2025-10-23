@@ -8,6 +8,7 @@ use reth::cli::Cli;
 use reth_node_ethereum::EthereumNode;
 use reth_node_ethereum::node::EthereumAddOns;
 use tracing::info;
+use metis_chain::hook_provider::HookExecutorBuilder;
 
 fn main() {
     reth_cli_util::sigsegv_handler::install();
@@ -36,7 +37,9 @@ fn main() {
                 .with_types::<EthereumNode>()
                 // Configure the components of the node
                 // use default ethereum components but use our parallel executor.
-                .with_components(EthereumNode::components())
+                .with_components(
+                    EthereumNode::components().executor(HookExecutorBuilder::default())
+                )
                 .with_add_ons(EthereumAddOns::default());
             handle.launch().await?.wait_for_node_exit().await
         }
