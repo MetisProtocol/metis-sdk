@@ -31,6 +31,7 @@ metis-vm = { path = "crates/vm" }
 metis-primitives = { path = "crates/primitives" }
 metis-pe = { path = "crates/pe" }
 metis-chain = { path = "crates/chain" }
+metis-hook = {path = "crates/hook" }
 
 anyhow = "1.0.99"
 

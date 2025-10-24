@@ -3,6 +3,7 @@
 #[global_allocator]
 static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
 
+use metis_chain::hook_provider::HookExecutorBuilder;
 use metis_chain::provider::ParallelExecutorBuilder;
 use reth::cli::Cli;
 use reth_node_ethereum::EthereumNode;
@@ -36,7 +37,9 @@ fn main() {
                 .with_types::<EthereumNode>()
                 // Configure the components of the node
                 // use default ethereum components but use our parallel executor.
-                .with_components(EthereumNode::components())
+                .with_components(
+                    EthereumNode::components().executor(HookExecutorBuilder::default()),
+                )
                 .with_add_ons(EthereumAddOns::default());
             handle.launch().await?.wait_for_node_exit().await
         }
