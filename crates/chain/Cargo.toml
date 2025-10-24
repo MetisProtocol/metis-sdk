@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 metis-primitives.workspace = true
 metis-pe.workspace = true
+metis-hook.workspace = true
 
 # comefbft abci
 tendermint.workspace = true
