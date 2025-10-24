@@ -1,33 +1,28 @@
 use alloy_evm::{
-    eth::EthEvmContext,
-    precompiles::PrecompilesMap,
-    revm::{
-        handler::EthPrecompiles,
-    },
-    EvmFactory,
+    EvmFactory, eth::EthEvmContext, precompiles::PrecompilesMap, revm::handler::EthPrecompiles,
 };
+use metis_hook::evm::MyEvm;
 use reth_ethereum::{
-    chainspec::{Chain, ChainSpec},
+    EthPrimitives,
+    chainspec::ChainSpec,
     evm::{
+        EthEvmConfig,
         primitives::{Database, EvmEnv},
         revm::{
+            MainBuilder, MainContext,
             context::{Context, TxEnv},
             context_interface::result::{EVMError, HaltReason},
             inspector::{Inspector, NoOpInspector},
             interpreter::interpreter::EthInterpreter,
             primitives::hardfork::SpecId,
-            MainBuilder, MainContext,
         },
-        EthEvm, EthEvmConfig,
     },
     node::{
         api::{FullNodeTypes, NodeTypes},
-        builder::{components::ExecutorBuilder, BuilderContext},
+        builder::{BuilderContext, components::ExecutorBuilder},
     },
-    EthPrimitives,
 };
 use std::fmt::Debug;
-use metis_hook::evm::MyEvm;
 
 /// Custom EVM configuration.
 #[derive(Debug, Clone, Default)]
@@ -35,8 +30,7 @@ use metis_hook::evm::MyEvm;
 pub struct MyEvmFactory;
 
 impl EvmFactory for MyEvmFactory {
-    type Evm<DB: Database, I: Inspector<EthEvmContext<DB>, EthInterpreter>> =
-        EthEvm<DB, I, Self::Precompiles>;
+    type Evm<DB: Database, I: Inspector<EthEvmContext<DB>>> = MyEvm<DB, I, Self::Precompiles>;
     type Tx = TxEnv;
     type Error<DBError: core::error::Error + Send + Sync + 'static> = EVMError<DBError>;
     type HaltReason = HaltReason;
@@ -50,15 +44,11 @@ impl EvmFactory for MyEvmFactory {
             .with_cfg(input.cfg_env)
             .with_block(input.block_env)
             .build_mainnet_with_inspector(NoOpInspector {})
-            .with_precompiles(EthPrecompiles::default());
+            .with_precompiles(PrecompilesMap::from_static(
+                EthPrecompiles::default().precompiles,
+            ));
 
-        let my_evm = MyEvm::new(evm.ctx, NoOpInspector {});
-        // let my_evm = MyEvm(evm);
-        // if spec == SpecId::PRAGUE {
-        //     evm = evm.with_precompiles(PrecompilesMap::from_static(prague_custom()));
-        // }
-        EthEvm::new(my_evm, false)
-        // my_evm
+        MyEvm::new(evm, false)
     }
 
     fn create_evm_with_inspector<DB: Database, I: Inspector<Self::Context<DB>, EthInterpreter>>(
@@ -67,7 +57,12 @@ impl EvmFactory for MyEvmFactory {
         input: EvmEnv,
         inspector: I,
     ) -> Self::Evm<DB, I> {
-        EthEvm::new(self.create_evm(db, input).into_inner().with_inspector(inspector), true)
+        MyEvm::new(
+            self.create_evm(db, input)
+                .into_inner()
+                .with_inspector(inspector),
+            true,
+        )
     }
 }
 

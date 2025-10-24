@@ -1,145 +1,243 @@
-use crate::handler::MyHandler;
+use alloy_evm::Evm as EvmTrait;
+use alloy_evm::{env::EvmEnv, eth::EthEvmContext};
+use alloy_primitives::{Address, Bytes};
 use revm::{
+    Database, ExecuteEvm, SystemCallEvm,
+    context::{BlockEnv, Context, Evm as RevmEvm, FrameStack, TxEnv, result::HaltReason},
+    context_interface::result::{EVMError, ResultAndState},
     handler::{
-        evm::FrameTr, instructions::EthInstructions, EthFrame, EthPrecompiles, EvmTr,
-        FrameInitOrResult, ItemOrResult, Handler,
+        EthFrame, EthPrecompiles, EvmTr, FrameInitOrResult, PrecompileProvider,
+        evm::{ContextDbError, FrameInitResult, FrameTr},
+        instructions::EthInstructions,
     },
-    inspector::{InspectorEvmTr, JournalExt, InspectCommitEvm, InspectEvm, Inspector, InspectorHandler},
-    interpreter::interpreter::EthInterpreter,
-    Database,
-    context::{
-        result::{ExecResultAndState, HaltReason, InvalidTransaction},
-        ContextError, ContextSetters, ContextTr, Evm, FrameStack,
-    },
-    context_interface::{
-        result::{EVMError, ExecutionResult},
-        JournalTr,
-    },
-    state::EvmState,
-    DatabaseCommit, ExecuteCommitEvm, ExecuteEvm,
+    inspector::{InspectEvm, Inspector, InspectorEvmTr},
+    interpreter::{InterpreterResult, interpreter::EthInterpreter},
+    primitives::hardfork::SpecId,
 };
+use std::ops::{Deref, DerefMut};
 
-/// MyEvm variant of the EVM.
-///
-/// This struct demonstrates how to create a custom EVM implementation by wrapping
-/// the standard REVM components. It combines a context (CTX), an inspector (INSP),
-/// and the standard Ethereum instructions, precompiles, and frame execution logic.
-///
-/// The generic parameters allow for flexibility in the underlying database and
-/// inspection capabilities while maintaining the standard Ethereum execution semantics.
 #[derive(Debug)]
-pub struct MyEvm<CTX, INSP>(
-    pub  Evm<
-        CTX,
-        INSP,
-        EthInstructions<EthInterpreter, CTX>,
-        EthPrecompiles,
-        EthFrame<EthInterpreter>,
+pub struct MyEvm<DB: Database, I, PRECOMPILE = EthPrecompiles> {
+    pub inner: RevmEvm<
+        EthEvmContext<DB>,
+        I,
+        EthInstructions<EthInterpreter, EthEvmContext<DB>>,
+        PRECOMPILE,
+        EthFrame,
     >,
-);
+    inspect: bool,
+}
 
-impl<CTX: ContextTr, INSP> MyEvm<CTX, INSP> {
-    pub fn new(ctx: CTX, inspector: INSP) -> Self {
-        Self(Evm {
-            ctx,
-            inspector,
-            instruction: EthInstructions::new_mainnet(),
-            precompiles: EthPrecompiles::default(),
-            frame_stack: FrameStack::new(),
-        })
+impl<DB: Database, I, PRECOMPILE> MyEvm<DB, I, PRECOMPILE> {
+    /// Creates a new Ethereum EVM instance.
+    ///
+    /// The `inspect` argument determines whether the configured [`Inspector`] of the given
+    /// [`RevmEvm`] should be invoked on [`Evm::transact`].
+    pub const fn new(
+        evm: RevmEvm<
+            EthEvmContext<DB>,
+            I,
+            EthInstructions<EthInterpreter, EthEvmContext<DB>>,
+            PRECOMPILE,
+            EthFrame,
+        >,
+        inspect: bool,
+    ) -> Self {
+        Self {
+            inner: evm,
+            inspect,
+        }
+    }
+
+    /// Consumes self and return the inner EVM instance.
+    pub fn into_inner(
+        self,
+    ) -> RevmEvm<
+        EthEvmContext<DB>,
+        I,
+        EthInstructions<EthInterpreter, EthEvmContext<DB>>,
+        PRECOMPILE,
+        EthFrame,
+    > {
+        self.inner
+    }
+
+    /// Provides a reference to the EVM context.
+    pub const fn ctx(&self) -> &EthEvmContext<DB> {
+        &self.inner.ctx
+    }
+
+    /// Provides a mutable reference to the EVM context.
+    pub const fn ctx_mut(&mut self) -> &mut EthEvmContext<DB> {
+        &mut self.inner.ctx
     }
 }
 
-impl<CTX: ContextTr, INSP> EvmTr for MyEvm<CTX, INSP>
-where
-    CTX: ContextTr,
-{
-    type Context = CTX;
-    type Instructions = EthInstructions<EthInterpreter, CTX>;
-    type Precompiles = EthPrecompiles;
-    type Frame = EthFrame<EthInterpreter>;
+impl<DB: Database, I, PRECOMPILE> Deref for MyEvm<DB, I, PRECOMPILE> {
+    type Target = EthEvmContext<DB>;
 
     #[inline]
+    fn deref(&self) -> &Self::Target {
+        self.ctx()
+    }
+}
+
+impl<DB: Database, I, PRECOMPILE> DerefMut for MyEvm<DB, I, PRECOMPILE> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.ctx_mut()
+    }
+}
+
+impl<DB, I, PRECOMPILE> EvmTrait for MyEvm<DB, I, PRECOMPILE>
+where
+    DB: alloy_evm::Database,
+    I: Inspector<EthEvmContext<DB>>,
+    PRECOMPILE: PrecompileProvider<EthEvmContext<DB>, Output = InterpreterResult>,
+{
+    type DB = DB;
+    type Tx = TxEnv;
+    type Error = EVMError<DB::Error>;
+    type HaltReason = HaltReason;
+    type Spec = SpecId;
+    type Precompiles = PRECOMPILE;
+    type Inspector = I;
+
+    fn block(&self) -> &BlockEnv {
+        &self.block
+    }
+
+    fn chain_id(&self) -> u64 {
+        self.cfg.chain_id
+    }
+
+    fn transact_raw(
+        &mut self,
+        tx: Self::Tx,
+    ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
+        if self.inspect {
+            self.inner.inspect_tx(tx)
+        } else {
+            self.inner.transact(tx)
+        }
+    }
+
+    fn transact_system_call(
+        &mut self,
+        caller: Address,
+        contract: Address,
+        data: Bytes,
+    ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
+        // self.inner.system_call_with_caller(caller, contract, data)
+        self.inner.system_call_with_caller(caller, contract, data)
+    }
+
+    fn finish(self) -> (Self::DB, EvmEnv<Self::Spec>) {
+        let Context {
+            block: block_env,
+            cfg: cfg_env,
+            journaled_state,
+            ..
+        } = self.inner.ctx;
+
+        (journaled_state.database, EvmEnv { block_env, cfg_env })
+    }
+
+    fn set_inspector_enabled(&mut self, enabled: bool) {
+        self.inspect = enabled;
+    }
+
+    fn components(&self) -> (&Self::DB, &Self::Inspector, &Self::Precompiles) {
+        (
+            &self.inner.ctx.journaled_state.database,
+            &self.inner.inspector,
+            &self.inner.precompiles,
+        )
+    }
+
+    fn components_mut(&mut self) -> (&mut Self::DB, &mut Self::Inspector, &mut Self::Precompiles) {
+        (
+            &mut self.inner.ctx.journaled_state.database,
+            &mut self.inner.inspector,
+            &mut self.inner.precompiles,
+        )
+    }
+}
+
+impl<DB, I, PRECOMPILE> EvmTr for MyEvm<DB, I, PRECOMPILE>
+where
+    DB: alloy_evm::Database,
+    I: Inspector<EthEvmContext<DB>>,
+    PRECOMPILE: PrecompileProvider<EthEvmContext<DB>, Output = InterpreterResult>,
+{
+    type Context = EthEvmContext<DB>;
+    type Instructions = EthInstructions<EthInterpreter, EthEvmContext<DB>>;
+    type Precompiles = PRECOMPILE;
+    type Frame = EthFrame<EthInterpreter>;
+
+    fn ctx(&mut self) -> &mut Self::Context {
+        self.inner.ctx_mut()
+    }
+
+    fn ctx_ref(&self) -> &Self::Context {
+        self.inner.ctx_ref()
+    }
+
+    fn ctx_instructions(&mut self) -> (&mut Self::Context, &mut Self::Instructions) {
+        self.inner.ctx_instructions()
+    }
+
+    fn ctx_precompiles(&mut self) -> (&mut Self::Context, &mut Self::Precompiles) {
+        self.inner.ctx_precompiles()
+    }
+
+    fn frame_stack(&mut self) -> &mut FrameStack<Self::Frame> {
+        self.inner.frame_stack()
+    }
+
     fn frame_init(
         &mut self,
         frame_input: <Self::Frame as FrameTr>::FrameInit,
-    ) -> Result<
-        ItemOrResult<&mut Self::Frame, <Self::Frame as FrameTr>::FrameResult>,
-        ContextError<<<Self::Context as ContextTr>::Db as Database>::Error>,
-    > {
-        self.0.frame_init(frame_input)
+    ) -> Result<FrameInitResult<'_, Self::Frame>, ContextDbError<Self::Context>> {
+        self.inner.frame_init(frame_input)
     }
 
-    #[inline]
     fn frame_run(
         &mut self,
-    ) -> Result<
-        FrameInitOrResult<Self::Frame>,
-        ContextError<<<Self::Context as ContextTr>::Db as Database>::Error>,
-    > {
-        self.0.frame_run()
+    ) -> Result<FrameInitOrResult<Self::Frame>, ContextDbError<Self::Context>> {
+        self.inner.frame_run()
     }
 
-    #[inline]
     fn frame_return_result(
         &mut self,
-        frame_result: <Self::Frame as FrameTr>::FrameResult,
-    ) -> Result<
-        Option<<Self::Frame as FrameTr>::FrameResult>,
-        ContextError<<<Self::Context as ContextTr>::Db as Database>::Error>,
-    > {
-        self.0.frame_return_result(frame_result)
-    }
-    
-    #[doc = " Returns a mutable reference to the execution context"]
-    fn ctx(&mut self) ->  &mut Self::Context {
-        self.0.ctx()
-    }
-    
-    #[doc = " Returns an immutable reference to the execution context"]
-    fn ctx_ref(&self) ->  &Self::Context {
-        self.0.ctx_ref()
-    }
-    
-    #[doc = " Returns mutable references to both the context and instruction set."]
-    #[doc = " This enables atomic access to both components when needed."]
-    fn ctx_instructions(&mut self) -> (&mut Self::Context, &mut Self::Instructions) {
-        self.0.ctx_instructions()
-    }
-    
-    #[doc = " Returns mutable references to both the context and precompiles."]
-    #[doc = " This enables atomic access to both components when needed."]
-    fn ctx_precompiles(&mut self) -> (&mut Self::Context, &mut Self::Precompiles) {
-        self.0.ctx_precompiles()
-    }
-    
-    #[doc = " Returns a mutable reference to the frame stack."]
-    fn frame_stack(&mut self) ->  &mut FrameStack<Self::Frame>  {
-        self.0.frame_stack()
+        result: <Self::Frame as FrameTr>::FrameResult,
+    ) -> Result<Option<<Self::Frame as FrameTr>::FrameResult>, ContextDbError<Self::Context>> {
+        self.inner.frame_return_result(result)
     }
 }
 
-impl<CTX: ContextTr, INSP> InspectorEvmTr for MyEvm<CTX, INSP>
+impl<DB, I, PRECOMPILE> InspectorEvmTr for MyEvm<DB, I, PRECOMPILE>
 where
-    CTX: ContextSetters<Journal: JournalExt>,
-    INSP: Inspector<CTX, EthInterpreter>,
+    DB: alloy_evm::Database,
+    I: Inspector<EthEvmContext<DB>>,
+    PRECOMPILE: PrecompileProvider<EthEvmContext<DB>, Output = InterpreterResult>,
 {
-    type Inspector = INSP;
-    
+    type Inspector = I;
+
     fn inspector(&mut self) -> &mut Self::Inspector {
-        self.0.inspector()
+        self.inner.inspector()
     }
-    
+
     fn ctx_inspector(&mut self) -> (&mut Self::Context, &mut Self::Inspector) {
-        self.0.ctx_inspector()
+        self.inner.ctx_inspector()
     }
-    
+
     fn ctx_inspector_frame(
         &mut self,
     ) -> (&mut Self::Context, &mut Self::Inspector, &mut Self::Frame) {
-        self.0.ctx_inspector_frame()
+        self.inner.ctx_inspector_frame()
     }
-    
+
     fn ctx_inspector_frame_instructions(
         &mut self,
     ) -> (
@@ -148,84 +246,6 @@ where
         &mut Self::Frame,
         &mut Self::Instructions,
     ) {
-        self.0.ctx_inspector_frame_instructions()
+        self.inner.ctx_inspector_frame_instructions()
     }
-}
-
-/// Type alias for the error type of the OpEvm.
-type MyError<CTX> = EVMError<<<CTX as ContextTr>::Db as Database>::Error, InvalidTransaction>;
-
-// Trait that allows to replay and transact the transaction.
-impl<CTX, INSP> ExecuteEvm for MyEvm<CTX, INSP>
-where
-    CTX: ContextSetters<Journal: JournalTr<State = EvmState>>,
-{
-    type State = EvmState;
-    type ExecutionResult = ExecutionResult<HaltReason>;
-    type Error = MyError<CTX>;
-
-    type Tx = <CTX as ContextTr>::Tx;
-
-    type Block = <CTX as ContextTr>::Block;
-
-    fn set_block(&mut self, block: Self::Block) {
-        self.0.ctx.set_block(block);
-    }
-
-    fn transact_one(&mut self, tx: Self::Tx) -> Result<Self::ExecutionResult, Self::Error> {
-        self.0.ctx.set_tx(tx);
-        let mut handler = MyHandler::default();
-        handler.run(self)
-    }
-
-    fn finalize(&mut self) -> Self::State {
-        self.ctx().journal_mut().finalize()
-    }
-
-    fn replay(
-        &mut self,
-    ) -> Result<ExecResultAndState<Self::ExecutionResult, Self::State>, Self::Error> {
-        let mut handler = MyHandler::default();
-        handler.run(self).map(|result| {
-            let state = self.finalize();
-            ExecResultAndState::new(result, state)
-        })
-    }
-}
-
-// Trait allows replay_commit and transact_commit functionality.
-impl<CTX, INSP> ExecuteCommitEvm for MyEvm<CTX, INSP>
-where
-    CTX: ContextSetters<Db: DatabaseCommit, Journal: JournalTr<State = EvmState>>,
-{
-    fn commit(&mut self, state: Self::State) {
-        self.ctx().db_mut().commit(state);
-    }
-}
-
-// Inspection trait.
-impl<CTX, INSP> InspectEvm for MyEvm<CTX, INSP>
-where
-    CTX: ContextSetters<Journal: JournalTr<State = EvmState> + JournalExt>,
-    INSP: Inspector<CTX, EthInterpreter>,
-{
-    type Inspector = INSP;
-
-    fn set_inspector(&mut self, inspector: Self::Inspector) {
-        self.0.inspector = inspector;
-    }
-
-    fn inspect_one_tx(&mut self, tx: Self::Tx) -> Result<Self::ExecutionResult, Self::Error> {
-        self.0.ctx.set_tx(tx);
-        let mut handler = MyHandler::default();
-        handler.inspect_run(self)
-    }
-}
-
-// Inspect
-impl<CTX, INSP> InspectCommitEvm for MyEvm<CTX, INSP>
-where
-    CTX: ContextSetters<Db: DatabaseCommit, Journal: JournalTr<State = EvmState> + JournalExt>,
-    INSP: Inspector<CTX, EthInterpreter>,
-{
 }

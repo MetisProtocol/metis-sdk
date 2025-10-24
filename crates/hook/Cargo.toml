@@ -7,3 +7,5 @@ edition.workspace = true
 revm.workspace = true
 metis-primitives.workspace = true
 alloy-evm.workspace = true
+alloy-primitives.workspace = true
+reth-evm.workspace = true
