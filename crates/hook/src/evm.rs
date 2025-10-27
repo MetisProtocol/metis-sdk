@@ -118,7 +118,7 @@ where
         if self.inspect {
             self.inner.inspect_tx(tx)
         } else {
-            self.inner.transact(tx)
+            ExecuteEvm::transact(self, tx)
         }
     }
 
