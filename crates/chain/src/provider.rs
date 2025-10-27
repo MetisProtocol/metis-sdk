@@ -9,7 +9,6 @@ use alloy_evm::eth::dao_fork::DAO_HARDFORK_BENEFICIARY;
 use alloy_evm::eth::{dao_fork, eip6110};
 use alloy_evm::{Database, FromRecoveredTx, FromTxWithEncoded};
 use alloy_hardforks::EthereumHardfork;
-use alloy_rpc_types_engine::ExecutionData;
 use metis_primitives::{CfgEnv, ExecutionResult, SpecId, TxEnv};
 use reth::api::{FullNodeTypes, NodeTypes};
 use reth::builder::BuilderContext;
@@ -22,15 +21,12 @@ use reth_evm::block::{ExecutableTx, InternalBlockExecutionError};
 use reth_evm::eth::spec::EthExecutorSpec;
 use reth_evm::eth::{EthBlockExecutionCtx, EthBlockExecutor, EthBlockExecutorFactory};
 use reth_evm::precompiles::PrecompilesMap;
-use reth_evm::{
-    ConfigureEngineEvm, ConfigureEvm, EvmEnvFor, ExecutableTxIterator, ExecutionCtxFor,
-};
+use reth_evm::{ConfigureEvm, OnStateHook, execute::BlockExecutor};
 use reth_evm::{EthEvmFactory, Evm, EvmEnv, EvmFactory, NextBlockEnvAttributes};
-use reth_evm::{OnStateHook, execute::BlockExecutor};
 pub use reth_evm_ethereum::EthEvmConfig;
 use reth_evm_ethereum::{EthBlockAssembler, RethReceiptBuilder};
 use reth_primitives_traits::{SealedBlock, SealedHeader};
-use revm::{DatabaseCommit, context::result::ResultAndState};
+use revm::DatabaseCommit;
 use std::convert::Infallible;
 use std::fmt::Debug;
 use std::num::NonZeroUsize;
@@ -80,7 +76,7 @@ where
         &self.config.block_assembler
     }
 
-    fn evm_env(&self, header: &Header) -> Result<EvmEnv, Self::Error> {
+    fn evm_env(&self, header: &Header) -> EvmEnv {
         self.config.evm_env(header)
     }
 
@@ -92,10 +88,7 @@ where
         self.config.next_evm_env(parent, attributes)
     }
 
-    fn context_for_block<'a>(
-        &self,
-        block: &'a SealedBlock<Block>,
-    ) -> Result<EthBlockExecutionCtx<'a>, Self::Error> {
+    fn context_for_block<'a>(&self, block: &'a SealedBlock<Block>) -> EthBlockExecutionCtx<'a> {
         self.config.context_for_block(block)
     }
 
@@ -103,25 +96,8 @@ where
         &self,
         parent: &SealedHeader,
         attributes: Self::NextBlockEnvCtx,
-    ) -> Result<EthBlockExecutionCtx<'_>, Self::Error> {
+    ) -> EthBlockExecutionCtx<'_> {
         self.config.context_for_next_block(parent, attributes)
-    }
-}
-
-impl ConfigureEngineEvm<ExecutionData> for ParallelEthEvmConfig<ChainSpec>
-where
-    ChainSpec: EthExecutorSpec + EthChainSpec<Header = Header> + Hardforks + 'static,
-{
-    fn evm_env_for_payload(&self, payload: &ExecutionData) -> EvmEnvFor<Self> {
-        self.config.evm_env_for_payload(payload)
-    }
-
-    fn context_for_payload<'a>(&self, payload: &'a ExecutionData) -> ExecutionCtxFor<'a, Self> {
-        self.config.context_for_payload(payload)
-    }
-
-    fn tx_iterator_for_payload(&self, payload: &ExecutionData) -> impl ExecutableTxIterator<Self> {
-        self.config.tx_iterator_for_payload(payload)
     }
 }
 
@@ -193,21 +169,6 @@ where
         self.apply_pre_execution_changes()?;
         self.execute_transactions(transactions)
     }
-
-    fn execute_transaction_without_commit(
-        &mut self,
-        tx: impl ExecutableTx<Self>,
-    ) -> Result<ResultAndState<<Self::Evm as Evm>::HaltReason>, BlockExecutionError> {
-        self.executor.execute_transaction_without_commit(tx)
-    }
-
-    fn commit_transaction(
-        &mut self,
-        output: ResultAndState<<Self::Evm as Evm>::HaltReason>,
-        tx: impl ExecutableTx<Self>,
-    ) -> Result<u64, BlockExecutionError> {
-        self.executor.commit_transaction(output, tx)
-    }
 }
 
 impl<'db, DB, E, Spec> ParallelBlockExecutor<'_, E, Spec>
@@ -256,7 +217,7 @@ where
             evm_env,
             transactions
                 .into_iter()
-                .map(|tx| tx.to_tx_env())
+                .map(|tx| tx.into_tx_env())
                 .collect::<Vec<TxEnv>>(),
             NonZeroUsize::new(num_cpus::get()).unwrap_or(NonZeroUsize::new(1).unwrap()),
         );

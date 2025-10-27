@@ -1,16 +1,19 @@
 use alloy_genesis::Genesis;
 use alloy_primitives::B256;
 use alloy_primitives::{b256, hex};
+use futures_util::StreamExt as FuturesStreamExt;
+use jsonrpsee::http_client::HttpClient;
 use reth::builder::{FullNode, rpc::RethRpcAddOns};
 use reth::rpc::api::EngineEthApiClient;
 use reth::rpc::types::Transaction;
-use reth_ethereum::provider::CanonStateSubscriptions;
 use reth_ethereum::{
     chainspec::ChainSpec,
     node::core::{args::RpcServerArgs, node_config::NodeConfig},
 };
+use reth_ethereum::{node::core::primitives::SignedTransaction, provider::CanonStateSubscriptions};
 use reth_node_api::NodeTypes;
 use reth_node_api::{EngineTypes, FullNodeComponents};
+use reth_primitives_traits::BlockBody;
 use std::error::Error;
 use std::sync::Arc;
 
@@ -22,11 +25,11 @@ where
     Node: FullNodeComponents<Types: NodeTypes<Payload = Engine>>,
     AddOns: RethRpcAddOns<Node>,
 {
-    let mut _notifications = node.provider.canonical_state_stream();
+    let mut notifications = node.provider.canonical_state_stream();
     let raw_tx = hex!(
         "02f876820a28808477359400847735940082520894ab0840c0e43688012c1adb0f5e3fc665188f83d28a029d394a5d630544000080c080a0a044076b7e67b5deecc63f61a8d7913fab86ca365b344b5759d1fe3563b4c39ea019eab979dd000da04dfc72bb0377c092d30fd9e1cab5ae487de49586cc8b0090"
     );
-    let eth_api = node.rpc_server_handles.rpc.http_client().unwrap();
+    let eth_api: HttpClient = node.rpc_server_handles.rpc.http_client().unwrap();
     let hash: B256 =
         EngineEthApiClient::<Transaction, Transaction, Transaction>::send_raw_transaction(
             &eth_api,
@@ -39,9 +42,10 @@ where
     assert_eq!(hash, expected);
     println!("submitted transaction: {hash}");
 
-    // let head = FuturesStreamExt::next(&mut notifications).await.unwrap();
-    // let tx = head.tip().body().transactions().first().unwrap();
-    // assert_eq!(*tx.tx_hash(), hash);
+    let head = FuturesStreamExt::next(&mut notifications).await.unwrap();
+    let tx = head.tip().body().transactions().first().unwrap();
+
+    assert_eq!(*tx.tx_hash(), hash);
     println!("mined transaction: {hash}");
     Ok(())
 }
