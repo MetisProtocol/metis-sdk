@@ -142,7 +142,7 @@ rand = "0.9"
 # rand 8 for secp256k1
 rand_08 = { package = "rand", version = "0.8" }
 rayon = "1.11.0"
-reqwest = { version = "0.12.22", default-features = false, features = [
+reqwest = { version = "0.12.24", default-features = false, features = [
   "rustls-tls",
   "json",
 ] }
