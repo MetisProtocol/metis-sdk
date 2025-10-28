@@ -176,7 +176,7 @@ hash-db = "0.15"
 plain_hasher = "0.2"
 triehash = "0.8"
 k256 = { version = "0.13.3", features = ["ecdsa"] }
-libloading = "0.8.7"
+libloading = "0.8.9"
 moka = { version = "0.12.10", features = ["sync"] }
 either = "1.15.0"
 
