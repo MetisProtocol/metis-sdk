@@ -58,16 +58,8 @@ where
         let context = evm.ctx();
         let gas = exec_result.gas();
         let beneficiary = context.block().beneficiary();
-        // let basefee = context.block().basefee() as u128;
-        let coinbase_gas_price = context.tx().effective_gas_price(0);
-
-        // Transfer fee to coinbase/beneficiary.
-        // EIP-1559 discard basefee for coinbase transfer. Basefee amount of gas is discarded.
-        // let coinbase_gas_price = if context.cfg().spec().into().is_enabled_in(SpecId::LONDON) {
-        //     effective_gas_price.saturating_sub(basefee)
-        // } else {
-        //     effective_gas_price
-        // };
+        let basefee = context.block().basefee() as u128;
+        let coinbase_gas_price = context.tx().effective_gas_price(basefee);
 
         // reward beneficiary
         context.journal_mut().balance_incr(
