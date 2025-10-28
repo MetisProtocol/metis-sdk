@@ -6595,6 +6595,7 @@ dependencies = [
  "futures",
  "futures-util",
  "jsonrpsee 0.25.1",
+ "metis-hook",
  "metis-pe",
  "metis-primitives",
  "num_cpus",
@@ -6644,6 +6645,17 @@ dependencies = [
 [[package]]
 name = "metis-db"
 version = "0.6.0"
+
+[[package]]
+name = "metis-hook"
+version = "0.6.0"
+dependencies = [
+ "alloy-evm",
+ "alloy-primitives 1.3.1",
+ "metis-primitives",
+ "reth-evm",
+ "revm",
+]
 
 [[package]]
 name = "metis-pe"
