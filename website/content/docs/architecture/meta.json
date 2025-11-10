@@ -1,5 +1,5 @@
 {
   "title": "Architecture",
   "icon": "Network",
-  "pages": ["vm", "db", "pe", "ch", "ai_exex"]
+  "pages": ["vm", "db", "pe", "ch", "ai_exex", "val"]
 }
