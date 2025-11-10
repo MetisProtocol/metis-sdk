@@ -69,7 +69,7 @@ revm = { version = "29.0.1", default-features = false, features = [
 # OP Alloy and OP Revm dependencies
 alloy-op-evm = { version = "0.21.0" }
 op-alloy-consensus = { version = "0.20.0" }
-op-alloy-network = { version = "0.20.0" }
+op-alloy-network = { version = "0.22.0" }
 op-alloy-rpc-types = { version = "0.20.0" }
 op-alloy-rpc-types-engine = { version = "0.20.0", features = ["serde"] }
 op-revm = { version = "10.1.0" }
