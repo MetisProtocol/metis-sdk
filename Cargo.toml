@@ -72,7 +72,7 @@ op-alloy-consensus = { version = "0.20.0" }
 op-alloy-network = { version = "0.20.0" }
 op-alloy-rpc-types = { version = "0.20.0" }
 op-alloy-rpc-types-engine = { version = "0.20.0", features = ["serde"] }
-op-revm = { version = "10.1.0" }
+op-revm = { version = "10.1.1" }
 
 # Reth dependencies
 reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.8.2", default-features = false }
