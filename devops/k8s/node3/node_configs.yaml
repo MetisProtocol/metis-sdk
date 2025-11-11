@@ -13,6 +13,15 @@ data:
     wt_path = "/data/jwt.hex"
     block_interval = "1s"
 
+    [engine.dynamic_validator_set]
+    enabled = true
+    contract_address = "0x0000000000000000000000000000000000000800"
+    update_interval_seconds = 30
+    epoch_length_blocks = 100
+    min_stake_amount = "1000000000000000000"
+    slashing_enabled = true
+    fee_distribution_enabled = true
+
     [logging]
     log_level = "debug"
     log_format = "plaintext"
