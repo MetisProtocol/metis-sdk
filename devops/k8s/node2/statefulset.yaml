@@ -76,7 +76,7 @@ spec:
             - containerPort: 27000
               name: p2p
             - containerPort: 29000
-              name: metrics
+              name: mala-metrics
           command:
             - /app/malachitebft-eth-app
           args:
