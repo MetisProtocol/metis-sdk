@@ -1,0 +1,92 @@
+---
+title: Crate Validator
+---
+
+## Create Validator
+### Prerequisites
+
+1. Acquire minimum self-delegation tokens (≥ 20000 METIS)
+2. Set up validator infrastructure (servers, networking)
+3. Generate validator keys (consensus and operator)
+4. Prepare Tendermint public key and Ethereum operator address
+5. Install Foundry tools (`cast`, `forge`)
+
+### Step 1: Generate Validator Keys
+
+#### Generate Ed25519 Consensus Key
+
+You need to generate an Ed25519 key pair for consensus. You can use the Malaketh-Layered CLI or any Ed25519 key generator.
+```bash
+git clone https://github.com/MetisProtocol/malaketh-layered.git
+cd malaketh-layered
+cargo run --bin malachitebft-eth-utils pubkey --key-file {consensus_node_data_dir}/config/priv_validator_key.json
+```
+
+Example Output:
+```
+## this is tendermint pubkey
+0x7d7e3b7cb0dbe90ed442800de93a585e6239a46b90c5eced4f99e9a66526bb29
+## this is consensus address
+0x49e9dc75a1e71731bc799f36e7a9ddaa4e9597b3
+```
+#### Prepare Your Ethereum Operator Address
+
+This is your standard Ethereum address that will operate the validator and receive rewards.
+The balance of this address must exceed 20,000 METIS tokens, and you must possess the private key for this address to be able to send transactions.
+
+### Step 2: Prepare Validator Information
+Before creating the validator, prepare the following information:
+
+1. **Consensus Address**: Derived from your Ed25519 public key
+2. **Tendermint Public Key**: Your Ed25519 public key (32 bytes hex)
+3. **Operator Address**: Your Ethereum address
+4. **Description**: Optional metadata (Validator name, identity, website, details)
+5. **Self-Delegation**: Minimum 20,000 METIS
+
+### Step 3: Create Validator Using Cast
+**StakeHub Contract Address**: `0x0000000000000000000000000000000000002002`
+
+```bash
+cast send 0x0000000000000000000000000000000000002002 \
+  "createValidator(address,bytes,(string,string,string,string))" \
+  {CONSENSUS_ADDRESS} \
+  {TENDERMINT_PUBKEY} \
+  "({MONIKER},{IDENTITY},{WEBSITE},{DETAILS})" \
+  --value {SELF_DELEGATION} \
+  --rpc-url {RPC_URL} \
+  --private-key {PRIVATE_KEY}
+```
+
+Example:
+```bash
+cast send 0x0000000000000000000000000000000000002002 \
+  "createValidator(address,bytes,(string,string,string,string))" \
+  0xcce73027a7f939f491ddc48d0961e8177397c790 \
+  0x1702117e3fad60574a8638fe2976d0312b5e43d2badfb1d307cf0b3066e01fc1 \
+  "(\"TestVal\",\"test-identity\",\"https://test.com\",\"Test validator details\")" \
+  --value 20000000000000000000000 \
+  --private-key 0x0b98cf341c45e4199c432f734576d7404eba4e54257b47004f0c4b1444da94433 \
+  --rpc-url https://premainnet.lazai.network
+```
+
+### Step 4: Verify Validator Creation
+After sending the transaction, verify that your validator was created successfully:
+
+```bash
+# Check validator details
+cast call 0x0000000000000000000000000000000000002002 \
+  "getValidatorDescription(address)" \
+  {YOUR_OPERATOR_ADDRESS} \
+  --rpc-url {RPC_URL}
+
+# Check current validator set
+cast call 0x0000000000000000000000000000000000002002 \
+  "getValidatorElectionInfo(uint256,uint256)(address[],uint64[],address[],bytes[],uint256)" \
+  0 0 \
+  --rpc-url {RPC_URL}
+```
+
+Then you can wait for the Validator to participate in the consensus and produce blocks:
+
+- Next epoch
+- This Validator's voting power ranks in the top 21
