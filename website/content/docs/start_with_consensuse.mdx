@@ -1,57 +1,244 @@
 ---
 title: Quick Start With Consensus
+
 icon: "Atom"
 ---
 
-Welcome to the Metis SDK! This guide will help you quickly launch a Metis dev node.
+Welcome to the Metis SDK! This guide will help you quickly launch a Metis dev localnet or join in a chain.
+
+A consensus-included Metis node comprises two components:
+
+1. metis-sdk node (acting as the execution layer)
+2. malachitebft node (acting as the consensus layer)
 
 ## Pre-Built Binaries
 
 [Archives of precompiled binaries](https://github.com/MetisProtocol/metis-sdk/releases/) of metis are available for macOS and Linux. They are static executables. Users of platforms not explicitly listed below should download one of these archives.
 
-## Run From Docker
-Note: Before starting, please ensure that all necessary modifications have been completed.
-```bash
-git clone https://github.com/MetisProtocol/metis-sdk.git
-cd metis-sdk/devops
-bash start_node.sh
+## Docker
+
+Metis hyperion node docker images: https://github.com/MetisProtocol/metis-sdk/pkgs/container/hyperion
+
+Metis malachitebft node docker images: https://github.com/MetisProtocol/metis-sdk/pkgs/container/malachitebft
+
+Metis hyperion node docker images and malachitebft node docker images for both x86\_64 and ARM64 machines are published with every release of reth on GitHub Container Registry.
+
+```Plain
+docker pull ghcr.io/metisprotocol/hyperion
+docker pull ghcr.io/metisprotocol/malachitebft
 ```
 
-## Necessary Modifications
+Or a specific version (e.g. v0.7.1) with:
 
-### 1. configs/node/config/config.toml
-Update `persistent_peers` under `[consensus.p2p]` to the IP addresses of the peers in the target chain you want to connect to.
+```Plain
+docker pull ghcr.io/metisprotocol/hyperion:v0.7.1
+docker pull ghcr.io/metisprotocol/malachitebft:v0.7.1
+```
 
-### 2. genesis.json
-Replace with the `genesis.json` file corresponding to the target chain you want to connect to.
-need to be replaced file: 
-configs/node/config/genesis.json
-configs/assets/genesis.json
+## Build from Source
 
-### 3. configs/node/config/priv_validator_key.json
-You need to generate your own private key and replace this file. Steps to generate the file:
-```bash
+### Dependencies
+
+First, install Rust using [rustup](https://rustup.rs/):
+
+```Plain
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+With Rust installed, follow the [instructions](https://github.com/MetisProtocol/metis-sdk/blob/main/CONTRIBUTING.md) below to install dependencies relevant to your operating system:
+
+### Build Metis
+
+With Rust and the dependencies installed, clone the repository:
+
+```Plain
+git clone https://github.com/MetisProtocol/metis-sdk
+cd metis-sdk
+```
+
+Then, install metis into your `PATH` via:
+
+```Plain
+make install
+```
+
+Or build with the max performance mode
+
+```Plain
+make PROFILE=maxperf install
+```
+
+Alternatively, you can build yourself with:
+
+```Plain
+cargo build --release
+```
+
+This will place the reth binary under `./target/release/metis`, and you can copy it to your directory of preference after that.
+
+### Build malachitebft
+
+With Rust and the dependencies installed, clone the repository:
+
+```Plain
 git clone https://github.com/MetisProtocol/malaketh-layered.git
 cd malaketh-layered
-cargo run --bin malachitebft-eth-app -- testnet --nodes 1 --home nodes
-ls nodes/0/config/priv_validator_key.json
 ```
 
-### 4. configs/assets/jwtsecret
-Replace with the `jwtsecret` file corresponding to the target chain you want to connect to.
+Alternatively, you can build yourself with:
 
-### 5. compose.yaml
-Replace the "bootnodes" value to the target chain you want to connect to
+```Plain
+cargo build --release
+```
 
-## Optional Modifications
+This will place the reth binary under `./target/release/malachitebft-eth-app`, and you can copy it to your directory of preference after that.
 
-### 1. compose.yaml
-1. Service name
-2. `--http.port`: The port used to provide the engine service
-3. `--authrpc.port`: The port used to provide the RPC service
-4. `volumes` mapping: The `./configs` directory must match the directory where your configuration files are actually stored
+## Launch a Metis Localnet
 
-### 2. configs/node/config/app_config.toml
-1. Ensure that `reth0` in this file matches the service name `reth0` in `compose.yaml`
-2. The port in `engine_url` must match `--authrpc.port` in `compose.yaml`
-3. The port in `eth_url` must match `--http.port` in `compose.yaml`
+A Metis localnet with consensus must include at least three complete Metis nodes (Metis-sdk node + malachitebft node).
+
+Take a localnet with three nodes as an example.
+
+Step 1: Start three Metis-sdk nodes.
+
+Step 2: Start three malachitebft nodes.
+
+### Run From Binary
+
+#### Start metis-sdk node:
+
+You can use the script:
+
+```Plain
+git clone https://github.com/MetisProtocol/metis-sdk
+cd metis-sdk/example/test-local-chain/from_bin
+bash metis_nodes.sh
+```
+
+Or you can start metis-sdk node by yourself:
+
+```Solidity
+nohup metis node \
+    ${VERBOSITY} \
+    -d \
+    --datadir="${datadir}" \
+    --chain="${GENESIS_PATH}" \
+    --http \
+    --http.port="${http_port}" \
+    --http.addr=0.0.0.0 \
+    --http.corsdomain=* \
+    --http.api=all \
+    --authrpc.addr=0.0.0.0 \
+    --authrpc.port="${authrpc_port}" \
+    --authrpc.jwtsecret="${JWT_SECRET}" \
+    --metrics=0.0.0.0:"${metrics_port}" \
+    --discovery.port="${p2p_port}" \
+    --port="${p2p_port}" \
+    --ipcpath="${ipc_path}" \
+    >> "${log_file}" 2>&1 &
+```
+
+A `JWT_SECRET` example is:
+
+```Solidity
+167814d140ef5b51febc9b2aa29c08dba3b67e0a343352722d33d1570e9fbfa1
+```
+
+A `genesis.json` example is:
+
+```Plain
+git clone https://github.com/MetisProtocol/malaketh-layered.git
+ls malaketh-layered/assets/genesis.json
+```
+
+#### Start malachitebft node
+
+You can use the script:
+
+```Plain
+git clone https://github.com/MetisProtocol/malaketh-layered.git
+cd malaketh-layered
+cp -fr nodes_config_bin nodes
+bash scripts/spawn.bash --nodes 3 --home nodes
+```
+
+Or you can start malachitebft node by yourself:
+
+```Plain
+cd malaketh-layered
+cp -fr nodes_config_bin nodes
+malachitebft-eth-app start --home nodes/0
+malachitebft-eth-app start --home nodes/1
+malachitebft-eth-app start --home nodes/2
+```
+
+Configuration items you may need to pay attention to：(eg. nodes/0/config/config.toml)
+
+```Solidity
+engine_url = "http://localhost:8551" // metis-sdk engine url/port
+eth_url = "http://localhost:8545" // metis-sdk eth url/port
+block_interval = "1s" // Interval between block productions
+[consensus.p2p]
+listen_addr = "/ip4/0.0.0.0/tcp/27000" // malachitebft node self listen p2p url/port
+persistent_peers = [ // other node p2p url/port in the same chain
+    "/ip4/127.0.0.1/tcp/27001",
+    "/ip4/127.0.0.1/tcp/27002",
+]
+```
+
+### Run From Docker
+
+You can use the script:
+
+```Plain
+git clone https://github.com/MetisProtocol/metis-sdk
+cd metis-sdk/example/test-local-chain/from_docker
+bash start_metis_localnet.sh
+```
+
+Or you can start yourself with the docker compose
+
+`metis-sdk/example/test-local-chain/from_docker/compose.yaml`
+
+`metis-sdk/example/test-local-chain/from_docker/compose-mala.yaml`
+
+## Start a Metis-consensus node and join in a chain
+
+Same as "Launch a Metis Localnet", but just start one metis-sdk node and one malachitebft node.
+
+Start metis-sdk node:
+
+```Solidity
+nohup metis node \
+    ${VERBOSITY} \
+    -d \
+    --datadir="${datadir}" \
+    --chain="${GENESIS_PATH}" \
+    --http \
+    --http.port="${http_port}" \
+    --http.addr=0.0.0.0 \
+    --http.corsdomain=* \
+    --http.api=all \
+    --authrpc.addr=0.0.0.0 \
+    --authrpc.port="${authrpc_port}" \
+    --authrpc.jwtsecret="${JWT_SECRET}" \
+    --metrics=0.0.0.0:"${metrics_port}" \
+    --discovery.port="${p2p_port}" \
+    --port="${p2p_port}" \
+    --ipcpath="${ipc_path}" \
+    >> "${log_file}" 2>&1 &
+```
+
+Start malachitebft node
+
+```Solidity
+cd malaketh-layered
+cp -fr nodes_config_bin nodes
+malachitebft-eth-app start --home nodes/0
+```
+
+**Attention:**
+
+1. Should use the \`genesis.json\` file corresponding to the target chain you want to connect to.
+2. In malachitebft node config. `persistent_peers` should be modified to the URL/port of the nodes in the chain to be connected.
+
