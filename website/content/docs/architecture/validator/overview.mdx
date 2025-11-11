@@ -1,0 +1,178 @@
+---
+title: Overview
+---
+
+**Metis-SDK** relies on a system of multiple validators using **Malachite BFT (Byzantine Fault Tolerant) consensus** that provides deterministic finality and efficient block production. Validators with the highest voting power in the StakeHub staking contract have the opportunity to produce blocks. The BFT consensus mechanism and slashing logic ensure security, stability, and immediate chain finality.
+
+Metis SDK conducts validator elections based on real-time staking data from the **StakeHub** smart contract. The system dynamically selects validators with the highest voting power to participate in block production. The `maxElectedValidators` parameter in StakeHub determines the maximum number of active validators that can participate in consensus at any given epoch.
+
+In each **epoch** (a fixed number of blocks defined by `epochLength`), all active validators participate in the Malachite BFT consensus process:
+
+- **Proposer Selection**: Validators take turns as block proposers using a deterministic round-robin algorithm: `(height - 1 + round) % validator_count`
+- **Consensus Voting**: All active validators vote on proposed blocks, with each vote weighted by their voting power
+- **Finality Threshold**: Blocks are finalized when they receive votes representing more than **2/3** of total voting power
+- **Slashing**: If a validator fails to participate when selected as proposer or commits Byzantine faults (double-signing, malicious voting), they face slashing consequences
+
+Unlike traditional PoS systems with separate "cabinet" and "candidate" tiers, **Metis-SDK uses a flat validator structure** where all elected validators have equal probability of being selected as proposer (weighted by a simple rotation). However, all validators must maintain high availability - if they fail to propose blocks when it's their turn or don't participate in voting, they will be slashed. This measure ensures continuous participation from all validators, enhancing the decentralization and security of Metis-SDK.
+
+
+## What is a Validator?
+
+Validators on Metis-SDK are nodes responsible for producing blocks and securing the network through the **Malachite BFT consensus mechanism**. They participate in:
+
+- **Block Proposal**: Taking turns proposing new blocks containing transactions
+- **Block Validation**: Voting on proposed blocks to achieve Byzantine Fault Tolerant consensus
+- **Network Security**: Maintaining the integrity and finality of the blockchain through cryptographic signatures
+- **Earning Rewards**: Receiving tokens as compensation for their services from transaction fees and block rewards
+
+Each validator in Metis-SDK maintains two identities:
+
+1. **Consensus Address**: A Tendermint-compatible address derived from an Ed25519 public key, used for BFT consensus protocol
+2. **Operator Address**: An Ethereum-compatible address used for staking operations and interacting with the StakeHub contract
+
+## The Network Topology
+
+Validators on the Metis-SDK network are interconnected through a **peer-to-peer (P2P) network** using libp2p protocol, allowing for both direct and indirect connections. As a validator node operator, you have two operational modes:
+
+### Mode A (Ease of Use)
+
+You can expose your validator’s public IP address directly to the P2P network, which facilitates a direct connection. This mode is the most straightforward and offers high efficiency due to fewer network hops. To mitigate potential security risks, it is highly recommended to deactivate the HTTP module whenever possible and avoid exposing HTTP access to the public. Additionally, it’s crucial to safeguard your validator node’s information to prevent Distributed Denial of Service (DDoS) attacks that could target the P2P port.
+
+**Advantages:**
+- Straightforward setup and configuration
+- Lower latency due to fewer network hops
+- Direct peer discovery
+
+**Security Recommendations:**
+- Disable HTTP/RPC modules when not needed
+- Never expose RPC endpoints to public internet
+- Use firewall rules to restrict P2P port access
+- Enable connection limits to prevent resource exhaustion
+- Implement DDoS protection at network level
+
+### Mode B (Enhanced Security)
+
+This mode conceals your validator node behind one or more **Sentry Nodes**, which are regular Metis-SDK full nodes. The SentryNode acts as a protective intermediary between your hidden validator node and the public P2P network. It primarily shields the validator from threats such as DDoS attacks and other security vulnerabilities.
+**Architecture:**
+```
+Internet → Sentry Node(s) → Private Network → Validator Node
+```
+
+**Advantages:**
+- Validator IP address remains hidden
+- Protection against DDoS attacks
+- Additional layer of network security
+- Ability to quickly swap sentry nodes if attacked
+- Better control over peer connections
+
+## Consensus Mechanism
+
+Metis-SDK uses **Malachite BFT consensus**, a Byzantine Fault Tolerant protocol based on Tendermint consensus with the following characteristics:
+
+### Key Properties
+
+- **Deterministic Finality**: Blocks are immediately finalized once committed (no probabilistic finality)
+- **Byzantine Fault Tolerance**: Can tolerate up to 1/3 of voting power being malicious or offline
+- **Fast Block Times**: Efficient consensus allows for rapid block production
+- **Weighted Voting**: Validators vote with weight proportional to their staked tokens
+
+### Consensus Process
+
+1. **Propose Phase**: The designated proposer creates and broadcasts a block proposal
+2. **Prevote Phase**: All validators broadcast prevotes for the proposed block
+3. **Precommit Phase**: Upon receiving 2/3+ prevotes, validators broadcast precommits
+4. **Commit Phase**: Block is finalized when 2/3+ precommits are collected
+
+### Proposer Selection
+
+Proposers are selected deterministically using a round-robin algorithm:
+
+```
+proposer_index = (height - 1 + round) % validator_count
+```
+
+This ensures:
+- Fair distribution of proposer responsibilities
+- Deterministic and verifiable selection
+- Predictable proposer rotation
+- Equal opportunity for all validators (not weighted by stake)
+
+## Validator Selection Process
+
+### Initial Setup
+
+At genesis or when loading initial validator data, Metis-SDK reads validator information from the **Reth genesis block's extraData field**, which includes:
+
+- Consensus addresses (Tendermint Ed25519 public keys)
+- Operator addresses (Ethereum addresses)
+- Voting power (staked token amounts)
+- Epoch length configuration
+
+### Dynamic Validator Updates
+
+During runtime, the validator set can be updated from the **StakeHub smart contract**:
+
+1. **StakeHub Query**: At epoch boundaries, the system queries `getValidatorElectionInfo()` from StakeHub
+2. **Ranking by Voting Power**: Validators are ranked by their total delegated stake
+3. **Top-N Selection**: The top `maxElectedValidators` by voting power are elected
+4. **Validator Set Update**: The new validator set becomes active for the next epoch
+
+## Economics
+
+### Current Economic Model (Simplified)
+
+**Current Implementation**: In the current version of Metis-SDK, the economic model is simplified:
+
+- **Transaction Fees**: All transaction fees from a block go entirely to the **block proposer** (the validator who proposes that specific block)
+- **No Commission System**: There is currently no commission fee distribution to delegators
+- **No Block Rewards**: No additional block rewards beyond transaction fees
+- **Direct Proposer Rewards**: The validator that successfully proposes and gets a block committed receives 100% of the transaction fees from that block
+
+### Reward Distribution
+
+**Current Distribution**:
+```
+Block with transaction fees = 10 METIS in fees
+
+Proposer receives: 10 METIS (100%)
+Other validators: 0 METIS
+Delegators: 0 METIS
+```
+
+**How It Works**:
+1. Validator is selected as proposer for a specific height/round
+2. Proposer creates a block with transactions
+3. Block is validated and committed by 2/3+ of validators
+4. **All transaction fees** from that block go to the proposer's address
+5. Other validators (who voted but didn't propose) receive no rewards from that block
+
+### Future Economic Model (Planned)
+
+A more comprehensive economic model is planned for future releases, which may include:
+
+- ✅ **Commission System**: Validators can set commission rates and share rewards with delegators
+- ✅ **Reward Distribution**: Proportional distribution based on stake and participation
+- ✅ **Base Block Rewards**: Fixed rewards per block in addition to transaction fees
+- ✅ **Validator Set Rewards**: All participating validators receive a share, not just proposers
+- ✅ **Fee Distribution Logic**: Smart contract-based fee distribution to delegators
+- ✅ **Staking Yields**: Calculated APY/APR for staking participants
+
+
+## Risks for Validators
+
+If validators attempt to cheat the system or violate the specifications, they may incur a penalty known as slashing.
+
+### Double Sign Slash
+Running your validator keys simultaneously on two or more machines will result in Double-Sign slashing. The penalty for double-sign slash:
+
+1. 200 staked Metis will be slashed for the validator.
+2. The double sign jail time is 30 days, preventing the malicious validator from participating in consensus until manual intervention is taken.
+
+### Downtime Slash
+If your validator misses over 50 blocks in 24 hours, the blocking reward won’t be given to you but will be shared among other validators. If your validator continues to miss more than 150 blocks within 24 hours, it will trigger the following penalty for being offline.
+
+1. 10 staked Metis will be slashed for the validator.
+2. The offline jail time is 2 days. This allows the validator to send an unjail transaction and resume as an active validator after 2 days.
+
+### Low Self-Delegation Slash
+Validators must stake a minimum of 20000 Metis for self-delegation. If the self-delegated amount is less, the penalty is 2 days of jail time.
