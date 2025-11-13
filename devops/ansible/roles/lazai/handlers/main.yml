@@ -1,0 +1,73 @@
+---
+- name: Start/Enable node_exporter
+  ansible.builtin.systemd_service:
+    name: node_exporter
+    state: started
+    daemon_reload: true
+    enabled: true
+- name: Start/Enable ufw
+  ansible.builtin.systemd_service:
+    name: ufw
+    state: started
+    enabled: true
+- name: Restart ufw
+  ansible.builtin.systemd_service:
+    name: ufw
+    state: restarted
+    enabled: true
+- name: Restart chrony
+  ansible.builtin.systemd_service:
+    name: chrony
+    state: restarted
+    enabled: true
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+- name: Systemd reload
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: create_lazai_service.changed
+- name: Start/Enable lazai.service
+  ansible.builtin.systemd_service:
+    state: started
+    name: lazai
+    enabled: true
+  register: started_lazai_service
+- name: Restart/Enable lazai.service
+  ansible.builtin.systemd_service:
+    state: restarted
+    name: lazai
+    enabled: true
+  when:
+    - create_lazai_service.changed or download_lazai_binary.changed
+    - not started_lazai_service.changed
+- name: Wait for rpc port to open lazai.service
+  ansible.builtin.wait_for:
+    port: "8545"
+    connect_timeout: 5
+    delay: 20
+    state: started
+    timeout: 900
+######## lazai ########
+- name: Stop lazai node
+  listen: Restart lazai node
+  ansible.builtin.command: /opt/nodes/{{ lazai_node_name }}/stop.sh
+  environment:
+    HOST_ALIAS: "{{ lazai_node_name }}"
+    NODE_TYPE: "{{ lazai_role }}"
+  register: lazai_stop_output
+- name: Show stop lazai node output
+  listen: Restart lazai node
+  ansible.builtin.debug:
+    msg: "{{ lazai_stop_output.stdout }}"
+- name: Start lazai node
+  listen: Restart lazai node
+  ansible.builtin.command: /opt/nodes/{{ lazai_node_name }}/start.sh
+  environment:
+    HOST_ALIAS: "{{ lazai_node_name }}"
+    NODE_TYPE: "{{ lazai_role }}"
+  register: lazai_start_output
+- name: Show start lazai node output
+  listen: Restart lazai node
+  ansible.builtin.debug:
+    msg: "{{ lazai_start_output.stdout }}"

@@ -1,0 +1,6 @@
+---
+- name: Metis Node Setup (LazAI)
+  hosts: "all"
+  become: true
+  roles:
+    - role: lazai

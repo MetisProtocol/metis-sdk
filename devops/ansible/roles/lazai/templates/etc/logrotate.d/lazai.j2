@@ -1,0 +1,26 @@
+/opt/lazai/logs/*.log {
+    daily
+    copytruncate
+    rotate 4
+    size 2M
+    compress
+    compresscmd /bin/zstd
+    compressext .zst
+    compressoptions -18 -T0 --rm
+    dateext
+    dateformat -%Y%m%d%H
+}
+
+/opt/nodes/{{ node_name }}/logs/lazai-backup.log {
+    size 1M
+    rotate 3
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 root adm
+    postrotate
+        # Optionally, reload something if needed (none required for cron jobs)
+        :
+    endscript
+}

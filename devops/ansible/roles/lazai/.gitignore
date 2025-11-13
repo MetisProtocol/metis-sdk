@@ -1,0 +1,4 @@
+genesis.json
+jwtsecret
+*.env
+priv_validator_key.*

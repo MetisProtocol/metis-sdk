@@ -1,0 +1,41 @@
+---
+- name: Get architecture
+  ansible.builtin.set_fact:
+    lazai_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+- name: Get operating system
+  ansible.builtin.set_fact:
+    lazai_os: "{{ ansible_system | lower }}"
+- name: Get node_name
+  ansible.builtin.set_fact:
+    lazai_node_name: "{{ lazai_node_name | default(inventory_hostname.split('.')[0]) }}"
+- name: Install common packages
+  ansible.builtin.apt:
+    pkg:
+      - jq
+      - chrony
+      - tzdata
+    state: latest # noqa package-latest
+    update_cache: true
+  notify:
+    - Restart chrony
+- name: Configure sysctl
+  when: lazai_sysctl_enabled
+  ansible.builtin.include_tasks: ./sysctl.yml
+  vars:
+    sysctl: "{{ lazai_sysctl }}"
+- name: Configure ufw
+  when: lazai_ufw_enabled
+  ansible.builtin.include_tasks: ./ufw.yml
+- name: Install node_exporter
+  when: lazai_node_exporter_enabled
+  ansible.builtin.include_tasks: ./node_exporter.yml
+  vars:
+    node_exporter_version: "{{ lazai_node_exporter_version }}"
+    node_exporter_args: "{{ lazai_node_exporter_args }}"
+- name: Install docker
+  ansible.builtin.include_tasks: ./docker.yml
+  vars:
+    apt_mode: "{{ lazai_apt_mode }}"
+- name: Install lazai
+  ansible.builtin.include_tasks: ./lazai.yml
+  when: lazai_lazai_enabled

@@ -1,0 +1,36 @@
+---
+- name: Ensure ufw is installed
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+    update_cache: true
+- name: Allow SSH
+  community.general.ufw:
+    rule: allow
+    port: ssh
+    proto: tcp
+- name: Allow HTTP
+  community.general.ufw:
+    rule: allow
+    port: http
+    proto: tcp
+- name: Allow HTTPS
+  community.general.ufw:
+    rule: allow
+    port: https
+    proto: tcp
+- name: Allow 30303 TCP
+  community.general.ufw:
+    rule: allow
+    port: 30303
+    proto: tcp
+- name: Allow 30303 UDP
+  community.general.ufw:
+    rule: allow
+    port: 30303
+    proto: udp
+- name: Allow 27000 TCP
+  community.general.ufw:
+    rule: allow
+    port: 27000
+    proto: tcp
