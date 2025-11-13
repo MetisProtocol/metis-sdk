@@ -2,15 +2,21 @@
 ansible deployment scripts
 
 ## LazAI
-
-* requirements
-  * supported architecture: arm64
+* hardware requirements (recommendations)
+  * CPU: 8 cores
+  * Memory: 16 GB
+  * Storage: 512 GB SSD [as of `2025-11-13`] (expected 2–3 TB increase per year)
+  * Network: 1 Gbps
+  * Archive nodes and tracing nodes benefit from faste
+* os requirements
+* supported architecture: arm64
   * supported os: debian, ubuntu
     * for ubuntu / debian ( < 12), change ansible var `lazai_apt_mode` to `apt_repository`
   * lazai_role: default `rpc`, change to `seq` if plan to run in validator mode
 * runbook
-1. follow [create validator](../../website/content/docs/architecture/validator/crate.mdx)
+1. follow [create validator](../../website/content/docs/architecture/validator/create.mdx)
     * create private key and put rename under `roles/lazai/templates/opt/nodes/mala/config/priv_validator_key.{{ lazai_node_name | "default to $(hostname -s)"}}.json`
+    * [optional] contact LazAI (https://lazai.network) to get a most recent data snapshot, alternatively sync from beginning
 2. run ansible playbook
 ```bash
 ansible-playbook \

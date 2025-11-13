@@ -157,6 +157,11 @@ docker run \
     --ws --ws.api=all --ws.addr=0.0.0.0 --ws.port=8546
 ```
 
+### From Ansible
+refer to [LazAI Example](https://github.com/MetisProtocol/metis-sdk/blob/main/devops/ansible/README.md)
+* default behaviour deploys **LazAI** rpc node against mainnet [https://mainnet.lazai.network]
+* refer to https://github.com/MetisProtocol/metis-sdk/blob/main/devops/ansible/roles/lazai/defaults/main.yml to alter default behaviour
+
 ### Observability with Prometheus & Grafana
 
 Metis chain exposes a number of metrics which can be enabled by adding the `--metrics` flag:
