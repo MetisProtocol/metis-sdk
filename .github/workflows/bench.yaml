@@ -13,7 +13,7 @@ env:
   MACOSX_DEPLOYMENT_TARGET: '12.0'
 
 concurrency:
-  ggroup: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
