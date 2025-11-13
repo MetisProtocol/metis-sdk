@@ -11,7 +11,7 @@ ansible deployment scripts
 * os requirements
   * supported architecture: arm64, amd64
   * supported os: debian, ubuntu
-    * for ubuntu / debian ( < 12), change ansible var `lazai_apt_mode` to `apt_repository` (default is `lazai_apt_mode`)
+    * for ubuntu / debian (<= 12), change ansible var `lazai_apt_mode` to `apt_repository` (default is `lazai_apt_mode`)
   * lazai_role: default `rpc`, change to `seq` if plan to run in validator mode
   * install ansible (`pip install ansible`) (more details refer to https://docs.ansible.com)
 * runbook
