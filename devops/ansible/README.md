@@ -9,10 +9,11 @@ ansible deployment scripts
   * Network: 1 Gbps
   * Archive nodes and tracing nodes benefit from faste
 * os requirements
-* supported architecture: arm64
+  * supported architecture: arm64, amd64
   * supported os: debian, ubuntu
-    * for ubuntu / debian ( < 12), change ansible var `lazai_apt_mode` to `apt_repository`
+    * for ubuntu / debian ( < 12), change ansible var `lazai_apt_mode` to `apt_repository` (default is `lazai_apt_mode`)
   * lazai_role: default `rpc`, change to `seq` if plan to run in validator mode
+  * install ansible (`pip install ansible`) (more details refer to https://docs.ansible.com)
 * runbook
 1. follow [create validator](../../website/content/docs/architecture/validator/create.mdx)
     * create private key and put rename under `roles/lazai/templates/opt/nodes/mala/config/priv_validator_key.{{ lazai_node_name | "default to $(hostname -s)"}}.json`
