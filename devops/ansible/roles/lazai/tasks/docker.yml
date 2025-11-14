@@ -1,0 +1,58 @@
+---
+- name: Configure Docker Apt
+  block:
+    - name: Add docker apt-key
+      ansible.builtin.get_url:
+        url: "https://download.docker.com/{{ lazai_os }}/{{ ansible_distribution | lower }}/gpg"
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+    - name: Configure docker apt repository (apt_repository)
+      when:
+        - apt_mode == 'apt_repository'
+      ansible.builtin.apt_repository:
+        repo: >-
+          deb [arch={{ lazai_arch }} signed-by=/etc/apt/keyrings/docker.asc]
+          https://download.docker.com/{{ lazai_os }}/{{ ansible_distribution | lower }}
+          {{ ansible_distribution_release | lower }}
+          stable
+        state: present
+        update_cache: true
+        filename: docker
+    - name: Configure docker apt repository (deb822_repository)
+      when:
+        - apt_mode == 'deb822_repository'
+      ansible.builtin.deb822_repository:
+        name: docker
+        architectures: "{{ lazai_arch }}"
+        types: [deb]
+        uris: "https://download.docker.com/linux/{{ ansible_distribution | lower }}"
+        suites: ["{{ ansible_distribution_release | lower }}"]
+        components: [stable]
+        signed_by: "/etc/apt/keyrings/docker.asc"
+        state: present
+- name: Install docker packages
+  ansible.builtin.apt:
+    pkg:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    update_cache: true
+    state: present
+# - name: Create /etc/systemd/system/docker.service.d
+#   ansible.builtin.file:
+#     path: "/etc/systemd/system/docker.service.d"
+#     state: directory
+#     owner: root
+#     group: root
+#     mode: "0755"
+# - name: Create /etc/systemd/system/docker.service.d/override.conf
+#   ansible.builtin.template:
+#     src: "etc/systemd/system/docker.service.d/override.conf"
+#     dest: /etc/systemd/system/docker.service.d/override.conf
+#     owner: root
+#     group: root
+#     mode: "0644"
+#   notify:
+#     - Start/Enable docker

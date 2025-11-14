@@ -1,0 +1,16 @@
+---
+- name: "Create /etc/sysctl.d/lazai.conf"
+  ansible.builtin.template:
+    src: "etc/sysctl.d/lazai.conf.j2"
+    dest: "/etc/sysctl.d/lazai.conf"
+    mode: "0644"
+    owner: root
+    group: root
+  vars:
+    sysctl_config: "{{ sysctl }}"
+- name: Apply sysctl
+  ansible.builtin.shell:
+    cmd: "sysctl --system"
+    executable: /bin/bash
+  changed_when: lazai_apply_sysctl.rc != 0
+  register: lazai_apply_sysctl

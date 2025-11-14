@@ -1,0 +1,85 @@
+services:
+  # Blockscout Backend
+  backend:
+    image: {{ backend_image }}
+    container_name: blockscout-backend
+    command: ["sh", "-c", "bin/blockscout eval \"Elixir.Explorer.ReleaseTasks.create_and_migrate()\" && bin/blockscout start"]
+    ports:
+      - "127.0.0.1:4000:4000"
+    env_file:
+      - ./env/backend.{{ env }}.env
+    # depends_on:
+    #   postgres:
+    #     condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/api/health/liveness"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    logging:
+      driver: json-file         # or: local
+      options:
+        max-size: "50m"         # rotate when log file hits 50 MB
+        max-file: "5"           # keep 5 rotated files
+    volumes:
+      - /opt/blockscount-backend/logs:/app/logs
+    restart: unless-stopped
+    labels:
+      project: "lazai"
+      service: "backend"
+      service_type: "blockscout"
+      env: "{{ env }}"
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '8'
+    #       memory: 8G
+    #     reservations:
+    #       cpus: '2'
+    #       memory: 1G
+    networks:
+      - blockscout-network
+
+  # Blockscout Frontend
+  frontend:
+    image: {{ frontend_image }}
+    container_name: blockscout-frontend
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./env/frontend.{{ env }}.env
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    logging:
+      driver: json-file         # or: local
+      options:
+        max-size: "50m"         # rotate when log file hits 50 MB
+        max-file: "5"           # keep 5 rotated files
+    restart: unless-stopped
+    labels:
+      project: "lazai"
+      service: "frontend"
+      service_type: "blockscout"
+      env: "{{ env }}"
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '4'
+    #       memory: 1G
+    #     reservations:
+    #       cpus: '0.128'
+    #       memory: 128M
+    networks:
+      - blockscout-network
+
+networks:
+  blockscout-network:
+    driver: bridge

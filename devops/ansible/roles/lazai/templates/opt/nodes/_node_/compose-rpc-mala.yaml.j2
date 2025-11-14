@@ -1,0 +1,33 @@
+services:
+  mala:
+    image: {{ mala_image }}
+    container_name: {{ node_name }}-mala
+    volumes:
+      - /opt/nodes/{{ node_name }}/mala/data:/data
+      - /opt/nodes/{{ node_name }}/assets:/app/assets
+    ports:
+      - "27000:27000"
+      - "127.0.0.1:29000:29000"
+{% if sequencers | length > 0 %}
+    extra_hosts:
+{% for seq in sequencers %}
+      - "{{ seq.name }}:{{ seq.addr }}"
+{% endfor %}
+{% endif %}
+    environment:
+      PATH: /app
+    logging:
+      driver: json-file         # or: local
+      options:
+        max-size: "50m"         # rotate when log file hits 50 MB
+        max-file: "5"           # keep 5 rotated files
+    command:
+      - "malachitebft-eth-app"
+      - "start"
+      - "--home"
+      - "/data"
+    labels:
+      project: "lazai"
+      service: "mala"
+      service_type: "rpc"
+      env: "{{ env }}"

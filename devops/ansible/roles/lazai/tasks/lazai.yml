@@ -1,0 +1,73 @@
+# yamllint disable rule:line-length
+---
+### Configure lazai ####
+- name: Create lazai user
+  ansible.builtin.user:
+    name: "{{ lazai_user }}"
+    create_home: true
+    home: "{{ lazai_home }}"
+    shell: "{{ lazai_bin }}"
+    comment: lazai
+- name: Create lazai directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+    state: directory
+  loop: "{{ lazai_lazai_dirs }}"
+- name: "Download genesis.json ({{ lazai_env }})"
+  get_url:
+    url: "https://raw.githubusercontent.com/0xLazAI/lazai-genesis/refs/heads/main/{{ lazai_env }}/genesis.json"
+    dest: "{{ role_path }}/files/opt/nodes/_node_/assets.{{ lazai_env }}/genesis.json"
+    mode: "0600"
+  become: false
+  delegate_to: localhost
+- name: "Generate jwtsecret [localhost]"
+  ansible.builtin.copy:
+    dest: "{{ role_path }}/files/opt/nodes/_node_/assets.{{ lazai_env }}/jwtsecret"
+    mode: "0600"
+    content: "{{ lookup('ansible.builtin.password',
+                         role_path + '/files/opt/nodes/_node_/assets.' + lazai_env + '/jwtsecret'
+                         ~ ' length=64 chars=0123456789abcdef'
+                       ) }}"
+  become: false
+  delegate_to: localhost
+- name: "Create lazai files [file]"
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item['mode'] | default('0640') }}"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  loop:
+    - {"src": "opt/nodes/_node_/assets.{{ lazai_env }}/genesis.json", "dest": "/opt/nodes/{{ lazai_node_name }}/assets/genesis.json", "mode": "0400" }
+    - {"src": "opt/nodes/_node_/assets.{{ lazai_env }}/jwtsecret", "dest": "/opt/nodes/{{ lazai_node_name }}/assets/jwtsecret", "mode": "0400" }
+    - {"src": "opt/nodes/_node_/backup.sh", "dest": "/opt/nodes/{{ lazai_node_name }}/backup.sh", "mode": "0700" }
+    - {"src": "opt/nodes/_node_/start.sh", "dest": "/opt/nodes/{{ lazai_node_name }}/start.sh", "mode": "0700" }
+    - {"src": "opt/nodes/_node_/stop.sh", "dest": "/opt/nodes/{{ lazai_node_name }}/stop.sh", "mode": "0700" }
+  notify:
+    - Restart lazai node
+- name: "Create lazai mala files [template]"
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "{{ item['mode'] | default('0640') }}"
+  vars:
+    env: "{{ lazai_env }}"
+    node_name: "{{ lazai_node_name }}"
+    peers: "{{ lazai_sequencers }}"
+    sequencers: "{{ lazai_sequencers }}"
+    mala_image: "{{ lazai_mala_image }}"
+    reth_image: "{{ lazai_reth_image }}"
+  loop:
+    - {"src": "opt/nodes/_node_/mala/config/config.toml.j2", "dest": "/opt/nodes/{{ lazai_node_name }}/mala/data/config/config.toml", "mode": "0640" }
+    - {"src": "opt/nodes/_node_/mala/config/priv_validator_key.{{ lazai_node_name }}.json", "dest": "/opt/nodes/{{ lazai_node_name }}/mala/data/config/priv_validator_key.json", "mode": "0400" }
+    - {"src": "opt/nodes/_node_/compose-{{ lazai_role }}-mala.yaml.j2", "dest": "/opt/nodes/{{ lazai_node_name }}/compose-{{ lazai_role }}-mala.yaml", "mode": "0640" }
+    - {"src": "opt/nodes/_node_/compose-{{ lazai_role }}-reth-init.yaml.j2", "dest": "/opt/nodes/{{ lazai_node_name }}/compose-{{ lazai_role }}-reth-init.yaml", "mode": "0640" }
+    - {"src": "opt/nodes/_node_/compose-{{ lazai_role }}-reth.yaml.j2", "dest": "/opt/nodes/{{ lazai_node_name }}/compose-{{ lazai_role }}-reth.yaml", "mode": "0640" }
+    - {"src": "etc/logrotate.d/lazai.j2", "dest": "/etc/logrotate.d/lazai", "mode": "0644" }
+  notify:
+    - Restart lazai node

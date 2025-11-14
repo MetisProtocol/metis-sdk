@@ -1,0 +1,66 @@
+services:
+  reth:
+    image: {{ reth_image }}
+    container_name: {{ node_name }}-reth
+    volumes:
+      - /opt/nodes/{{ node_name }}/reth/rethdata:/data/reth/execution-data
+      - /opt/nodes/{{ node_name }}/assets:/root/assets/
+    ports:
+      - "127.0.0.1:8545:8545"
+      - "127.0.0.1:8546:8546"
+      - "127.0.0.1:8551:8551"
+      - "127.0.0.1:9101:9100"
+      - "30303:30303"
+      - "30303:30303/udp"
+{% if sequencers | length > 0 %}
+    extra_hosts:
+{% for seq in sequencers %}
+      - "{{ seq.name }}:{{ seq.addr }}"
+{% endfor %}
+{% endif %}
+    #environment:
+    #  PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    logging:
+      driver: json-file         # or: local
+      options:
+        max-size: "50m"         # rotate when log file hits 50 MB
+        max-file: "5"           # keep 5 rotated files
+    command:
+      - "node"
+      - "-vvvv"
+      - "-d"
+      - "--datadir=/data/reth/execution-data"
+      - "--chain=/root/assets/genesis.json"
+      - "--http"
+      - "--http.port=8545"
+      - "--http.addr=0.0.0.0"
+      - "--http.corsdomain=*"
+      - "--http.api=net,eth,web3,debug,txpool,trace"
+      - "--ws"
+      - "--ws.port=8546"
+      - "--ws.api=net,eth,web3,debug,txpool,trace"
+      - "--ws.addr=0.0.0.0"
+      - "--ws.origins=*"
+      - "--authrpc.addr=0.0.0.0"
+      - "--authrpc.port=8551"
+      - "--authrpc.jwtsecret=/root/assets/jwtsecret"
+      - "--ipcdisable"
+      - "--metrics=0.0.0.0:9100"
+      - "--discovery.port=30303"
+      - "--port=30303"
+{% if sequencers | length > 0 %}
+      - "--bootnodes={% for seq in sequencers %}enode://{{ seq.id }}@{{ seq.name }}:{{ seq.port }}{% if not loop.last %},{% endif %}{% endfor %}"
+{% endif %}
+      # - "--builder.gaslimit=3600000000" # default * 100
+      # - "--builder.interval=10ms"
+      # - "--builder.deadline=1" # The deadline in seconds for when the payload builder job should resolve
+      # - "--builder.max-tasks=10" # default=3
+      # - "--txpool.gas-limit=300000000" # default * 10
+      # - "--blobpool.pricebump=1"
+      # - "--txpool.pending-max-count=50000" # default=10000
+      # - "--txpool.queued-max-count=50000" # default=10000
+    labels:
+      project: "lazai"
+      service: "reth"
+      service_type: "rpc"
+      env: "{{ env }}"
