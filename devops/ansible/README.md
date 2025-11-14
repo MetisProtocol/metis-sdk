@@ -7,11 +7,11 @@ ansible deployment scripts
   * Memory: 16 GB
   * Storage: 512 GB SSD [as of `2025-11-13`] (expected 2–3 TB increase per year)
   * Network: 1 Gbps
-  * Archive nodes and tracing nodes benefit from faste
+  * Archive nodes and tracing nodes benefit from faster network bandwidth
 * os requirements
   * supported architecture: arm64, amd64
   * supported os: debian, ubuntu
-    * for ubuntu / debian (<= 12), change ansible var `lazai_apt_mode` to `apt_repository` (default is `lazai_apt_mode`)
+    * for ubuntu / debian (<= 12), change ansible var `lazai_apt_mode` to `apt_repository` (default is `deb822_repository`)
   * lazai_role: default `rpc`, change to `seq` if plan to run in validator mode
   * install ansible (`pip install ansible`) (more details refer to https://docs.ansible.com)
 * runbook
