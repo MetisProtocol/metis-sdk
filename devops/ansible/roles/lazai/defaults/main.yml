@@ -23,8 +23,8 @@ lazai_node_exporter_version: 1.9.1
 lazai_node_exporter_args: --web.listen-address 127.0.0.1:9100 --collector.systemd
 lazai_lazai_enabled: true
 lazai_blockscout_enabled: false
-lazai_mala_image: ghcr.io/0xlazai/malachitebft:v0.7.1
-lazai_reth_image: ghcr.io/0xlazai/lazchain:v0.7.1
+lazai_mala_image: ghcr.io/0xlazai/malachitebft:v0.7.2
+lazai_reth_image: ghcr.io/0xlazai/lazchain:v0.7.2
 lazai_blockscout_frontend_image: ghcr.io/0xlazai/frontend:v2.4.1-1c38a14
 lazai_blockscout_backend_image: ghcr.io/blockscout/blockscout:8.1.2
 lazai_bin: /usr/sbin/nologin
