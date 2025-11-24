@@ -136,7 +136,7 @@ bitflags = "2.9.1"
 bitvec = "1.0.1"
 clap = { version = "4.5.40", features = ["derive"] }
 color-eyre = "0.6.3"
-criterion = "0.5.1"
+criterion = "0.7.0"
 dashmap = "6.1.0"
 flate2 = "1.1.2"
 rand = "0.9"
