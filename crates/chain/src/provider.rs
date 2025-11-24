@@ -1,3 +1,4 @@
+use crate::hook_provider::MyEvmFactory;
 use crate::state::StateStorageAdapter;
 use alloy_consensus::Header;
 use alloy_eips::eip7685::Requests;
@@ -46,6 +47,14 @@ impl<ChainSpec> ParallelEthEvmConfig<ChainSpec> {
     pub fn new(chain_spec: Arc<ChainSpec>) -> Self {
         Self {
             config: EthEvmConfig::new(chain_spec),
+        }
+    }
+}
+
+impl<ChainSpec, EvmFactory> ParallelEthEvmConfig<ChainSpec, EvmFactory> {
+    pub fn new_with_evm_factory(chain_spec: Arc<ChainSpec>, evm_factory: EvmFactory) -> Self {
+        Self {
+            config: EthEvmConfig::new_with_evm_factory(chain_spec, evm_factory),
         }
     }
 }
@@ -108,9 +117,21 @@ where
     }
 }
 
-impl ConfigureEngineEvm<ExecutionData> for ParallelEthEvmConfig<ChainSpec>
+impl<EvmF> ConfigureEngineEvm<ExecutionData> for ParallelEthEvmConfig<ChainSpec, EvmF>
 where
     ChainSpec: EthExecutorSpec + EthChainSpec<Header = Header> + Hardforks + 'static,
+    EvmF: EvmFactory<
+            Tx: TransactionEnv
+                    + FromRecoveredTx<TransactionSigned>
+                    + FromTxWithEncoded<TransactionSigned>,
+            Spec = SpecId,
+            Precompiles = PrecompilesMap,
+        > + Clone
+        + Debug
+        + Send
+        + Sync
+        + Unpin
+        + 'static,
 {
     fn evm_env_for_payload(&self, payload: &ExecutionData) -> EvmEnvFor<Self> {
         self.config.evm_env_for_payload(payload)
@@ -352,9 +373,12 @@ impl<Node> ExecutorBuilder<Node> for ParallelExecutorBuilder
 where
     Node: FullNodeTypes<Types: NodeTypes<ChainSpec = ChainSpec, Primitives = EthPrimitives>>,
 {
-    type EVM = ParallelEthEvmConfig;
+    type EVM = ParallelEthEvmConfig<ChainSpec, MyEvmFactory>;
 
     async fn build_evm(self, ctx: &BuilderContext<Node>) -> eyre::Result<Self::EVM> {
-        Ok(ParallelEthEvmConfig::new(ctx.chain_spec()))
+        Ok(ParallelEthEvmConfig::new_with_evm_factory(
+            ctx.chain_spec(),
+            MyEvmFactory::default(),
+        ))
     }
 }
