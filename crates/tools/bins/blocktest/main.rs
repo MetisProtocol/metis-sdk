@@ -292,18 +292,18 @@ fn check_execute_results(results: &[TxExecutionResult], name: &str, suite: &Suit
         }
     }
     // Check the post state account nonce.
-    if let Some(post_state) = &suite.post {
-        if let Some(result) = results.last() {
-            let db_state = &result.state;
-            for (address, expect_account) in post_state {
-                let db_account = db_state.get(address).cloned().unwrap_or_default();
-                if expect_account.nonce != db_account.info.nonce {
-                    let kind = TestErrorKind::AccountMismatch {
-                        got: (*address, db_account.info.balance, db_account.info.nonce),
-                        expected: (*address, expect_account.balance, expect_account.nonce),
-                    };
-                    panic!("{kind:?}");
-                }
+    if let Some(post_state) = &suite.post
+        && let Some(result) = results.last()
+    {
+        let db_state = &result.state;
+        for (address, expect_account) in post_state {
+            let db_account = db_state.get(address).cloned().unwrap_or_default();
+            if expect_account.nonce != db_account.info.nonce {
+                let kind = TestErrorKind::AccountMismatch {
+                    got: (*address, db_account.info.balance, db_account.info.nonce),
+                    expected: (*address, expect_account.balance, expect_account.nonce),
+                };
+                panic!("{kind:?}");
             }
         }
     }
