@@ -24,7 +24,7 @@ use reth_optimism_evm::{OpEvmConfig, OpRethReceiptBuilder};
 use reth_optimism_primitives::{OpPrimitives, OpReceipt, OpTransactionSigned};
 use reth_primitives::SealedBlock;
 use reth_primitives_traits::SealedHeader;
-use revm::{context::result::ResultAndState, context::BlockEnv as RevmBlockEnv, database::State};
+use revm::{context::BlockEnv as RevmBlockEnv, context::result::ResultAndState, database::State};
 
 use crate::state::StateStorageAdapter;
 use alloy_eips::eip7685::Requests;
@@ -132,11 +132,17 @@ impl ConfigureEvm for OpParallelEvmConfig {
 }
 
 impl ConfigureEngineEvm<OpExecutionData> for OpParallelEvmConfig {
-    fn evm_env_for_payload(&self, payload: &OpExecutionData) -> Result<EvmEnvFor<Self>, Self::Error> {
+    fn evm_env_for_payload(
+        &self,
+        payload: &OpExecutionData,
+    ) -> Result<EvmEnvFor<Self>, Self::Error> {
         self.config.evm_env_for_payload(payload)
     }
 
-    fn context_for_payload<'a>(&self, payload: &'a OpExecutionData) -> Result<ExecutionCtxFor<'a, Self>, Self::Error> {
+    fn context_for_payload<'a>(
+        &self,
+        payload: &'a OpExecutionData,
+    ) -> Result<ExecutionCtxFor<'a, Self>, Self::Error> {
         self.config.context_for_payload(payload)
     }
 
@@ -264,20 +270,20 @@ where
     ) -> Result<BlockExecutionResult<OpReceipt>, BlockExecutionError> {
         // Set state clear flag if the block is after the Spurious Dragon hardfork.
         let block_env: &RevmBlockEnv = self.evm().block();
-        let state_clear_flag = self.spec.is_spurious_dragon_active_at_block(
-            block_env.number.try_into().unwrap_or(u64::MAX),
-        );
+        let state_clear_flag = self
+            .spec
+            .is_spurious_dragon_active_at_block(block_env.number.try_into().unwrap_or(u64::MAX));
         let evm_env = EvmEnv::new(CfgEnv::default(), self.evm().block().clone());
         let db = self.evm_mut().db_mut();
         db.set_state_clear_flag(state_clear_flag);
-        
+
         // Collect transactions and calculate blob gas used
         let transactions: Vec<_> = transactions.into_iter().collect();
         let total_blob_gas_used: u64 = transactions
             .iter()
             .filter_map(|tx| tx.tx().blob_gas_used())
             .sum();
-        
+
         let mut op_parallel_executor = metis_pe::OpParallelExecutor::default();
         let results = op_parallel_executor.execute(
             StateStorageAdapter::new(db),

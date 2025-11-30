@@ -31,7 +31,7 @@ use reth_evm::{OnStateHook, execute::BlockExecutor};
 pub use reth_evm_ethereum::EthEvmConfig;
 use reth_evm_ethereum::{EthBlockAssembler, RethReceiptBuilder};
 use reth_primitives_traits::{SealedBlock, SealedHeader};
-use revm::{DatabaseCommit, context::result::ResultAndState, context::BlockEnv as RevmBlockEnv};
+use revm::{DatabaseCommit, context::BlockEnv as RevmBlockEnv, context::result::ResultAndState};
 use std::convert::Infallible;
 use std::fmt::Debug;
 use std::num::NonZeroUsize;
@@ -139,11 +139,17 @@ where
         self.config.evm_env_for_payload(payload)
     }
 
-    fn context_for_payload<'a>(&self, payload: &'a ExecutionData) -> Result<ExecutionCtxFor<'a, Self>, Self::Error> {
+    fn context_for_payload<'a>(
+        &self,
+        payload: &'a ExecutionData,
+    ) -> Result<ExecutionCtxFor<'a, Self>, Self::Error> {
         self.config.context_for_payload(payload)
     }
 
-    fn tx_iterator_for_payload(&self, payload: &ExecutionData) -> Result<impl ExecutableTxIterator<Self>, Self::Error> {
+    fn tx_iterator_for_payload(
+        &self,
+        payload: &ExecutionData,
+    ) -> Result<impl ExecutableTxIterator<Self>, Self::Error> {
         self.config.tx_iterator_for_payload(payload)
     }
 }
@@ -258,7 +264,7 @@ where
             receipts,
             requests,
             gas_used: parallel_execute_result.gas_used,
-            blob_gas_used: parallel_execute_result.blob_gas_used
+            blob_gas_used: parallel_execute_result.blob_gas_used,
         };
 
         Ok(results)
@@ -269,20 +275,20 @@ where
         transactions: impl IntoIterator<Item = impl ExecutableTx<Self>>,
     ) -> Result<BlockExecutionResult<Receipt>, BlockExecutionError> {
         let block_env: &RevmBlockEnv = self.evm().block();
-        let state_clear_flag = self.spec.is_spurious_dragon_active_at_block(
-            block_env.number.try_into().unwrap_or(u64::MAX),
-        );
+        let state_clear_flag = self
+            .spec
+            .is_spurious_dragon_active_at_block(block_env.number.try_into().unwrap_or(u64::MAX));
         let evm_env = EvmEnv::new(CfgEnv::default(), self.evm().block().clone());
         let db = self.evm_mut().db_mut();
         db.set_state_clear_flag(state_clear_flag);
-        
+
         // Collect transactions and calculate blob gas used
         let transactions: Vec<_> = transactions.into_iter().collect();
         let total_blob_gas_used: u64 = transactions
             .iter()
             .filter_map(|tx| tx.tx().blob_gas_used())
             .sum();
-        
+
         let mut parallel_executor = metis_pe::ParallelExecutor::default();
         let results = parallel_executor.execute(
             StateStorageAdapter::new(db),

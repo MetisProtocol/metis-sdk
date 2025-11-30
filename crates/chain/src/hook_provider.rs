@@ -1,7 +1,6 @@
 use alloy_evm::{
     EvmFactory, eth::EthEvmContext, precompiles::PrecompilesMap, revm::handler::EthPrecompiles,
 };
-use revm::context::BlockEnv;
 use metis_hook::evm::MyEvm;
 use reth_ethereum::{
     EthPrimitives,
@@ -23,6 +22,7 @@ use reth_ethereum::{
         builder::{BuilderContext, components::ExecutorBuilder},
     },
 };
+use revm::context::BlockEnv;
 use std::fmt::Debug;
 
 /// Custom EVM configuration.

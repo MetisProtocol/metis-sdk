@@ -21,8 +21,8 @@ use reth_ethereum_consensus::EthBeaconConsensus;
 use reth_primitives::{Account as RethAccount, Bytecode, SealedHeader, StorageEntry};
 use reth_primitives::{BlockBody, SealedBlock, StaticFileSegment};
 use reth_provider::{
-    BlockWriter, DatabaseProviderFactory, ProviderError, StaticFileProviderFactory, providers::StaticFileWriter,
-    test_utils::create_test_provider_factory_with_chain_spec,
+    BlockWriter, DatabaseProviderFactory, ProviderError, StaticFileProviderFactory,
+    providers::StaticFileWriter, test_utils::create_test_provider_factory_with_chain_spec,
 };
 use reth_stages::{ExecInput, Stage, stages::ExecutionStage};
 use serde::Deserialize;

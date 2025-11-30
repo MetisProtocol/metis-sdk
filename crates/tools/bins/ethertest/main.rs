@@ -1,6 +1,6 @@
+use alloy_eips::eip4844::calc_excess_blob_gas;
 use alloy_evm::EvmEnv;
 use alloy_rlp::{RlpEncodable, RlpMaxEncodedLen};
-use alloy_eips::eip4844::calc_excess_blob_gas;
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
 use either::Either;
@@ -10,8 +10,7 @@ use metis_chain::state::StateStorageAdapter;
 use metis_pe::{AccountInfo, ParallelExecutor};
 use metis_primitives::{
     AccessList, Address, B256, Bytecode, Bytes, GAS_PER_BLOB, Log, PlainAccount,
-    SignedAuthorization, SpecId, TxEnv, TxKind, U256, as_u64_saturated,
-    keccak256,
+    SignedAuthorization, SpecId, TxEnv, TxKind, U256, as_u64_saturated, keccak256,
 };
 use metis_tools::{SpecName, find_all_json_tests};
 use plain_hasher::PlainHasher;
@@ -624,10 +623,7 @@ fn setup_env(test: &Test, spec_id: SpecId) -> Result<EvmEnv, Box<TestError>> {
         test.env.parent_excess_blob_gas,
     ) {
         env.block_env.set_blob_excess_gas_and_price(
-            calc_excess_blob_gas(
-                parent_blob_gas_used.to(),
-                parent_excess_blob_gas.to(),
-            ),
+            calc_excess_blob_gas(parent_blob_gas_used.to(), parent_excess_blob_gas.to()),
             revm::primitives::eip4844::BLOB_BASE_FEE_UPDATE_FRACTION_CANCUN,
         );
     }
