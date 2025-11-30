@@ -1,6 +1,7 @@
 use alloy_evm::{
     EvmFactory, eth::EthEvmContext, precompiles::PrecompilesMap, revm::handler::EthPrecompiles,
 };
+use revm::context::BlockEnv;
 use metis_hook::evm::MyEvm;
 use reth_ethereum::{
     EthPrimitives,
@@ -32,6 +33,7 @@ pub struct MyEvmFactory;
 impl EvmFactory for MyEvmFactory {
     type Evm<DB: Database, I: Inspector<EthEvmContext<DB>>> = MyEvm<DB, I, Self::Precompiles>;
     type Tx = TxEnv;
+    type BlockEnv = BlockEnv;
     type Error<DBError: core::error::Error + Send + Sync + 'static> = EVMError<DBError>;
     type HaltReason = HaltReason;
     type Context<DB: Database> = EthEvmContext<DB>;

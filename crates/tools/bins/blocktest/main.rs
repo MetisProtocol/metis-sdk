@@ -155,7 +155,7 @@ fn execute_test(path: &Path) -> Result<(), TestError> {
         for (id, tx) in &suite.transactions {
             transactions[id.parse::<usize>().unwrap() - 1] = tx.clone();
         }
-        let mut env = EvmEnv::default();
+        let mut env: EvmEnv<SpecId, revm::context::BlockEnv> = EvmEnv::default();
         env.cfg_env.chain_id = 1;
         env.cfg_env.spec = spec_id;
         env.block_env.number = suite.env.block_number;

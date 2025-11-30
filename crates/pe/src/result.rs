@@ -195,6 +195,9 @@ pub(crate) fn op_evm_err_to_exec_error<DB: DatabaseRef>(
             OpTransactionError::HaltedDepositPostRegolith => {
                 ExecutionError::Custom("HaltedDepositPostRegolith".to_string()).into()
             }
+            OpTransactionError::MissingEnvelopedTx => {
+                ExecutionError::Custom("MissingEnvelopedTx".to_string()).into()
+            }
         },
         EVMError::Header(err) => ExecutionError::Header(err).into(),
         EVMError::Custom(err) => ExecutionError::Custom(err).into(),

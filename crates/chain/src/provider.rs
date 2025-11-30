@@ -1,6 +1,6 @@
 use crate::hook_provider::MyEvmFactory;
 use crate::state::StateStorageAdapter;
-use alloy_consensus::Header;
+use alloy_consensus::{Header, Transaction};
 use alloy_eips::eip7685::Requests;
 use alloy_evm::block::{
     BlockExecutionError, BlockValidationError, CommitChanges, SystemCaller,
@@ -31,7 +31,7 @@ use reth_evm::{OnStateHook, execute::BlockExecutor};
 pub use reth_evm_ethereum::EthEvmConfig;
 use reth_evm_ethereum::{EthBlockAssembler, RethReceiptBuilder};
 use reth_primitives_traits::{SealedBlock, SealedHeader};
-use revm::{DatabaseCommit, context::result::ResultAndState};
+use revm::{DatabaseCommit, context::result::ResultAndState, context::BlockEnv as RevmBlockEnv};
 use std::convert::Infallible;
 use std::fmt::Debug;
 use std::num::NonZeroUsize;
@@ -67,6 +67,7 @@ where
                     + FromRecoveredTx<TransactionSigned>
                     + FromTxWithEncoded<TransactionSigned>,
             Spec = SpecId,
+            BlockEnv = revm::context::BlockEnv,
             Precompiles = PrecompilesMap,
         > + Clone
         + Debug
@@ -89,7 +90,7 @@ where
         &self.config.block_assembler
     }
 
-    fn evm_env(&self, header: &Header) -> Result<EvmEnv, Self::Error> {
+    fn evm_env(&self, header: &Header) -> Result<EvmEnvFor<Self>, Self::Error> {
         self.config.evm_env(header)
     }
 
@@ -97,7 +98,7 @@ where
         &self,
         parent: &Header,
         attributes: &NextBlockEnvAttributes,
-    ) -> Result<EvmEnv, Self::Error> {
+    ) -> Result<EvmEnvFor<Self>, Self::Error> {
         self.config.next_evm_env(parent, attributes)
     }
 
@@ -125,6 +126,7 @@ where
                     + FromRecoveredTx<TransactionSigned>
                     + FromTxWithEncoded<TransactionSigned>,
             Spec = SpecId,
+            BlockEnv = revm::context::BlockEnv,
             Precompiles = PrecompilesMap,
         > + Clone
         + Debug
@@ -133,15 +135,15 @@ where
         + Unpin
         + 'static,
 {
-    fn evm_env_for_payload(&self, payload: &ExecutionData) -> EvmEnvFor<Self> {
+    fn evm_env_for_payload(&self, payload: &ExecutionData) -> Result<EvmEnvFor<Self>, Self::Error> {
         self.config.evm_env_for_payload(payload)
     }
 
-    fn context_for_payload<'a>(&self, payload: &'a ExecutionData) -> ExecutionCtxFor<'a, Self> {
+    fn context_for_payload<'a>(&self, payload: &'a ExecutionData) -> Result<ExecutionCtxFor<'a, Self>, Self::Error> {
         self.config.context_for_payload(payload)
     }
 
-    fn tx_iterator_for_payload(&self, payload: &ExecutionData) -> impl ExecutableTxIterator<Self> {
+    fn tx_iterator_for_payload(&self, payload: &ExecutionData) -> Result<impl ExecutableTxIterator<Self>, Self::Error> {
         self.config.tx_iterator_for_payload(payload)
     }
 }
@@ -157,7 +159,7 @@ pub struct ParallelBlockExecutor<'a, Evm, Spec> {
 impl<'db, DB, E, Spec> BlockExecutor for ParallelBlockExecutor<'_, E, Spec>
 where
     DB: Database + 'db,
-    E: Evm<DB = &'db mut State<DB>, Tx = TxEnv>,
+    E: Evm<DB = &'db mut State<DB>, Tx = TxEnv, BlockEnv = revm::context::BlockEnv>,
     Spec: EthExecutorSpec + Clone,
 {
     type Transaction = TransactionSigned;
@@ -234,7 +236,7 @@ where
 impl<'db, DB, E, Spec> ParallelBlockExecutor<'_, E, Spec>
 where
     DB: Database + 'db,
-    E: Evm<DB = &'db mut State<DB>, Tx = TxEnv>,
+    E: Evm<DB = &'db mut State<DB>, Tx = TxEnv, BlockEnv = revm::context::BlockEnv>,
     Spec: EthExecutorSpec + Clone,
 {
     pub fn execute_transactions(
@@ -256,6 +258,7 @@ where
             receipts,
             requests,
             gas_used: parallel_execute_result.gas_used,
+            blob_gas_used: parallel_execute_result.blob_gas_used
         };
 
         Ok(results)
@@ -265,12 +268,21 @@ where
         &mut self,
         transactions: impl IntoIterator<Item = impl ExecutableTx<Self>>,
     ) -> Result<BlockExecutionResult<Receipt>, BlockExecutionError> {
+        let block_env: &RevmBlockEnv = self.evm().block();
         let state_clear_flag = self.spec.is_spurious_dragon_active_at_block(
-            self.evm().block().number.try_into().unwrap_or(u64::MAX),
+            block_env.number.try_into().unwrap_or(u64::MAX),
         );
         let evm_env = EvmEnv::new(CfgEnv::default(), self.evm().block().clone());
         let db = self.evm_mut().db_mut();
         db.set_state_clear_flag(state_clear_flag);
+        
+        // Collect transactions and calculate blob gas used
+        let transactions: Vec<_> = transactions.into_iter().collect();
+        let total_blob_gas_used: u64 = transactions
+            .iter()
+            .filter_map(|tx| tx.tx().blob_gas_used())
+            .sum();
+        
         let mut parallel_executor = metis_pe::ParallelExecutor::default();
         let results = parallel_executor.execute(
             StateStorageAdapter::new(db),
@@ -297,8 +309,9 @@ where
 
         Ok(BlockExecutionResult {
             receipts,
-            gas_used: total_gas_used,
             requests: Requests::default(),
+            gas_used: total_gas_used,
+            blob_gas_used: total_blob_gas_used,
         })
     }
 
@@ -310,10 +323,11 @@ where
             self.executor.ctx.withdrawals.as_deref(),
         );
         // Irregular state change at Ethereum DAO hardfork
+        let block_env: &RevmBlockEnv = self.evm().block();
         if self
             .spec
             .ethereum_fork_activation(EthereumHardfork::Dao)
-            .transitions_at_block(self.evm().block().number.try_into().unwrap_or(u64::MAX))
+            .transitions_at_block(block_env.number.try_into().unwrap_or(u64::MAX))
         {
             // drain balances from hardcoded addresses.
             let drained_balance: u128 = self

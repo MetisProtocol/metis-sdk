@@ -1,5 +1,6 @@
 use alloy_evm::EvmEnv;
 use alloy_rlp::{RlpEncodable, RlpMaxEncodedLen};
+use alloy_eips::eip4844::calc_excess_blob_gas;
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
 use either::Either;
@@ -9,7 +10,7 @@ use metis_chain::state::StateStorageAdapter;
 use metis_pe::{AccountInfo, ParallelExecutor};
 use metis_primitives::{
     AccessList, Address, B256, Bytecode, Bytes, GAS_PER_BLOB, Log, PlainAccount,
-    SignedAuthorization, SpecId, TxEnv, TxKind, U256, as_u64_saturated, calc_excess_blob_gas,
+    SignedAuthorization, SpecId, TxEnv, TxKind, U256, as_u64_saturated,
     keccak256,
 };
 use metis_tools::{SpecName, find_all_json_tests};
@@ -591,7 +592,7 @@ fn execute_test(path: &Path) -> Result<(), Box<TestError>> {
 }
 
 fn setup_env(test: &Test, spec_id: SpecId) -> Result<EvmEnv, Box<TestError>> {
-    let mut env = EvmEnv::default();
+    let mut env: EvmEnv<SpecId, revm::context::BlockEnv> = EvmEnv::default();
     env.cfg_env.chain_id = 1;
     env.cfg_env.spec = spec_id;
     // Configure max blobs per spec
@@ -626,10 +627,6 @@ fn setup_env(test: &Test, spec_id: SpecId) -> Result<EvmEnv, Box<TestError>> {
             calc_excess_blob_gas(
                 parent_blob_gas_used.to(),
                 parent_excess_blob_gas.to(),
-                test.env
-                    .parent_target_blobs_per_block
-                    .map(|i| i.to())
-                    .unwrap_or(TARGET_BLOB_GAS_PER_BLOCK_CANCUN),
             ),
             revm::primitives::eip4844::BLOB_BASE_FEE_UPDATE_FRACTION_CANCUN,
         );
