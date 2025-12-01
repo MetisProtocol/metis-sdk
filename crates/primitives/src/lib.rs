@@ -15,7 +15,7 @@ pub use revm::context::{
     TxEnv, result::EVMError,
 };
 pub use revm::context_interface::{
-    block::{BlobExcessGasAndPrice, calc_blob_gasprice, calc_excess_blob_gas},
+    block::{BlobExcessGasAndPrice, calc_blob_gasprice},
     cfg::Cfg,
     context::{SStoreResult, SelfDestructResult},
     journaled_state::{AccountLoad, JournalTr, StateLoad},

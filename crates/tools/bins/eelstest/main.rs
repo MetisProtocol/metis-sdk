@@ -21,8 +21,8 @@ use reth_ethereum_consensus::EthBeaconConsensus;
 use reth_primitives::{Account as RethAccount, Bytecode, SealedHeader, StorageEntry};
 use reth_primitives::{BlockBody, SealedBlock, StaticFileSegment};
 use reth_provider::{
-    DatabaseProviderFactory, ProviderError, StaticFileProviderFactory, providers::StaticFileWriter,
-    test_utils::create_test_provider_factory_with_chain_spec,
+    BlockWriter, DatabaseProviderFactory, ProviderError, StaticFileProviderFactory,
+    providers::StaticFileWriter, test_utils::create_test_provider_factory_with_chain_spec,
 };
 use reth_stages::{ExecInput, Stage, stages::ExecutionStage};
 use serde::Deserialize;
@@ -576,7 +576,7 @@ fn execute_test(path: &Path) -> Result<(), TestError> {
             let provider = provider.database_provider_rw().unwrap();
 
             // Insert initial test state into the provider.
-            provider.insert_historical_block(
+            provider.insert_block(
                 SealedBlock::<reth_primitives::Block>::from_sealed_parts(
                     case.genesis_block_header.clone().into(),
                     BlockBody::default(),
@@ -601,7 +601,7 @@ fn execute_test(path: &Path) -> Result<(), TestError> {
                 let decoded: reth_primitives::SealedBlock<
                     alloy_consensus::Block<reth_primitives::TransactionSigned>,
                 > = SealedBlock::decode(&mut block.rlp.as_ref())?;
-                provider.insert_historical_block(decoded.clone().try_recover().unwrap())?;
+                provider.insert_block(decoded.clone().try_recover().unwrap())?;
                 Ok::<Option<SealedBlock>, TestError>(Some(decoded))
             })?;
             provider

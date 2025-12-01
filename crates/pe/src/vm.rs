@@ -85,10 +85,10 @@ impl<'a, DB: DatabaseRef> VmDB<'a, DB> {
         if address == &self.tx.caller {
             return self.from_hash;
         }
-        if let TxKind::Call(to) = &self.tx.kind {
-            if to == address {
-                return self.to_hash.unwrap();
-            }
+        if let TxKind::Call(to) = &self.tx.kind
+            && to == address
+        {
+            return self.to_hash.unwrap();
         }
         hash_deterministic(Location::Basic(*address))
     }
@@ -111,26 +111,25 @@ impl<'a, DB: DatabaseRef> VmDB<'a, DB> {
         let read_origins = self.read_set.entry(location_hash).or_default();
 
         // Try to read the latest code hash in [`MvMemory`]
-        if let Some(written_txs) = self.vm.mv_memory.data.get(&location_hash) {
-            if let Some((tx_idx, Entry::Data(tx_incarnation, value))) =
+        if let Some(written_txs) = self.vm.mv_memory.data.get(&location_hash)
+            && let Some((tx_idx, Entry::Data(tx_incarnation, value))) =
                 written_txs.range(..self.tx_idx).next_back()
-            {
-                match value {
-                    LocationValue::SelfDestructed => {
-                        return Err(ReadError::SelfDestructedAccount);
-                    }
-                    LocationValue::CodeHash(code_hash) => {
-                        Self::push_origin(
-                            read_origins,
-                            ReadOrigin::MvMemory(TxVersion {
-                                tx_idx: *tx_idx,
-                                tx_incarnation: *tx_incarnation,
-                            }),
-                        )?;
-                        return Ok(Some(*code_hash));
-                    }
-                    _ => {}
+        {
+            match value {
+                LocationValue::SelfDestructed => {
+                    return Err(ReadError::SelfDestructedAccount);
                 }
+                LocationValue::CodeHash(code_hash) => {
+                    Self::push_origin(
+                        read_origins,
+                        ReadOrigin::MvMemory(TxVersion {
+                            tx_idx: *tx_idx,
+                            tx_incarnation: *tx_incarnation,
+                        }),
+                    )?;
+                    return Ok(Some(*code_hash));
+                }
+                _ => {}
             }
         };
 
@@ -179,52 +178,51 @@ impl<DB: DatabaseRef> Database for VmDB<'_, DB> {
         let mut nonce_addition = 0;
 
         // Try reading from multi-version data
-        if self.tx_idx > 0 {
-            if let Some(written_txs) = self.vm.mv_memory.data.get(&location_hash) {
-                let mut iter = written_txs.range(..self.tx_idx);
+        if self.tx_idx > 0
+            && let Some(written_txs) = self.vm.mv_memory.data.get(&location_hash)
+        {
+            let mut iter = written_txs.range(..self.tx_idx);
 
-                // Fully evaluate lazy updates
-                loop {
-                    match iter.next_back() {
-                        Some((blocking_idx, Entry::Estimate)) => {
-                            return Err(ReadError::Blocking(*blocking_idx));
+            // Fully evaluate lazy updates
+            loop {
+                match iter.next_back() {
+                    Some((blocking_idx, Entry::Estimate)) => {
+                        return Err(ReadError::Blocking(*blocking_idx));
+                    }
+                    Some((closest_idx, Entry::Data(tx_incarnation, value))) => {
+                        // About to push a new origin
+                        // Inconsistent: new origin will be longer than the previous!
+                        if has_prev_origins && read_origins.len() == new_origins.len() {
+                            return Err(ReadError::InconsistentRead);
                         }
-                        Some((closest_idx, Entry::Data(tx_incarnation, value))) => {
-                            // About to push a new origin
-                            // Inconsistent: new origin will be longer than the previous!
-                            if has_prev_origins && read_origins.len() == new_origins.len() {
-                                return Err(ReadError::InconsistentRead);
-                            }
-                            let origin = ReadOrigin::MvMemory(TxVersion {
-                                tx_idx: *closest_idx,
-                                tx_incarnation: *tx_incarnation,
-                            });
-                            // Inconsistent: new origin is different from the previous!
-                            if has_prev_origins
-                                && unsafe { read_origins.get_unchecked(new_origins.len()) }
-                                    != &origin
-                            {
-                                return Err(ReadError::InconsistentRead);
-                            }
-                            new_origins.push(origin);
-                            match value {
-                                LocationValue::Basic(basic) => {
-                                    final_account = Some(basic.clone());
-                                    break;
-                                }
-                                LocationValue::LazyRecipient(addition) => {
-                                    balance_addition += (*addition).into()
-                                }
-                                LocationValue::LazySender(subtraction) => {
-                                    balance_addition -= (*subtraction).into();
-                                    nonce_addition += 1;
-                                }
-                                _ => return Err(ReadError::InvalidValueType),
-                            }
+                        let origin = ReadOrigin::MvMemory(TxVersion {
+                            tx_idx: *closest_idx,
+                            tx_incarnation: *tx_incarnation,
+                        });
+                        // Inconsistent: new origin is different from the previous!
+                        if has_prev_origins
+                            && unsafe { read_origins.get_unchecked(new_origins.len()) } != &origin
+                        {
+                            return Err(ReadError::InconsistentRead);
                         }
-                        None => {
-                            break;
+                        new_origins.push(origin);
+                        match value {
+                            LocationValue::Basic(basic) => {
+                                final_account = Some(basic.clone());
+                                break;
+                            }
+                            LocationValue::LazyRecipient(addition) => {
+                                balance_addition += (*addition).into()
+                            }
+                            LocationValue::LazySender(subtraction) => {
+                                balance_addition -= (*subtraction).into();
+                                nonce_addition += 1;
+                            }
+                            _ => return Err(ReadError::InvalidValueType),
                         }
+                    }
+                    None => {
+                        break;
                     }
                 }
             }
@@ -337,24 +335,23 @@ impl<DB: DatabaseRef> Database for VmDB<'_, DB> {
         let read_origins = self.read_set.entry(location_hash).or_default();
 
         // Try reading from multi-version data
-        if self.tx_idx > 0 {
-            if let Some(written_txs) = self.vm.mv_memory.data.get(&location_hash) {
-                if let Some((closest_idx, entry)) = written_txs.range(..self.tx_idx).next_back() {
-                    match entry {
-                        Entry::Data(tx_incarnation, LocationValue::Storage(value)) => {
-                            Self::push_origin(
-                                read_origins,
-                                ReadOrigin::MvMemory(TxVersion {
-                                    tx_idx: *closest_idx,
-                                    tx_incarnation: *tx_incarnation,
-                                }),
-                            )?;
-                            return Ok(*value);
-                        }
-                        Entry::Estimate => return Err(ReadError::Blocking(*closest_idx)),
-                        _ => return Err(ReadError::InvalidValueType),
-                    }
+        if self.tx_idx > 0
+            && let Some(written_txs) = self.vm.mv_memory.data.get(&location_hash)
+            && let Some((closest_idx, entry)) = written_txs.range(..self.tx_idx).next_back()
+        {
+            match entry {
+                Entry::Data(tx_incarnation, LocationValue::Storage(value)) => {
+                    Self::push_origin(
+                        read_origins,
+                        ReadOrigin::MvMemory(TxVersion {
+                            tx_idx: *closest_idx,
+                            tx_incarnation: *tx_incarnation,
+                        }),
+                    )?;
+                    return Ok(*value);
                 }
+                Entry::Estimate => return Err(ReadError::Blocking(*closest_idx)),
+                _ => return Err(ReadError::InvalidValueType),
             }
         }
 
