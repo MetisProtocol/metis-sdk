@@ -22,6 +22,7 @@ use reth_ethereum::{
         builder::{BuilderContext, components::ExecutorBuilder},
     },
 };
+use revm::context::BlockEnv;
 use std::fmt::Debug;
 
 /// Custom EVM configuration.
@@ -32,6 +33,7 @@ pub struct MyEvmFactory;
 impl EvmFactory for MyEvmFactory {
     type Evm<DB: Database, I: Inspector<EthEvmContext<DB>>> = MyEvm<DB, I, Self::Precompiles>;
     type Tx = TxEnv;
+    type BlockEnv = BlockEnv;
     type Error<DBError: core::error::Error + Send + Sync + 'static> = EVMError<DBError>;
     type HaltReason = HaltReason;
     type Context<DB: Database> = EthEvmContext<DB>;

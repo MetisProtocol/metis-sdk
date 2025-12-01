@@ -97,18 +97,19 @@ where
 {
     type DB = DB;
     type Tx = TxEnv;
+    type BlockEnv = BlockEnv;
     type Error = EVMError<DB::Error>;
     type HaltReason = HaltReason;
     type Spec = SpecId;
     type Precompiles = PRECOMPILE;
     type Inspector = I;
 
-    fn block(&self) -> &BlockEnv {
-        &self.block
+    fn block(&self) -> &Self::BlockEnv {
+        &self.inner.ctx.block
     }
 
     fn chain_id(&self) -> u64 {
-        self.cfg.chain_id
+        self.inner.ctx.cfg.chain_id
     }
 
     fn transact_raw(
@@ -214,6 +215,38 @@ where
     ) -> Result<Option<<Self::Frame as FrameTr>::FrameResult>, ContextDbError<Self::Context>> {
         self.inner.frame_return_result(result)
     }
+
+    fn all(
+        &self,
+    ) -> (
+        &Self::Context,
+        &Self::Instructions,
+        &Self::Precompiles,
+        &FrameStack<Self::Frame>,
+    ) {
+        (
+            self.inner.ctx_ref(),
+            &self.inner.instruction,
+            &self.inner.precompiles,
+            &self.inner.frame_stack,
+        )
+    }
+
+    fn all_mut(
+        &mut self,
+    ) -> (
+        &mut Self::Context,
+        &mut Self::Instructions,
+        &mut Self::Precompiles,
+        &mut FrameStack<Self::Frame>,
+    ) {
+        (
+            &mut self.inner.ctx,
+            &mut self.inner.instruction,
+            &mut self.inner.precompiles,
+            &mut self.inner.frame_stack,
+        )
+    }
 }
 
 impl<DB, I, PRECOMPILE> InspectorEvmTr for MyEvm<DB, I, PRECOMPILE>
@@ -247,5 +280,41 @@ where
         &mut Self::Instructions,
     ) {
         self.inner.ctx_inspector_frame_instructions()
+    }
+
+    fn all_inspector(
+        &self,
+    ) -> (
+        &Self::Context,
+        &Self::Instructions,
+        &Self::Precompiles,
+        &FrameStack<Self::Frame>,
+        &Self::Inspector,
+    ) {
+        (
+            self.inner.ctx_ref(),
+            &self.inner.instruction,
+            &self.inner.precompiles,
+            &self.inner.frame_stack,
+            &self.inner.inspector,
+        )
+    }
+
+    fn all_mut_inspector(
+        &mut self,
+    ) -> (
+        &mut Self::Context,
+        &mut Self::Instructions,
+        &mut Self::Precompiles,
+        &mut FrameStack<Self::Frame>,
+        &mut Self::Inspector,
+    ) {
+        (
+            &mut self.inner.ctx,
+            &mut self.inner.instruction,
+            &mut self.inner.precompiles,
+            &mut self.inner.frame_stack,
+            &mut self.inner.inspector,
+        )
     }
 }

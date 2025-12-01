@@ -72,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
         {
             Ok(Some(block)) => block,
             Ok(None) => anyhow::bail!("Block not found"),
-            Err(error) => anyhow::bail!("Error: {:?}", error),
+            Err(error) => anyhow::bail!("Error: {error:?}"),
         };
         println!("Fetched block number: {}", block.header.number);
         let previous_block_number = block_number - 1;

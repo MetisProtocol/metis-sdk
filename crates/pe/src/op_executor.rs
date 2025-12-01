@@ -170,12 +170,11 @@ impl OpParallelExecutor {
                 if !matches!(
                     write_history.first_key_value(),
                     Some((_, Entry::Data(_, LocationValue::Basic(_))))
-                ) {
-                    if let Ok(Some(account)) = db.basic_ref(address) {
-                        balance = account.balance;
-                        nonce = account.nonce;
-                        code_hash = account.code_hash;
-                    }
+                ) && let Ok(Some(account)) = db.basic_ref(address)
+                {
+                    balance = account.balance;
+                    nonce = account.nonce;
+                    code_hash = account.code_hash;
                 }
                 let code = match db.code_by_hash_ref(code_hash) {
                     Ok(code) => code,
