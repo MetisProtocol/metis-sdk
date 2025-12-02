@@ -90,11 +90,6 @@ name = "metis"
 path = "bin/metis.rs"
 doc = false
 
-[[bin]]
-name = "op-metis"
-path = "bin/op_metis.rs"
-doc = false
-
 [features]
 default = []
 
