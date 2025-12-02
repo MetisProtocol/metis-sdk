@@ -42,40 +42,38 @@ fn main() {
             eprintln!("Error: {err:?}");
             std::process::exit(1);
         }
-    } else {
-        if let Err(err) = Cli::parse_args().run(async move |builder, _| {
-            info!(target: "metis::cli", "Launching node");
-            if std::env::var_os("ENABLE_PARALLEL_EXECUTOR").is_some() {
-                let handle = builder
-                    // Use the default ethereum node types
-                    .with_types::<EthereumNode>()
-                    // Configure the components of the node
-                    // use default ethereum components but use our parallel executor.
-                    .with_components(
-                        EthereumNode::components().executor(ParallelExecutorBuilder::default()),
-                    )
-                    .with_add_ons(EthereumAddOns::default());
-                handle.launch().await?.wait_for_node_exit().await
-            } else {
-                let handle = builder
-                    // Use the default ethereum node types
-                    .with_types::<EthereumNode>()
-                    // Configure the components of the node
-                    // use default ethereum components but use our parallel executor.
-                    .with_components(
-                        EthereumNode::components().executor(HookExecutorBuilder::default()),
-                    )
-                    .with_add_ons(EthereumAddOns::default());
-                // handle.launch().await?.wait_for_node_exit().await
-                handle
-                    .launch_with_debug_capabilities()
-                    .await?
-                    .wait_for_node_exit()
-                    .await
-            }
-        }) {
-            eprintln!("Error: {err:?}");
-            std::process::exit(1);
+    } else if let Err(err) = Cli::parse_args().run(async move |builder, _| {
+        info!(target: "metis::cli", "Launching node");
+        if std::env::var_os("ENABLE_PARALLEL_EXECUTOR").is_some() {
+            let handle = builder
+                // Use the default ethereum node types
+                .with_types::<EthereumNode>()
+                // Configure the components of the node
+                // use default ethereum components but use our parallel executor.
+                .with_components(
+                    EthereumNode::components().executor(ParallelExecutorBuilder::default()),
+                )
+                .with_add_ons(EthereumAddOns::default());
+            handle.launch().await?.wait_for_node_exit().await
+        } else {
+            let handle = builder
+                // Use the default ethereum node types
+                .with_types::<EthereumNode>()
+                // Configure the components of the node
+                // use default ethereum components but use our parallel executor.
+                .with_components(
+                    EthereumNode::components().executor(HookExecutorBuilder::default()),
+                )
+                .with_add_ons(EthereumAddOns::default());
+            // handle.launch().await?.wait_for_node_exit().await
+            handle
+                .launch_with_debug_capabilities()
+                .await?
+                .wait_for_node_exit()
+                .await
         }
+    }) {
+        eprintln!("Error: {err:?}");
+        std::process::exit(1);
     }
 }
