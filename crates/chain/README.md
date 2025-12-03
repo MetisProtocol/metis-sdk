@@ -79,22 +79,22 @@ A `genesis.json` example is
 
 ### Docker
 
-Metis hyperion node docker images for both x86_64 and ARM64 machines are published with every release of reth on GitHub Container Registry.
+Metis engine node docker images for both x86_64 and ARM64 machines are published with every release of reth on GitHub Container Registry.
 
 ```shell
-docker pull ghcr.io/metisprotocol/hyperion
+docker pull ghcr.io/metisprotocol/metis
 ```
 
 Or a specific version (e.g. v0.1.0) with:
 
 ```shell
-docker pull ghcr.io/metisprotocol/hyperion:v0.1.0
+docker pull ghcr.io/metisprotocol/metis:v0.1.0
 ```
 
 You can test the image with:
 
 ```shell
-docker run --rm ghcr.io/metisprotocol/hyperion --version
+docker run --rm ghcr.io/metisprotocol/metis --version
 ```
 
 To run the dev node with Docker, run:
@@ -108,8 +108,8 @@ docker run \
     -p 9001:9001 \
     -p 30303:30303 \
     -p 30303:30303/udp \
-    --name hyperion \
-    ghcr.io/metisprotocol/hyperion \
+    --name metis \
+    ghcr.io/metisprotocol/metis \
     node \
     --datadir=data \
     --metrics 0.0.0.0:9001 \
