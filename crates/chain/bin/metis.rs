@@ -30,12 +30,7 @@ fn main() {
                     handle.launch().await?.wait_for_node_exit().await
                 } else {
                     let handle = builder.node(OpNode::new(rollup_args));
-                    // handle.launch().await?.wait_for_node_exit().await
-                    handle
-                        .launch_with_debug_capabilities()
-                        .await?
-                        .wait_for_node_exit()
-                        .await
+                    handle.launch().await?.wait_for_node_exit().await
                 }
             },
         ) {
@@ -65,12 +60,7 @@ fn main() {
                     EthereumNode::components().executor(HookExecutorBuilder::default()),
                 )
                 .with_add_ons(EthereumAddOns::default());
-            // handle.launch().await?.wait_for_node_exit().await
-            handle
-                .launch_with_debug_capabilities()
-                .await?
-                .wait_for_node_exit()
-                .await
+            handle.launch().await?.wait_for_node_exit().await
         }
     }) {
         eprintln!("Error: {err:?}");
