@@ -1,6 +1,6 @@
 services:
   reth0:
-    image: ghcr.io/metisprotocol/metis
+    image: ghcr.io/metisprotocol/hyperion
     container_name: reth0
     volumes:
       - ./rethdata:/data/reth/execution-data

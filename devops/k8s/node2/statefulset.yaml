@@ -24,7 +24,7 @@ spec:
       dnsPolicy: ClusterFirst
       containers:
         - name: reth
-          image: ghcr.io/metisprotocol/metis
+          image: ghcr.io/metisprotocol/hyperion
           ports:
             - containerPort: 8545
               name: http

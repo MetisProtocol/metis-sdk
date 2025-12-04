@@ -10,7 +10,7 @@ resources:
   - genesis-configmap.yaml
   # - monitoring.yaml
 images:
-  - name: ghcr.io/metisprotocol/metis
+  - name: ghcr.io/metisprotocol/hyperion
     newTag: latest
   - name: ghcr.io/metisprotocol/malachitebft
     newTag: latest
