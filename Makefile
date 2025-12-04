@@ -87,12 +87,10 @@ install: ## Build and install the metis binary under `~/.cargo/bin`.
 .PHONY: build
 build: ## Build the metis binary into `target` directory.
 	cargo build --bin metis --features "$(FEATURES)" --profile "$(PROFILE)"
-	cargo build --bin op-metis --features "$(FEATURES)" --profile "$(PROFILE)"
 
 .PHONY: build-debug
 build-debug: ## Build the metis binary into `target/debug` directory.
 	cargo build --bin metis --features "$(FEATURES)"
-	cargo build --bin op-metis --features "$(FEATURES)"
 
 .PHONY: clean
 clean: ## Perform a `cargo` clean and remove the binary and test vectors directories.
@@ -102,7 +100,6 @@ clean: ## Perform a `cargo` clean and remove the binary and test vectors directo
 # Builds the metis binary natively.
 build-native-%:
 	cargo build --bin metis --target $* --features "$(FEATURES)" --profile "$(PROFILE)"
-	cargo build --bin op-metis --target $* --features "$(FEATURES)" --profile "$(PROFILE)"
 
 # Note: The additional rustc compiler flags are for intrinsics needed by MDBX.
 # See: https://github.com/cross-rs/cross/wiki/FAQ#undefined-reference-with-build-std
