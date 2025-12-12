@@ -9,7 +9,7 @@ compose deployment
       * mala - put under `mala/data`
       * reth - put under `reth/rethdata`
 
-2. [optional] rename `changethis` in [config.toml](./mala/data/config/config.toml#1)
+2. [optional] rename `changethis` in [config.toml](./mala/data/config/config.toml#L1)
 
 3. run compose
 
