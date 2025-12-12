@@ -18,6 +18,8 @@ ansible deployment scripts
 1. follow [create validator](../../website/content/docs/architecture/validator/create.mdx)
     * create private key and put rename under `roles/lazai/templates/opt/nodes/mala/config/priv_validator_key.{{ lazai_node_name | "default to $(hostname -s)"}}.json`
     * [optional] contact LazAI (https://lazai.network) to get a most recent data snapshot, alternatively sync from beginning
+      * mala - put under `mala/data`
+      * reth - put under `reth/rethdata`
 2. run ansible playbook
 ```bash
 ansible-playbook \
