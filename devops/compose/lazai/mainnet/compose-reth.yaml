@@ -1,0 +1,61 @@
+services:
+  reth:
+    image: ghcr.io/0xlazai/lazchain:v0.7.2
+    container_name: reth
+    volumes:
+      - ./reth/rethdata:/data/reth/execution-data
+      - ./assets:/root/assets/
+    ports:
+      - "127.0.0.1:8545:8545"
+      - "127.0.0.1:8546:8546"
+      - "127.0.0.1:8551:8551"
+      - "127.0.0.1:9101:9100"
+      - "30303:30303"
+      - "30303:30303/udp"
+    extra_hosts:
+      - "pub.rpc0.mainnet.lazai.systems:3.151.46.215"
+      - "pub.rpc1.mainnet.lazai.systems:3.0.225.122"
+    #environment:
+    #  PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    logging:
+      driver: json-file         # or: local
+      options:
+        max-size: "50m"         # rotate when log file hits 50 MB
+        max-file: "5"           # keep 5 rotated files
+    command:
+      - "node"
+      - "-vvvv"
+      - "--datadir=/data/reth/execution-data"
+      - "--chain=/root/assets/genesis.json"
+      - "--http"
+      - "--http.port=8545"
+      - "--http.addr=0.0.0.0"
+      - "--http.corsdomain=*"
+      - "--http.api=net,eth,web3,debug,txpool,trace"
+      - "--ws"
+      - "--ws.port=8546"
+      - "--ws.api=net,eth,web3,debug,txpool,trace"
+      - "--ws.addr=0.0.0.0"
+      - "--ws.origins=*"
+      - "--authrpc.addr=0.0.0.0"
+      - "--authrpc.port=8551"
+      - "--authrpc.jwtsecret=/root/assets/jwtsecret"
+      - "--ipcdisable"
+      - "--metrics=0.0.0.0:9100"
+      - "--discovery.port=30303"
+      - "--port=30303"
+      # - "--nat=extip:<YOUR_PUBLIC_IP>" # optional, only if behind NAT
+      - "--bootnodes=enode://b733787be3ef75eb2dc6a21f218f1285bb5210d541b64839d2de9b547bae2fe07541a47e678aa6a2c8234437a18a5da07a0181f96fa241a6d943b5e4b40f9244@pub.rpc0.mainnet.lazai.systems:30303,enode://da91c3a9530ac839e90255801638ffa33c4e84f116cea2e9283178ef283a1d0f1fe88ccf365ad95dbc5cad0095c640647fa4a2e3d1139cf8b5a1605c1e0ac6c1@pub.rpc1.mainnet.lazai.systems:30303"
+      # - "--builder.gaslimit=3600000000" # default * 100
+      # - "--builder.interval=10ms"
+      # - "--builder.deadline=1" # The deadline in seconds for when the payload builder job should resolve
+      # - "--builder.max-tasks=10" # default=3
+      # - "--txpool.gas-limit=300000000" # default * 10
+      # - "--blobpool.pricebump=1"
+      # - "--txpool.pending-max-count=50000" # default=10000
+      # - "--txpool.queued-max-count=50000" # default=10000
+    labels:
+      project: "lazai"
+      service: "reth"
+      service_type: "rpc"
+      env: "mainnet"
