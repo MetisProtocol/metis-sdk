@@ -19,7 +19,7 @@ PROFILE ?= release
 CARGO_INSTALL_EXTRA_FLAGS ?=
 
 # The docker image name
-DOCKER_IMAGE_NAME ?= ghcr.io/metisprotocol/hyperion
+DOCKER_IMAGE_NAME ?= ghcr.io/metisprotocol/metis
 
 # Environment variables for reproducible builds
 # Initialize RUSTFLAGS

@@ -8,8 +8,8 @@ on:
 env:
   REPO_NAME: ${{ github.repository_owner }}/metis-sdk
   CARGO_TERM_COLOR: always
-  EL_IMAGE_NAME: metisprotocol/hyperion
-  DOCKER_EL_IMAGE_NAME: ghcr.io/metisprotocol/hyperion
+  EL_IMAGE_NAME: metisprotocol/metis
+  DOCKER_EL_IMAGE_NAME: ghcr.io/metisprotocol/metis
   CL_IMAGE_NAME: metisprotocol/malachitebft
   DOCKER_CL_IMAGE_NAME: ghcr.io/metisprotocol/malachitebft
   DOCKER_USERNAME: ${{ github.actor }}
@@ -25,9 +25,9 @@ jobs:
       fail-fast: false
       matrix:
         build:
-          - name: 'Build and push hyperion image'
+          - name: 'Build and push metis image'
             command: 'make PROFILE=maxperf docker-build-push'
-          - name: 'Build and push hyperion image, tag as "latest"'
+          - name: 'Build and push metis image, tag as "latest"'
             command: 'make PROFILE=maxperf docker-build-push-latest'
     steps:
       - uses: actions/checkout@v5
