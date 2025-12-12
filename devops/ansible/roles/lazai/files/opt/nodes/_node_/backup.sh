@@ -339,18 +339,35 @@ if (( S3_RETAIN_DAYS > 0 )); then
 
   if [[ -n "$TO_DELETE_KEYS" ]]; then
     log "Deleting $(wc -l <<<"$TO_DELETE_KEYS" | tr -d ' ') old object(s) beyond keep policy…"
-    while read -r BATCH; do
+
+    while IFS= read -r BATCH; do
       [[ -z "$BATCH" ]] && continue
+
+      echo "BATCH: $BATCH"
+
+      # BATCH is now a full JSON array: [{"Key":"..."}, ...]
       PAYLOAD="$(jq -n --argjson arr "$BATCH" '{Objects: $arr}')"
-      aws s3api delete-objects --bucket "${AWS_S3_BUCKET}" --delete "$PAYLOAD" --output text >/dev/null || true
-      jq -r '.[].Key' <<<"$BATCH" | sed 's/^/  deleted: /' | while read -r L; do log "$L"; done
+
+      echo "PAYLOAD: $PAYLOAD"
+
+      aws s3api delete-objects \
+        --bucket "${AWS_S3_BUCKET}" \
+        --delete "$PAYLOAD" \
+        --output text >/dev/null || true
+
+      # Log deleted keys from this batch
+      jq -r '.[].Key' <<<"$BATCH" \
+        | sed 's/^/  deleted: /' \
+        | while read -r L; do log "$L"; done
+
     done < <(
-      jq -n --argjson keys "$(jq -R -s 'split("\n")|map(select(length>0))' <<<"$TO_DELETE_KEYS")" '
+      jq -n -c --argjson keys "$(jq -R -s 'split("\n") | map(select(length>0))' <<<"$TO_DELETE_KEYS")" '
         [ range(0; ($keys|length); 1000) as $i |
           ($keys[$i : ($i+1000)]) | map({Key:.})
-        ] | .[]
+        ][]        # <- each element is one batch: an array of {Key:...}
       '
     )
+
   else
     log "Nothing to delete on S3 (policy already satisfied)."
   fi
