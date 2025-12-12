@@ -1,0 +1,17 @@
+# LazAI Mainnet (Compose)
+compose deployment
+
+## Start Node
+
+1. follow [create validator](../../website/content/docs/architecture/validator/create.mdx)
+    * create private key and put `priv_validator_key.json` rename under `./mala/data/config`
+    * [optional] contact LazAI (https://lazai.network) to get a most recent data snapshot, alternatively sync from beginning
+
+2. run compose
+
+```bash
+# initialize assets
+./init.sh
+# start
+./start.sh
+```
