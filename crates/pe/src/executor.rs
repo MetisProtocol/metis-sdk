@@ -84,10 +84,12 @@ impl ParallelExecutor {
         }
 
         let block_size = txs.len();
+
         let task_provider = NormalProvider::new(block_size);
         let scheduler = Scheduler::new(task_provider);
 
         let mv_memory = build_mv_memory(&evm_env.block_env, &txs);
+
         let vm = Vm::new(
             &db,
             &mv_memory,
@@ -105,16 +107,44 @@ impl ParallelExecutor {
             }
         }
 
+        let start_time = std::time::Instant::now();
+
+        tracing::info!(
+            target: "metis::parallel::rerun",
+            block_size = block_size,
+            concurrency = concurrency_level.get(),
+            "🚀 Starting parallel execution"
+        );
+
         thread::scope(|scope| {
             for _ in 0..concurrency_level.into() {
                 scope.spawn(|| {
+                    let mut task_count = 0;
+                    let mut execution_count = 0;
+                    let mut validation_count = 0;
                     let mut next_task = scheduler.next_task();
+
                     while let Some(task) = next_task {
+                        task_count += 1;
                         next_task = match task {
                             Task::Execution(tx_version) => {
+                                execution_count += 1;
+                                tracing::debug!(
+                                    target: "metis::parallel::rerun",
+                                    tx_idx = tx_version.tx_idx,
+                                    tx_incarnation = tx_version.tx_incarnation,
+                                    "🔄 Executing TX (incarnation indicates rerun count)"
+                                );
                                 self.try_execute(&vm, &scheduler, tx_version)
                             }
                             Task::Validation(tx_version) => {
+                                validation_count += 1;
+                                tracing::debug!(
+                                    target: "metis::parallel::rerun",
+                                    tx_idx = tx_version.tx_idx,
+                                    tx_incarnation = tx_version.tx_incarnation,
+                                    "✓ Validating TX"
+                                );
                                 try_validate(&mv_memory, &scheduler, &tx_version)
                             }
                         };
@@ -125,9 +155,38 @@ impl ParallelExecutor {
                             next_task = scheduler.next_task();
                         }
                     }
+
+                    tracing::debug!(
+                        target: "metis::parallel::rerun",
+                        total_tasks = task_count,
+                        executions = execution_count,
+                        validations = validation_count,
+                        "🏁 Worker thread finished"
+                    );
                 });
             }
         });
+
+        let parallel_duration = start_time.elapsed();
+
+        // Calculate statistics from execution
+        let block_size = txs.len();
+        tracing::info!(
+            target: "metis::parallel::rerun",
+            block_size = block_size,
+            duration_ms = parallel_duration.as_millis(),
+            avg_tx_time_us = parallel_duration.as_micros() / block_size.max(1) as u128,
+            concurrency = concurrency_level.get(),
+            "✅ Parallel execution phase completed"
+        );
+
+        tracing::debug!(
+            target: "metis::parallel::rerun",
+            "📊 Block execution completed: block_size={}, total_duration_ms={}, avg_tx_time_us={}",
+            block_size,
+            parallel_duration.as_millis(),
+            parallel_duration.as_micros() / block_size.max(1) as u128
+        );
 
         if let Some(abort_reason) = self.abort_reason.take() {
             match abort_reason {
@@ -149,7 +208,6 @@ impl ParallelExecutor {
                 }
             }
         }
-
         let mut fully_evaluated_results = Vec::with_capacity(block_size);
         let mut cumulative_gas_used: u64 = 0;
         for i in 0..block_size {
@@ -162,7 +220,10 @@ impl ParallelExecutor {
 
         // We fully evaluate (the balance and nonce of) the beneficiary account
         // and raw transfer recipients that may have been atomically updated.
-        for address in mv_memory.consume_lazy_addresses() {
+        // IMPORTANT: Sort addresses to ensure deterministic processing order across nodes
+        let mut lazy_addresses: Vec<_> = mv_memory.consume_lazy_addresses().into_iter().collect();
+        lazy_addresses.sort(); // Sort by Address (which implements Ord) for deterministic order
+        for address in lazy_addresses {
             let location_hash = hash_deterministic(Location::Basic(address));
             if let Some(write_history) = mv_memory.data.get(&location_hash) {
                 let mut balance = U256::ZERO;
@@ -279,6 +340,14 @@ impl ParallelExecutor {
         #[cfg(feature = "async-dropper")]
         self.dropper.drop((mv_memory, scheduler, txs));
 
+        tracing::info!(
+            target: "metis::parallel::rerun",
+            block_size = block_size,
+            total_duration_ms = parallel_duration.as_millis(),
+            avg_tx_time_us = parallel_duration.as_micros() / block_size as u128,
+            "📊 Block execution completed"
+        );
+
         Ok(fully_evaluated_results)
     }
 
@@ -288,31 +357,64 @@ impl ParallelExecutor {
         scheduler: &Scheduler<T>,
         tx_version: TxVersion,
     ) -> Option<Task> {
+        let mut retry_count = 0;
         loop {
             return match vm.execute(&tx_version) {
                 Err(VmExecutionError::Retry) => {
+                    retry_count += 1;
+                    tracing::debug!(
+                        target: "metis::parallel::rerun",
+                        tx_idx = tx_version.tx_idx,
+                        tx_incarnation = tx_version.tx_incarnation,
+                        retry_count = retry_count,
+                        "⏳ Execution blocked, retrying..."
+                    );
                     if self.abort_reason.get().is_none() {
                         continue;
                     }
                     None
                 }
                 Err(VmExecutionError::FallbackToSequential) => {
+                    tracing::warn!(
+                        target: "metis::parallel::rerun",
+                        tx_idx = tx_version.tx_idx,
+                        "⚠️ Fallback to sequential execution triggered"
+                    );
                     scheduler.abort();
                     self.abort_reason
                         .get_or_init(|| AbortReason::FallbackToSequential);
                     None
                 }
                 Err(VmExecutionError::Blocking(blocking_tx_idx)) => {
+                    tracing::debug!(
+                        target: "metis::parallel::rerun",
+                        tx_idx = tx_version.tx_idx,
+                        tx_incarnation = tx_version.tx_incarnation,
+                        blocking_tx_idx = blocking_tx_idx,
+                        "🚧 TX blocked by dependency, adding to wait list"
+                    );
                     if !scheduler.add_dependency(tx_version.tx_idx, blocking_tx_idx)
                         && self.abort_reason.get().is_none()
                     {
                         // Retry the execution immediately if the blocking transaction was
                         // re-executed by the time we can add it as a dependency.
+                        tracing::debug!(
+                            target: "metis::parallel::rerun",
+                            tx_idx = tx_version.tx_idx,
+                            blocking_tx_idx = blocking_tx_idx,
+                            "🔄 Blocking TX already completed, retrying immediately"
+                        );
                         continue;
                     }
                     None
                 }
                 Err(VmExecutionError::ExecutionError(err)) => {
+                    tracing::error!(
+                        target: "metis::parallel::rerun",
+                        tx_idx = tx_version.tx_idx,
+                        error = ?err,
+                        "❌ Execution error occurred"
+                    );
                     scheduler.abort();
                     self.abort_reason
                         .get_or_init(|| AbortReason::ExecutionError(err));
@@ -322,6 +424,16 @@ impl ParallelExecutor {
                     execution_result,
                     flags,
                 }) => {
+                    if tx_version.tx_incarnation > 0 {
+                        tracing::info!(
+                            target: "metis::parallel::rerun",
+                            tx_idx = tx_version.tx_idx,
+                            tx_incarnation = tx_version.tx_incarnation,
+                            retry_count = retry_count,
+                            "✅ TX re-executed successfully after {} reruns",
+                            tx_version.tx_incarnation
+                        );
+                    }
                     {
                         *index_mutex!(self.execution_results, tx_version.tx_idx) =
                             Some(execution_result);
@@ -341,9 +453,26 @@ fn try_validate<T: TaskProvider>(
 ) -> Option<Task> {
     let read_set_valid = mv_memory.validate_read_locations(tx_version.tx_idx);
     let aborted = !read_set_valid && scheduler.try_validation_abort(tx_version);
+
     if aborted {
+        tracing::info!(
+            target: "metis::parallel::rerun",
+            tx_idx = tx_version.tx_idx,
+            tx_incarnation = tx_version.tx_incarnation,
+            "❌ Validation FAILED - TX will be re-executed (incarnation {}→{})",
+            tx_version.tx_incarnation,
+            tx_version.tx_incarnation + 1
+        );
         mv_memory.convert_writes_to_estimates(tx_version.tx_idx);
+    } else {
+        tracing::debug!(
+            target: "metis::parallel::rerun",
+            tx_idx = tx_version.tx_idx,
+            tx_incarnation = tx_version.tx_incarnation,
+            "✅ Validation SUCCESS"
+        );
     }
+
     scheduler.finish_validation(tx_version, aborted)
 }
 
@@ -355,11 +484,20 @@ pub fn execute_sequential<DB: DatabaseRef>(
     txs: Vec<TxEnv>,
     #[cfg(feature = "compiler")] worker: Arc<ExtCompileWorker>,
 ) -> ParallelExecutorResult {
+    let block_size = txs.len();
+    let start_time = std::time::Instant::now();
+
+    tracing::info!(
+        target: "metis::parallel::rerun",
+        block_size = block_size,
+        "🔄 Starting SEQUENTIAL execution (fallback from parallel)"
+    );
+
     let mut db = CacheDB::new(db);
     let mut evm = build_evm(&mut db, evm_env);
     let mut results = Vec::with_capacity(txs.len());
     let mut cumulative_gas_used: u64 = 0;
-    for tx in txs {
+    for tx in txs.into_iter() {
         let tx_type = reth_primitives::TxType::try_from(tx.tx_type)
             .map_err(|_| ParallelExecutorError::UnreachableError)?;
         #[cfg(feature = "compiler")]
@@ -388,5 +526,23 @@ pub fn execute_sequential<DB: DatabaseRef>(
 
         results.push(execution_result);
     }
+
+    let sequential_duration = start_time.elapsed();
+    tracing::info!(
+        target: "metis::parallel::rerun",
+        block_size = block_size,
+        duration_ms = sequential_duration.as_millis(),
+        avg_tx_time_us = sequential_duration.as_micros() / block_size.max(1) as u128,
+        "✅ Sequential execution completed"
+    );
+
+    tracing::debug!(
+        target: "metis::parallel::rerun",
+        "📊 Sequential execution stats: block_size={}, total_duration_ms={}, avg_tx_time_us={}",
+        block_size,
+        sequential_duration.as_millis(),
+        sequential_duration.as_micros() / block_size.max(1) as u128
+    );
+
     Ok(results)
 }
