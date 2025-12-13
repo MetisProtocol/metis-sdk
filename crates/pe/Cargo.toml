@@ -36,6 +36,7 @@ serde.workspace = true
 smallvec.workspace = true
 thiserror.workspace = true
 crossbeam.workspace = true
+tracing.workspace = true
 
 # OP Alloy and OP Revm dependencies
 op-alloy-consensus.workspace = true
