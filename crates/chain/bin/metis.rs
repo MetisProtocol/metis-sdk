@@ -5,7 +5,9 @@ static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::ne
 use clap::Parser;
 use metis_chain::hook_provider::HookExecutorBuilder;
 use metis_chain::op_provider::OpParallelNode;
+use metis_chain::parallel_payload_builder::ParallelPayloadBuilderBuilder;
 use metis_chain::provider::ParallelExecutorBuilder;
+use reth::builder::components::BasicPayloadServiceBuilder;
 use reth::cli::Cli;
 use reth_node_ethereum::EthereumNode;
 use reth_node_ethereum::node::EthereumAddOns;
@@ -24,13 +26,18 @@ fn main() {
     if std::env::var_os("ENABLE_OP_EXECUTOR").is_some() {
         if let Err(err) = OpCli::<OpChainSpecParser, RollupArgs>::parse().run(
             async move |builder, rollup_args| {
-                info!(target: "reth::cli", "Launching node");
+                info!(target: "metis::cli", "Launching node");
                 if std::env::var_os("ENABLE_PARALLEL_EXECUTOR").is_some() {
                     let handle = builder.node(OpParallelNode::new(OpNode::new(rollup_args)));
                     handle.launch().await?.wait_for_node_exit().await
                 } else {
                     let handle = builder.node(OpNode::new(rollup_args));
-                    handle.launch().await?.wait_for_node_exit().await
+                    // handle.launch().await?.wait_for_node_exit().await
+                    handle
+                        .launch_with_debug_capabilities()
+                        .await?
+                        .wait_for_node_exit()
+                        .await
                 }
             },
         ) {
@@ -44,9 +51,13 @@ fn main() {
                 // Use the default ethereum node types
                 .with_types::<EthereumNode>()
                 // Configure the components of the node
-                // use default ethereum components but use our parallel executor.
+                // Use our parallel executor AND parallel payload builder
                 .with_components(
-                    EthereumNode::components().executor(ParallelExecutorBuilder::default()),
+                    EthereumNode::components()
+                        .executor(ParallelExecutorBuilder::default())
+                        .payload(BasicPayloadServiceBuilder::new(
+                            ParallelPayloadBuilderBuilder::default(),
+                        )),
                 )
                 .with_add_ons(EthereumAddOns::default());
             handle.launch().await?.wait_for_node_exit().await
@@ -60,7 +71,12 @@ fn main() {
                     EthereumNode::components().executor(HookExecutorBuilder::default()),
                 )
                 .with_add_ons(EthereumAddOns::default());
-            handle.launch().await?.wait_for_node_exit().await
+            // handle.launch().await?.wait_for_node_exit().await
+            handle
+                .launch_with_debug_capabilities()
+                .await?
+                .wait_for_node_exit()
+                .await
         }
     }) {
         eprintln!("Error: {err:?}");
