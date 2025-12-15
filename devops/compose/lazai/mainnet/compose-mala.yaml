@@ -1,0 +1,30 @@
+services:
+  mala:
+    image: ghcr.io/0xlazai/malachitebft:v0.7.2
+    container_name: mala
+    volumes:
+      - ./mala/data:/data
+      - ./assets:/app/assets
+    ports:
+      - "27000:27000"
+      - "127.0.0.1:29000:29000"
+    extra_hosts:
+      - "pub.rpc0.mainnet.lazai.systems:3.151.46.215"
+      - "pub.rpc1.mainnet.lazai.systems:3.0.225.122"
+    environment:
+      PATH: /app
+    logging:
+      driver: json-file         # or: local
+      options:
+        max-size: "50m"         # rotate when log file hits 50 MB
+        max-file: "5"           # keep 5 rotated files
+    command:
+      - "malachitebft-eth-app"
+      - "start"
+      - "--home"
+      - "/data"
+    labels:
+      project: "lazai"
+      service: "mala"
+      service_type: "rpc"
+      env: "mainnet"
