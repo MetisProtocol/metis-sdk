@@ -94,6 +94,74 @@ impl Default for ParallelExecutionContext {
     }
 }
 
+// Thread-local global cache for parallel execution results
+// This is used by payload builder to pass results to the executor
+use std::cell::RefCell;
+
+thread_local! {
+    static GLOBAL_EXECUTION_CACHE: RefCell<HashMap<TxHash, CachedExecutionResult>> = RefCell::new(HashMap::new());
+}
+
+/// Set global cache with parallel execution results
+/// Called by payload builder before serial execution loop
+pub fn set_global_cache(tx_hashes: &[TxHash], results: &[metis_pe::TxExecutionResult]) {
+    GLOBAL_EXECUTION_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        cache.clear();
+        for (tx_hash, result) in tx_hashes.iter().zip(results.iter()) {
+            cache.insert(
+                *tx_hash,
+                CachedExecutionResult {
+                    gas_used: result.receipt.cumulative_gas_used,
+                    receipt: result.receipt.clone(),
+                },
+            );
+        }
+        tracing::info!(target: "metis::parallel",
+            "💾 Set global cache with {} parallel execution results",
+            cache.len()
+        );
+    });
+}
+
+/// Get cached result from global cache
+/// Called by executor during execute_transaction
+pub fn get_global_cached_result(tx_hash: &TxHash) -> Option<CachedExecutionResult> {
+    GLOBAL_EXECUTION_CACHE.with(|cache| {
+        let result = cache.borrow().get(tx_hash).cloned();
+        if result.is_some() {
+            tracing::debug!(target: "metis::parallel",
+                "🎯 Cache HIT for tx 0x{:x}", tx_hash);
+        } else {
+            tracing::debug!(target: "metis::parallel",
+                "❌ Cache MISS for tx 0x{:x}", tx_hash);
+        }
+        result
+    })
+}
+
+/// Clear global cache
+/// Called after block execution completes
+pub fn clear_global_cache() {
+    GLOBAL_EXECUTION_CACHE.with(|cache| {
+        let cleared_count = cache.borrow().len();
+        cache.borrow_mut().clear();
+        tracing::debug!(target: "metis::parallel",
+            "🧹 Cleared global cache ({} entries removed)",
+            cleared_count
+        );
+    });
+}
+
+/// Get cache statistics (for debugging)
+pub fn get_cache_stats() -> (usize, usize) {
+    GLOBAL_EXECUTION_CACHE.with(|cache| {
+        let len = cache.borrow().len();
+        let capacity = cache.borrow().capacity();
+        (len, capacity)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
