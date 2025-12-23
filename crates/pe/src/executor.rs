@@ -212,9 +212,19 @@ impl ParallelExecutor {
         let mut cumulative_gas_used: u64 = 0;
         for i in 0..block_size {
             let mut execution_result = index_mutex!(self.execution_results, i).take().unwrap();
+            let gas_this_tx = execution_result.receipt.cumulative_gas_used; // gas before accumulation
             cumulative_gas_used =
                 cumulative_gas_used.saturating_add(execution_result.receipt.cumulative_gas_used);
             execution_result.receipt.cumulative_gas_used = cumulative_gas_used;
+
+            tracing::info!(
+                target: "metis::parallel",
+                tx_idx = i,
+                gas_this_tx = gas_this_tx,
+                cumulative_after = cumulative_gas_used,
+                "Accumulated cumulative_gas_used"
+            );
+
             fully_evaluated_results.push(execution_result);
         }
 
