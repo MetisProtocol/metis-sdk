@@ -523,54 +523,76 @@ where
         // Save parallel execution receipts for later use
         parallel_receipts = results.iter().map(|r| r.receipt.clone()).collect();
 
-        // CRITICAL DECISION: DO NOT commit parallel execution state
-        // Instead, let builder.execute_transaction() execute and commit serially
-        // This avoids the double-execution problem
-        // We will replace the receipts at the end
+        // Cache parallel execution results to avoid double execution
+        // We need to cache results BEFORE calling execute_transaction()
+        // The executor will check the cache and skip re-execution
+        let tx_hashes: Vec<_> = collected_transactions.iter().map(|ct| ct.tx_hash).collect();
+
+        // Cache parallel execution results in thread-local storage
+        // The executor will check this cache before executing
+        crate::parallel_execution_context::set_global_cache(&tx_hashes, &results);
+
+        info!(target: "payload_builder",
+            "💾 Cached {} parallel execution results in builder executor",
+            results.len()
+        );
 
         debug!(target: "payload_builder", "Step 2b: Parallel execution complete, will use serial execution for state commit");
 
         // Step 2c: Execute transactions serially through builder to commit state
-        info!(target: "payload_builder", "🔄 Step 2c: Adding {} transactions to block via serial execution", tx_count);
+        // Note: These will use cached results, so no actual re-execution will occur!
+        info!(target: "payload_builder", "🔄 Step 2c: Adding {} transactions to block (will use cached results)", tx_count);
 
         // We need to access builder's executor to cache results
         // Since builder doesn't expose the executor directly, we'll use a workaround:
         // Call execute_transaction which will add transactions to block
         // The state is already correct from parallel execution
 
+        // Log cache state before serial loop
+        let (cache_len, cache_cap) = crate::parallel_execution_context::get_cache_stats();
+        info!(target: "payload_builder",
+            "🔍 Step 2c: Starting serial execution loop with cache (cache has {} entries, capacity {})",
+            cache_len, cache_cap
+        );
+
         let cache_start = std::time::Instant::now();
-        let cached_count = 0;
-        let serial_count = 0;
+        let mut cached_count = 0;
         for (idx, ct) in collected_transactions.into_iter().enumerate() {
             let tx_hash = ct.tx_hash;
 
-            debug!(target: "payload_builder",
-                "  Adding TX[{}] to block (using cached result): hash=0x{:x}",
+            info!(target: "payload_builder",
+                "🔍 TX[{}]: About to execute hash=0x{:x} (expecting cache hit)",
                 idx, tx_hash
             );
 
             // This will use cached result if available, or execute serially
             match builder.execute_transaction(ct.tx) {
                 Ok(_gas) => {
-                    debug!(target: "payload_builder", "    ✅ TX[{}] added to block", idx);
+                    info!(target: "payload_builder", "✅ TX[{}] successfully added to block", idx);
+                    cached_count += 1;
                 }
                 Err(err) => {
                     warn!(target: "payload_builder",
-                        "    ❌ Failed to add TX[{}] to block: {:?}", idx, err
+                        "❌ TX[{}] failed: {:?}", idx, err
                     );
                 }
             }
         }
 
+        info!(target: "payload_builder",
+            "✅ Step 2c: Serial loop completed, added {} transactions (expected all from cache)",
+            cached_count
+        );
+
         let cache_duration = cache_start.elapsed();
         info!(target: "payload_builder",
-            "✅ Step 2c complete: Added {} transactions to block in {:?}",
-            tx_count, cache_duration
+            "✅ Step 2c complete: Added {} transactions to block in {:?} (avg {:?} per tx, cache-accelerated)",
+            tx_count, cache_duration, cache_duration / tx_count.max(1) as u32
         );
 
         info!(target: "payload_builder",
-            "📊 Execution statistics: parallel_executed={}, cached={}, serial={}, parallel_time={:?}, block_building_time={:?}, total_time={:?}",
-            tx_count, cached_count, serial_count,
+            "📊 Execution statistics: parallel_executed={}, added_to_block={}, parallel_time={:?}, block_building_time={:?}, total_time={:?}",
+            tx_count, cached_count,
             parallel_duration, cache_duration, parallel_start.elapsed()
         );
 
@@ -594,6 +616,10 @@ where
     // STEP 3: Check if we have a better block and finalize
     // ====================================================================
     if !is_better_payload(best_payload.as_ref(), total_fees) {
+        // Clear cache even when aborting to prevent memory leaks
+        crate::parallel_execution_context::clear_global_cache();
+        debug!(target: "payload_builder", "🧹 Cleared global execution cache (aborted payload)");
+
         drop(builder);
         return Ok(BuildOutcome::Aborted {
             fees: total_fees,
@@ -613,6 +639,11 @@ where
         block,
         ..
     } = builder.finish(&state_provider)?;
+
+    // Clear the global cache after block building is complete
+    // This prevents cache from growing indefinitely across blocks
+    crate::parallel_execution_context::clear_global_cache();
+    debug!(target: "payload_builder", "🧹 Cleared global execution cache after block finalization");
 
     // Replace the receipts with the ones from our parallel execution
     // builder.finish() generated receipts from serial re-execution
