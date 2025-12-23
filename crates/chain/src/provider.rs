@@ -11,7 +11,7 @@ use alloy_evm::eth::{dao_fork, eip6110};
 use alloy_evm::{Database, FromRecoveredTx, FromTxWithEncoded};
 use alloy_hardforks::EthereumHardfork;
 use alloy_rpc_types_engine::ExecutionData;
-use metis_primitives::{CfgEnv, ExecutionResult, SpecId, TxEnv};
+use metis_primitives::{CfgEnv, ExecutionResult, Output, SpecId, SuccessReason, TxEnv};
 use reth::api::{FullNodeTypes, NodeTypes};
 use reth::builder::BuilderContext;
 use reth::builder::components::ExecutorBuilder;
@@ -239,6 +239,7 @@ pub struct ParallelBlockExecutor<'a, Evm, Spec> {
     /// Eth original executor (used for serial execution fallback).
     executor: EthBlockExecutor<'a, Evm, Spec, RethReceiptBuilder>,
     /// Execution context to track state and prevent double post_execution calls
+    /// Contains execution_cache for avoiding double execution
     context: crate::parallel_execution_context::ParallelExecutionContext,
 }
 
@@ -256,6 +257,19 @@ where
         self.executor.apply_pre_execution_changes()
     }
 
+    /// 执行交易并立即提交状态变更
+    ///
+    /// **调用场景：**
+    /// 1. **Block Builder 流式执行**：通过 `BasicBlockBuilder.execute_transaction()` 调用
+    ///    - 用于构建新块（payload builder、dev mode mining）
+    ///    - 用于验证 payload（payload validator）
+    /// 2. **RPC 调用**：`eth_call`、`eth_estimateGas`、`eth_simulateV1` 等
+    ///    - 通过 `simulate::execute_transactions()` 调用
+    ///
+    /// **特点：**
+    /// - 执行后立即提交状态变更到数据库
+    /// - 返回 gas_used
+    /// - 会调用回调函数 `f` 处理执行结果
     fn execute_transaction_with_result_closure(
         &mut self,
         tx: impl ExecutableTx<Self>,
@@ -264,8 +278,62 @@ where
         static CALL_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let count = CALL_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
         let tx_hash = *tx.tx().hash();
+
+        tracing::info!(target: "metis::parallel",
+            "🔍 execute_transaction_with_result_closure() CALLED [call #{}] for tx 0x{:x}",
+            count, tx_hash
+        );
+
+        // Check global cache first (set by payload builder)
+        if let Some(cached) = crate::parallel_execution_context::get_global_cached_result(&tx_hash)
+        {
+            tracing::info!(target: "metis::parallel", call_count=?count, tx_hash=?format!("{:?}", tx_hash),
+                "✅ Using CACHED parallel execution result from GLOBAL cache (skipping re-execution)");
+
+            // Call the callback with a dummy execution result (since we already have the receipt)
+            let dummy_result = ExecutionResult::Success {
+                reason: SuccessReason::Stop,
+                gas_used: cached.gas_used,
+                gas_refunded: 0,
+                logs: cached.receipt.logs.clone(),
+                output: Output::Call(metis_primitives::Bytes::new()),
+            };
+            f(&dummy_result);
+
+            return Ok(cached.gas_used);
+        }
+
+        // Check local cache (for backwards compatibility)
+        if let Some(cached) = self.context.get_cached_result(&tx_hash) {
+            tracing::info!(target: "metis::parallel", call_count=?count, tx_hash=?format!("{:?}", tx_hash),
+                "✅ Using CACHED parallel execution result from LOCAL cache (skipping re-execution)");
+
+            let dummy_result = ExecutionResult::Success {
+                reason: SuccessReason::Stop,
+                gas_used: cached.gas_used,
+                gas_refunded: 0,
+                logs: cached.receipt.logs.clone(),
+                output: Output::Call(metis_primitives::Bytes::new()),
+            };
+            f(&dummy_result);
+
+            return Ok(cached.gas_used);
+        }
+
         tracing::debug!(target: "metis::cli", call_count=?count, tx_hash=?format!("{:?}", tx_hash),
             "execute_transaction_with_result_closure() called - IMMEDIATE SERIAL EXECUTION");
+
+        // CRITICAL FIX: Execute transactions IMMEDIATELY in Payload Validator mode.
+        //
+        // Problem: In Payload Validator mode, Reth uses Streaming API:
+        // 1. Calls execute_transaction() multiple times to buffer transactions
+        // 2. Starts parallel state root calculation IMMEDIATELY (uses current DB snapshot)
+        // 3. Calls finish() to execute buffered transactions
+        // 4. State root calculation completes using OLD snapshot from step 2
+        //
+        // Solution: Execute each transaction immediately when called.
+        // Trade-off: Loses parallelism in Payload Validator mode, but ensures correctness.
+        // Note: Payload Builder mode (with execute_transactions()) still uses parallel execution.
 
         // Execute immediately using the inner executor (serial execution)
         let result = self
@@ -330,9 +398,43 @@ where
         self.apply_pre_execution_changes()?;
         let result = self.execute(transactions)?;
 
+        // CRITICAL: For Payload Validator path, we need to ensure post_execution() is called
+        // even if execute_transactions() didn't call execute() (e.g., for empty blocks).
+        // However, execute_transactions() calls execute() which already calls post_execution(),
+        // so we don't need to call it again here.
+        //
+        // But wait: in Payload Validator path, execute_transactions() is NOT called!
+        // Instead, execute_transaction() is called multiple times, then finish() is called.
+        // So for Payload Validator path, post_execution() should be called in finish().
+        //
+        // Actually, for Payload Validator path, execute_block() is NOT called!
+        // Instead, execute_metered() calls execute_transaction() multiple times, then finish().
+        // So we need to call post_execution() in finish() for Payload Validator path.
+
         Ok(result)
     }
 
+    /// 执行交易但不提交状态变更
+    ///
+    /// **调用场景：**
+    /// 1. **调试和追踪**：`debug_traceTransaction`、`trace_block` 等 RPC 方法
+    ///    - 需要检查执行结果但不修改状态
+    /// 2. **条件执行**：需要先检查执行结果再决定是否提交的场景
+    ///    - 通常配合 `commit_transaction()` 使用
+    ///
+    /// **特点：**
+    /// - 执行后不提交状态变更
+    /// - 返回 `ResultAndState`，包含执行结果和状态变更
+    /// - 需要后续调用 `commit_transaction()` 来提交状态
+    ///
+    /// **使用模式：**
+    /// ```rust
+    /// let result = executor.execute_transaction_without_commit(tx)?;
+    /// // 检查 result.result 决定是否提交
+    /// if should_commit {
+    ///     executor.commit_transaction(result, tx)?;
+    /// }
+    /// ```
     fn execute_transaction_without_commit(
         &mut self,
         tx: impl ExecutableTx<Self>,
@@ -546,6 +648,21 @@ where
             pe_duration
         );
 
+        // CRITICAL: The parallel executor already sets cumulative_gas_used in each receipt
+        // as the cumulative value (including all previous transactions).
+        // We should NOT sum all cumulative_gas_used values - that would be wrong!
+        // Instead, we use the last receipt's cumulative_gas_used as the total gas.
+
+        // CRITICAL: Merge state changes in transaction order to match serial execution behavior.
+        // In serial execution, transactions are executed sequentially, and later transactions
+        // see the state changes from earlier transactions. We need to replicate this behavior
+        // by merging states in transaction order (not by address).
+        //
+        // Key insight: Parallel executor returns states for each transaction as if they were
+        // executed independently. However, in reality, later transactions may have seen state
+        // changes from earlier transactions (due to Block-STM's dependency resolution).
+        // We need to merge states in transaction order, where later transactions overwrite
+        // earlier transactions for the same address.
         let results_vec = results.map_err(|err| {
             tracing::error!(target: "metis::parallel", "❌ Parallel execution FAILED: {:?}", err);
             BlockExecutionError::Internal(InternalBlockExecutionError::Other(Box::new(err)))
@@ -566,6 +683,13 @@ where
             total_gas_used
         );
 
+        // FIX (方案A): Call post_execution() here to ensure block rewards are applied.
+        //
+        // Problem: In some paths (like execute_block), finish() may not be called,
+        // leading to missing block rewards and state root mismatches.
+        //
+        // Solution: Call post_execution() here with a flag to prevent double application.
+        // The flag ensures it's only called once per block execution.
         if !self.context.post_execution_called {
             tracing::debug!(target: "metis::parallel", "Calling post_execution() to apply block rewards");
             self.post_execution()?;
@@ -629,7 +753,10 @@ where
                 .entry(DAO_HARDFORK_BENEFICIARY)
                 .or_default() += drained_balance;
         }
-
+        // CRITICAL: Sort balance_increments by address to ensure deterministic commit order
+        // HashMap iteration order is non-deterministic, which can cause different state roots
+        // across nodes even with the same execution results.
+        // We need to commit in a deterministic order (sorted by address)
         let mut sorted_increments: Vec<_> = balance_increments.into_iter().collect();
         sorted_increments.sort_by_key(|(address, _)| *address);
         tracing::debug!(target: "metis::parallel", "Sorted {} balance increments by address", sorted_increments.len());
