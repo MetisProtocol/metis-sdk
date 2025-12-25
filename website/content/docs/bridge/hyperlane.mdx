@@ -1,0 +1,40 @@
+---
+title: Hyperlane Bridge
+---
+
+# Metis ↔ Lazai Hyperlane Bridge
+
+The **Hyperlane Bridge** enables seamless cross-chain transfers between the **Metis** and **Lazai** blockchains. Leveraging Hyperlane’s interoperability infrastructure, users can move assets quickly and securely across ecosystems while preserving trustlessness and decentralization.
+
+**Bridge URL:**
+
+* Metis <-> LazAI: ➡️ https://nexus.hyperlane.xyz/?origin=metis&token=METIS&destination=lazai
+* LazAI <-> Metis ➡️ https://nexus.hyperlane.xyz/?origin=lazai&token=METIS&destination=metis
+
+![metis -> LazAI bridge](https://github.com/user-attachments/assets/528c509b-a1df-4123-a4ee-5239a4320be5)
+
+connect wallet
+select Token (e.g `METIS`)
+enter amount
+enter receipts address
+
+## How It Works
+
+The bridge uses Hyperlane's messaging and consensus protocols to transfer assets across chains. When a user initiates a transfer from Metis to Lazai, the Hyperlane network securely relays the transaction data through coordinated validators and Multichain Messaging (MultiISM), ensuring finality and correctness on the destination chain.
+
+## Technical Components
+
+### MultiISM
+
+Hyperlane’s **Multi-Chain Interoperability Standard (MultiISM)** enables validators across multiple chains to agree on message delivery and validation. This system improves security by aggregating consensus from a diverse validator set.
+Documentation: https://docs.hyperlane.xyz/docs/reference/addresses/validators/latencies#mainnet
+
+### Operator Validators
+
+Bridge operations rely on Hyperlane’s validator set and default ISM (Interchain Security Module) configurations for each chain. For the **Lazai (Chain ID: 52924)** network, the mainnet default validators are specified here:
+https://docs.hyperlane.xyz/docs/reference/addresses/validators/mainnet-default-ism-validators#lazai-52924
+
+## Notes
+
+- Supported assets (e.g., **METIS**) can be selected directly in the bridge UI.
+- Ensure you have the correct network added in your wallet before bridging.
