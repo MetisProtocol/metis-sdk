@@ -195,7 +195,9 @@ fn execute_test(path: &Path) -> Result<(), TestError> {
             let _ = tx.derive_tx_type();
             txs.push(tx);
         }
-        let mut executor = ParallelExecutor::default();
+        // Explicit HR to avoid inference ambiguity after HR was made generic in metis-pe.
+        let mut executor: ParallelExecutor<metis_primitives::HaltReason> =
+            ParallelExecutor::default();
         // Clone the state for execution.
         let mut cache = cache_state.clone();
         cache.set_state_clear_flag(spec_id.is_enabled_in(SpecId::SPURIOUS_DRAGON));
@@ -213,7 +215,7 @@ fn execute_test(path: &Path) -> Result<(), TestError> {
             )
             .build();
         // Check sequential execute results
-        let sequential_results = execute_sequential(
+        let sequential_results = execute_sequential::<_, metis_primitives::HaltReason>(
             StateStorageAdapter::new(&mut state),
             env.clone(),
             txs.clone(),
@@ -295,7 +297,7 @@ fn check_execute_results(results: &[TxExecutionResult], name: &str, suite: &Suit
     if let Some(post_state) = &suite.post
         && let Some(result) = results.last()
     {
-        let db_state = &result.state;
+        let db_state = result.state();
         for (address, expect_account) in post_state {
             let db_account = db_state.get(address).cloned().unwrap_or_default();
             if expect_account.nonce != db_account.info.nonce {

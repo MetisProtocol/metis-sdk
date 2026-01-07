@@ -12,7 +12,6 @@ use crate::{
 
 #[cfg(feature = "compiler")]
 use metis_primitives::ExecuteEvm;
-use revm::context::result::ExecResultAndState;
 #[cfg(feature = "compiler")]
 use std::sync::Arc;
 use std::{
@@ -24,17 +23,23 @@ use std::{
 
 use alloy_evm::EvmEnv;
 use metis_primitives::{
-    Account, AccountInfo, AccountStatus, CacheDB, ContextTr, DatabaseCommit, DatabaseRef,
-    InvalidTransaction, KECCAK_EMPTY, SpecId, Transaction, TxEnv, U256, hash_deterministic,
+    Account, AccountInfo, AccountStatus, CacheDB, DatabaseRef, InvalidTransaction, KECCAK_EMPTY,
+    SpecId, Transaction, TxEnv, U256, hash_deterministic,
 };
+// Required for `evm.set_tx(...)`
+use metis_primitives::ContextSetters;
+// Required for `evm.finalize()`
 #[cfg(feature = "compiler")]
 use metis_vm::ExtCompileWorker;
+use revm::ExecuteEvm;
 
 /// The main executor struct that executes blocks with Block-STM algorithm.
+///
+/// Generic over `HR` (halt reason) so callers can align the `ResultAndState` type
+/// with the concrete EVM implementation they use (e.g. reth/alloy executor).
 #[derive(Debug)]
-#[cfg_attr(not(feature = "compiler"), derive(Default))]
-pub struct ParallelExecutor {
-    execution_results: Vec<Mutex<Option<TxExecutionResult>>>,
+pub struct ParallelExecutor<HR = metis_primitives::HaltReason> {
+    execution_results: Vec<Mutex<Option<TxExecutionResult<HR>>>>,
     abort_reason: OnceLock<AbortReason>,
     #[cfg(feature = "async-dropper")]
     dropper: AsyncDropper<(MvMemory, Scheduler<NormalProvider>, Vec<TxEnv>)>,
@@ -43,8 +48,20 @@ pub struct ParallelExecutor {
     pub worker: Arc<ExtCompileWorker>,
 }
 
+#[cfg(not(feature = "compiler"))]
+impl<HR> Default for ParallelExecutor<HR> {
+    fn default() -> Self {
+        Self {
+            execution_results: Default::default(),
+            abort_reason: Default::default(),
+            #[cfg(feature = "async-dropper")]
+            dropper: Default::default(),
+        }
+    }
+}
+
 #[cfg(feature = "compiler")]
-impl Default for ParallelExecutor {
+impl<HR> Default for ParallelExecutor<HR> {
     fn default() -> Self {
         Self {
             execution_results: Default::default(),
@@ -56,7 +73,7 @@ impl Default for ParallelExecutor {
     }
 }
 
-impl ParallelExecutor {
+impl<HR> ParallelExecutor<HR> {
     /// New a parallel VM with the compiler feature. The default compiler is an AOT-based one.
     #[cfg(feature = "compiler")]
     pub fn compiler() -> Self {
@@ -67,7 +84,16 @@ impl ParallelExecutor {
     }
 }
 
-impl ParallelExecutor {
+impl<HR> ParallelExecutor<HR>
+where
+    HR: Clone
+        + Debug
+        + Send
+        + Sync
+        + 'static
+        + core::cmp::Eq
+        + core::convert::From<metis_primitives::HaltReason>,
+{
     /// Execute an block with the block env and transactions.
     pub fn execute<DB>(
         &mut self,
@@ -75,7 +101,7 @@ impl ParallelExecutor {
         evm_env: EvmEnv,
         txs: Vec<TxEnv>,
         concurrency_level: NonZeroUsize,
-    ) -> ParallelExecutorResult
+    ) -> ParallelExecutorResult<HR>
     where
         DB: DatabaseRef + Send + Sync,
     {
@@ -105,10 +131,20 @@ impl ParallelExecutor {
             }
         }
 
+        let start_time = std::time::Instant::now();
+
+        tracing::debug!(
+            target: "metis::parallel::rerun",
+            block_size = block_size,
+            concurrency = concurrency_level.get(),
+            "Starting parallel execution"
+        );
+
         thread::scope(|scope| {
             for _ in 0..concurrency_level.into() {
                 scope.spawn(|| {
                     let mut next_task = scheduler.next_task();
+
                     while let Some(task) = next_task {
                         next_task = match task {
                             Task::Execution(tx_version) => {
@@ -129,12 +165,25 @@ impl ParallelExecutor {
             }
         });
 
+        let parallel_duration = start_time.elapsed();
+
+        // Calculate statistics from execution
+        let block_size = txs.len();
+        tracing::debug!(
+            target: "metis::parallel::rerun",
+            block_size = block_size,
+            duration_ms = parallel_duration.as_millis(),
+            avg_tx_time_us = parallel_duration.as_micros() / block_size.max(1) as u128,
+            concurrency = concurrency_level.get(),
+            "Parallel execution phase completed"
+        );
+
         if let Some(abort_reason) = self.abort_reason.take() {
             match abort_reason {
                 AbortReason::FallbackToSequential => {
                     #[cfg(feature = "async-dropper")]
                     self.dropper.drop((mv_memory, scheduler, Vec::new()));
-                    return execute_sequential(
+                    return execute_sequential::<_, HR>(
                         db,
                         evm_env,
                         txs,
@@ -149,7 +198,6 @@ impl ParallelExecutor {
                 }
             }
         }
-
         let mut fully_evaluated_results = Vec::with_capacity(block_size);
         let mut cumulative_gas_used: u64 = 0;
         for i in 0..block_size {
@@ -157,12 +205,16 @@ impl ParallelExecutor {
             cumulative_gas_used =
                 cumulative_gas_used.saturating_add(execution_result.receipt.cumulative_gas_used);
             execution_result.receipt.cumulative_gas_used = cumulative_gas_used;
+
             fully_evaluated_results.push(execution_result);
         }
 
         // We fully evaluate (the balance and nonce of) the beneficiary account
         // and raw transfer recipients that may have been atomically updated.
-        for address in mv_memory.consume_lazy_addresses() {
+        // IMPORTANT: Sort addresses to ensure deterministic processing order across nodes
+        let mut lazy_addresses: Vec<_> = mv_memory.consume_lazy_addresses().into_iter().collect();
+        lazy_addresses.sort(); // Sort by Address (which implements Ord) for deterministic order
+        for address in lazy_addresses {
             let location_hash = hash_deterministic(Location::Basic(address));
             if let Some(write_history) = mv_memory.data.get(&location_hash) {
                 let mut balance = U256::ZERO;
@@ -242,7 +294,7 @@ impl ParallelExecutor {
                     }
                     // SAFETY
                     let tx_result = unsafe { fully_evaluated_results.get_unchecked_mut(*tx_idx) };
-                    let contains_account = tx_result.state.contains_key(&address);
+                    let contains_account = tx_result.state().contains_key(&address);
 
                     if evm_env.cfg_env.spec.is_enabled_in(SpecId::SPURIOUS_DRAGON)
                         && code_hash == KECCAK_EMPTY
@@ -252,13 +304,13 @@ impl ParallelExecutor {
                         // Do nothing for the empty account.
                     } else if contains_account {
                         // Only update the information except the code and code hash.
-                        let account = tx_result.state.entry(address).or_default();
+                        let account = tx_result.state_mut().entry(address).or_default();
                         account.info.balance = balance;
                         account.info.nonce = nonce;
                     } else {
                         // Insert a new account with the touched status.
                         // Only when account is marked as touched we will save it to database.
-                        tx_result.state.insert(
+                        tx_result.state_mut().insert(
                             address,
                             Account {
                                 info: AccountInfo {
@@ -289,7 +341,7 @@ impl ParallelExecutor {
         tx_version: TxVersion,
     ) -> Option<Task> {
         loop {
-            return match vm.execute(&tx_version) {
+            return match vm.execute::<HR>(&tx_version) {
                 Err(VmExecutionError::Retry) => {
                     if self.abort_reason.get().is_none() {
                         continue;
@@ -297,6 +349,11 @@ impl ParallelExecutor {
                     None
                 }
                 Err(VmExecutionError::FallbackToSequential) => {
+                    tracing::warn!(
+                        target: "metis::parallel::rerun",
+                        tx_idx = tx_version.tx_idx,
+                        "Fallback to sequential execution triggered"
+                    );
                     scheduler.abort();
                     self.abort_reason
                         .get_or_init(|| AbortReason::FallbackToSequential);
@@ -306,13 +363,17 @@ impl ParallelExecutor {
                     if !scheduler.add_dependency(tx_version.tx_idx, blocking_tx_idx)
                         && self.abort_reason.get().is_none()
                     {
-                        // Retry the execution immediately if the blocking transaction was
-                        // re-executed by the time we can add it as a dependency.
                         continue;
                     }
                     None
                 }
                 Err(VmExecutionError::ExecutionError(err)) => {
+                    tracing::error!(
+                        target: "metis::parallel::rerun",
+                        tx_idx = tx_version.tx_idx,
+                        error = ?err,
+                        "Execution error occurred"
+                    );
                     scheduler.abort();
                     self.abort_reason
                         .get_or_init(|| AbortReason::ExecutionError(err));
@@ -344,49 +405,96 @@ fn try_validate<T: TaskProvider>(
     if aborted {
         mv_memory.convert_writes_to_estimates(tx_version.tx_idx);
     }
+
     scheduler.finish_validation(tx_version, aborted)
 }
 
 /// Execute transactions sequentially.
 /// Useful for falling back for (small) blocks with many dependencies.
-pub fn execute_sequential<DB: DatabaseRef>(
+pub fn execute_sequential<DB, HR>(
     db: DB,
     evm_env: EvmEnv,
     txs: Vec<TxEnv>,
     #[cfg(feature = "compiler")] worker: Arc<ExtCompileWorker>,
-) -> ParallelExecutorResult {
+) -> ParallelExecutorResult<HR>
+where
+    DB: DatabaseRef,
+    HR: Clone
+        + Debug
+        + Send
+        + Sync
+        + 'static
+        + core::cmp::Eq
+        + core::convert::From<metis_primitives::HaltReason>,
+{
+    let block_size = txs.len();
+    let start_time = std::time::Instant::now();
+
+    tracing::debug!(
+        target: "metis::parallel::rerun",
+        block_size = block_size,
+        "Starting sequential execution (fallback from parallel)"
+    );
+
     let mut db = CacheDB::new(db);
     let mut evm = build_evm(&mut db, evm_env);
     let mut results = Vec::with_capacity(txs.len());
     let mut cumulative_gas_used: u64 = 0;
-    for tx in txs {
+    for tx in txs.into_iter() {
         let tx_type = reth_primitives::TxType::try_from(tx.tx_type)
             .map_err(|_| ParallelExecutorError::UnreachableError)?;
-        #[cfg(feature = "compiler")]
-        let result_and_state = {
+        // NOTE: sequential fallback is only used for blocks where parallel scheduler aborts.
+        // We need to preserve the exact `ResultAndState<HR>` type so the caller can commit via
+        // reth/alloy `commit_transaction`.
+        //
+        // We run the handler, then finalize the EVM to obtain the post-state, and wrap both
+        // into `ResultAndState<HR>`.
+        let result_and_state: metis_primitives::ResultAndState<HR> = {
             use revm::handler::Handler;
 
-            let mut t = metis_vm::CompilerHandler::new(worker.clone());
-            evm.set_tx(tx);
-            t.run(&mut evm).map_err(evm_err_to_exec_error::<DB>)?
+            #[cfg(feature = "compiler")]
+            {
+                // Compiler feature currently fixes its HaltReason type. Keep legacy behavior.
+                let mut t = metis_vm::CompilerHandler::new(worker.clone());
+                evm.set_tx(tx);
+                let result = t.run(&mut evm).map_err(evm_err_to_exec_error::<DB>)?;
+                let state = evm.finalize();
+                metis_primitives::ResultAndState { result, state }
+            }
+            #[cfg(not(feature = "compiler"))]
+            {
+                evm.set_tx(tx);
+                let mut t = crate::vm::WithoutRewardBeneficiaryHandler::<_, HR>::default();
+                let result = t.run(&mut evm).map_err(evm_err_to_exec_error::<DB>)?;
+                let state = evm.finalize();
+                metis_primitives::ResultAndState { result, state }
+            }
         };
-        #[cfg(not(feature = "compiler"))]
-        let result_and_state = {
-            use revm::ExecuteEvm;
 
-            evm.transact(tx).map_err(evm_err_to_exec_error::<DB>)?
-        };
+        // IMPORTANT:
+        // Do NOT commit state changes to the shared database here.
+        // The caller (reth executor) must commit via commit_transaction(ResultAndState, tx)
+        // to preserve correct journal/bundle semantics and deterministic state roots.
 
-        evm.db_mut().commit(result_and_state.state.clone());
-        let ExecResultAndState { result, state } = result_and_state;
+        // Store the complete ResultAndState (preserves all information for correct state root)
+        let mut execution_result = TxExecutionResult::from_raw(tx_type, result_and_state);
 
-        let mut execution_result = TxExecutionResult::from_raw(tx_type, result, state);
-
+        // Accumulate cumulative gas used
         cumulative_gas_used =
             cumulative_gas_used.saturating_add(execution_result.receipt.cumulative_gas_used);
         execution_result.receipt.cumulative_gas_used = cumulative_gas_used;
 
         results.push(execution_result);
     }
+
+    let sequential_duration = start_time.elapsed();
+    tracing::debug!(
+        target: "metis::parallel::rerun",
+        block_size = block_size,
+        duration_ms = sequential_duration.as_millis(),
+        avg_tx_time_us = sequential_duration.as_micros() / block_size.max(1) as u128,
+        "Sequential execution completed"
+    );
+
     Ok(results)
 }

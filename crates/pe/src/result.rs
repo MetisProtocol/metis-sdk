@@ -1,11 +1,11 @@
 use crate::{FinishExecFlags, TxIdx};
 use alloy_consensus::TxType;
 use metis_primitives::{
-    Account, Address, DBErrorMarker, DatabaseRef, EVMError, EvmState, ExecutionResult, HashMap,
-    InvalidTransaction, ResultAndState, TxNonce,
+    DBErrorMarker, DatabaseRef, EVMError, EvmState, InvalidTransaction, TxNonce,
 };
-use op_revm::{OpHaltReason, OpTransactionError};
+use op_revm::OpTransactionError;
 use reth_primitives::Receipt;
+use revm::context::result::ResultAndState as RevmResultAndState;
 
 /// Database error definitions.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -108,58 +108,80 @@ impl DBErrorMarker for ReadError {}
 pub type ExecutionError = EVMError<ReadError>;
 
 /// Execution result of a transaction
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TxExecutionResult {
+///
+/// This structure contains the complete execution result including:
+/// - receipt: The transaction receipt
+/// - result_and_state: The complete revm ResultAndState preserving all execution details
+///
+/// CRITICAL: Using ResultAndState (instead of HashMap<Address, Account>) ensures
+/// we don't lose storage slot changes, selfdestructs, created accounts, etc.
+/// This prevents state root mismatch issues when used with reth's commit_transaction().
+///
+/// The generic parameter HR is the HaltReason type from the EVM implementation.
+/// This allows metis-pe to return ResultAndState compatible with reth's executor.
+#[derive(Debug, Clone)]
+pub struct TxExecutionResult<HR = metis_primitives::HaltReason> {
     /// Receipt of the execution
     pub receipt: Receipt,
-    /// State that got updated
-    pub state: EvmState,
+    /// Complete execution result and state from revm
+    /// This preserves all information needed for correct state commitment
+    pub result_and_state: RevmResultAndState<HR>,
 }
 
-impl TxExecutionResult {
+impl<HR> TxExecutionResult<HR>
+where
+    HR: Clone + core::fmt::Debug,
+{
     /// Construct an execution result from the raw result and state.
+    ///
+    /// This preserves the complete ResultAndState from revm, ensuring no information loss.
     #[inline]
     pub fn from_raw(
         tx_type: TxType,
-        result: ExecutionResult,
-        state: HashMap<Address, Account>,
+        result_and_state: metis_primitives::ResultAndState<HR>,
     ) -> Self {
+        let cumulative_gas_used = result_and_state.result.gas_used();
+        let success = result_and_state.result.is_success();
+        let logs = result_and_state.result.logs().to_vec();
+
         Self {
             receipt: Receipt {
                 tx_type,
-                success: result.is_success(),
-                cumulative_gas_used: result.gas_used(),
-                logs: result.into_logs(),
+                success,
+                cumulative_gas_used,
+                logs,
             },
-            state,
+            result_and_state,
         }
     }
 
+    /// Get a reference to the state for backward compatibility.
+    ///
+    /// DEPRECATED: This is temporary compatibility for old code paths.
+    /// New code should use result_and_state directly with commit_transaction().
     #[inline]
-    /// Convert an execution result from the raw Optimism result and state.
-    pub fn from_raw_op(
-        tx_type: TxType,
-        ResultAndState { result, state }: ResultAndState<OpHaltReason>,
-    ) -> Self {
-        Self {
-            receipt: Receipt {
-                tx_type,
-                success: result.is_success(),
-                cumulative_gas_used: result.gas_used(),
-                logs: result.into_logs(),
-            },
-            state,
-        }
+    pub fn state(&self) -> &EvmState {
+        &self.result_and_state.state
+    }
+
+    /// Get a mutable reference to the state for backward compatibility.
+    ///
+    /// DEPRECATED: This is temporary compatibility for old code paths.
+    /// New code should use result_and_state directly with commit_transaction().
+    /// WARNING: Mutating the state directly may cause inconsistencies!
+    #[inline]
+    pub fn state_mut(&mut self) -> &mut EvmState {
+        &mut self.result_and_state.state
     }
 }
 
-pub(crate) struct VmExecutionResult {
-    pub(crate) execution_result: TxExecutionResult,
+pub(crate) struct VmExecutionResult<HR> {
+    pub(crate) execution_result: TxExecutionResult<HR>,
     pub(crate) flags: FinishExecFlags,
 }
 
 /// Execution result of a block
-pub type ParallelExecutorResult = Result<Vec<TxExecutionResult>, ParallelExecutorError>;
+pub type ParallelExecutorResult<HR> = Result<Vec<TxExecutionResult<HR>>, ParallelExecutorError>;
 
 #[derive(Debug)]
 pub(crate) enum AbortReason {
