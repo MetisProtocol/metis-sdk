@@ -1,12 +1,14 @@
 use crate::{
     AccountMeta, Entry, FinishExecFlags, Location, LocationHash, LocationValue, ReadOrigin,
     ReadOrigins, ReadSet, TxIdx, TxVersion, WriteSet,
-    mv_memory::{MvMemory, RewardPolicy, reward_policy},
+    mv_memory::MvMemory,
     result::{ReadError, TxExecutionResult, VmExecutionError, VmExecutionResult},
 };
 use alloy_evm::EvmEnv;
 use alloy_primitives::TxKind;
-use metis_primitives::{BuildIdentityHasher, EvmState, HashMap, I257, hash_deterministic};
+use metis_primitives::{
+    BuildIdentityHasher, EvmState, HashMap, I257, ResultAndState, hash_deterministic,
+};
 #[cfg(feature = "compiler")]
 use metis_vm::ExtCompileWorker;
 use revm::context::ContextSetters;
@@ -14,19 +16,19 @@ use revm::context::ContextSetters;
 use revm::handler::FrameInitOrResult;
 use revm::handler::{EvmTr, FrameResult, FrameTr};
 use revm::{
-    Database, DatabaseRef, ExecuteEvm, MainBuilder, MainContext, MainnetEvm,
+    Database, DatabaseRef, ExecuteEvm, MainBuilder, MainnetEvm,
     bytecode::Bytecode,
     context::{
         ContextTr, TxEnv,
         result::{EVMError, InvalidTransaction},
     },
-    context_interface::{JournalTr, result::HaltReason},
+    context_interface::{JournalTr, Transaction as _},
     handler::MainnetContext,
     primitives::{Address, B256, KECCAK_EMPTY, U256, hardfork::SpecId},
-    state::AccountInfo,
+    state::{Account, AccountInfo, AccountStatus},
 };
 use revm::{handler::Handler, interpreter::interpreter_action::FrameInit};
-use smallvec::{SmallVec, smallvec};
+use smallvec::SmallVec;
 #[cfg(feature = "compiler")]
 use std::sync::Arc;
 
@@ -376,8 +378,8 @@ pub(crate) struct Vm<'a, DB: DatabaseRef> {
     mv_memory: &'a MvMemory,
     evm_env: &'a EvmEnv,
     txs: &'a [TxEnv],
-    beneficiary_location_hash: LocationHash,
-    reward_policy: RewardPolicy,
+    // beneficiary_location_hash: LocationHash,
+    // reward_policy: RewardPolicy,
     #[cfg(feature = "compiler")]
     worker: Arc<ExtCompileWorker>,
 }
@@ -395,10 +397,10 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
             mv_memory,
             evm_env,
             txs,
-            beneficiary_location_hash: hash_deterministic(Location::Basic(
-                evm_env.block_env.beneficiary,
-            )),
-            reward_policy: reward_policy(),
+            // beneficiary_location_hash: hash_deterministic(Location::Basic(
+            //     evm_env.block_env.beneficiary,
+            // )),
+            // reward_policy: reward_policy(),
             #[cfg(feature = "compiler")]
             worker,
         }
@@ -420,10 +422,19 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
     // value are added to the write set, possibly replacing a pair with a prior value
     // (if it is not the first time the transaction wrote to this location during the
     // execution).
-    pub(crate) fn execute(
+    pub(crate) fn execute<HR>(
         &self,
         tx_version: &TxVersion,
-    ) -> Result<VmExecutionResult, VmExecutionError> {
+    ) -> Result<VmExecutionResult<HR>, VmExecutionError>
+    where
+        HR: Clone
+            + core::fmt::Debug
+            + Send
+            + Sync
+            + 'static
+            + core::cmp::Eq
+            + core::convert::From<metis_primitives::HaltReason>,
+    {
         // SAFETY: A correct scheduler would guarantee this index to be inbound.
         let tx = unsafe { self.txs.get_unchecked(tx_version.tx_idx) };
         let from_hash = hash_deterministic(Location::Basic(tx.caller));
@@ -441,9 +452,9 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
         let result = {
             evm.set_tx(tx.clone());
             #[cfg(feature = "compiler")]
-            let mut t = WithoutRewardBeneficiaryHandler::new(self.worker.clone());
+            let mut t = WithoutRewardBeneficiaryHandler::<_, HR>::new(self.worker.clone());
             #[cfg(not(feature = "compiler"))]
-            let mut t = WithoutRewardBeneficiaryHandler::default();
+            let mut t = WithoutRewardBeneficiaryHandler::<_, HR>::default();
             t.run(&mut evm)
         };
         match result {
@@ -452,7 +463,18 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
                 // the recipient, and the beneficiary accounts.
                 let mut write_set =
                     WriteSet::with_capacity_and_hasher(100, BuildIdentityHasher::default());
-                let state = evm.finalize();
+                let mut state = evm.finalize();
+                // IMPORTANT: `WithoutRewardBeneficiaryHandler` skips `reward_beneficiary`, so we must
+                // explicitly apply the beneficiary (miner tip) reward into the finalized `state`.
+                // Otherwise, proposers that commit pre-executed `ResultAndState` will produce a
+                // different state root than validators that re-execute transactions.
+                self.apply_beneficiary_reward_to_state(
+                    &mut state,
+                    tx_version.tx_idx,
+                    tx,
+                    result.gas_used(),
+                );
+
                 for (address, account) in &state {
                     if account.is_selfdestructed() {
                         // For now we are betting on [code_hash] triggering the sequential
@@ -545,8 +567,6 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
                     }
                 }
 
-                self.apply_rewards(&mut write_set, tx, U256::from(result.gas_used()))?;
-
                 // Drop the vm instance and the database instance.
                 drop(evm);
                 // Append lazy addresses when the mode is lazy.
@@ -568,8 +588,12 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
                 let tx_type = reth_primitives::TxType::try_from(tx.tx_type).map_err(|err| {
                     VmExecutionError::ExecutionError(EVMError::Custom(err.to_string()))
                 })?;
+
+                // Combine result and state into ResultAndState to preserve all execution information
+                let result_and_state: ResultAndState<HR> = ResultAndState { result, state };
+
                 Ok(VmExecutionResult {
-                    execution_result: TxExecutionResult::from_raw(tx_type, result, state),
+                    execution_result: TxExecutionResult::from_raw(tx_type, result_and_state),
                     flags,
                 })
             }
@@ -592,82 +616,152 @@ impl<'a, DB: DatabaseRef> Vm<'a, DB> {
         }
     }
 
-    // Apply rewards (balance increments) to beneficiary accounts, etc.
-    fn apply_rewards(
+    /// Apply the per-transaction beneficiary reward (miner tip) directly into the finalized `state`.
+    ///
+    /// This mirrors the logic in `apply_rewards`, but updates the committed `EvmState` so that
+    /// `ResultAndState` matches canonical EVM execution used during block validation.
+    fn apply_beneficiary_reward_to_state(
         &self,
-        write_set: &mut WriteSet,
+        state: &mut EvmState,
+        tx_idx: TxIdx,
         tx: &TxEnv,
-        gas_used: U256,
-    ) -> Result<(), VmExecutionError> {
-        let mut gas_price = if let Some(priority_fee) = tx.gas_priority_fee {
-            std::cmp::min(
-                tx.gas_price,
-                priority_fee.saturating_add(self.evm_env.block_env.basefee as u128),
-            )
-        } else {
-            tx.gas_price
-        };
-        if self.evm_env.cfg_env.spec.is_enabled_in(SpecId::LONDON) {
-            gas_price = gas_price.saturating_sub(self.evm_env.block_env.basefee as u128);
-        }
-        let gas_price = U256::from(gas_price);
-        let rewards: SmallVec<[(LocationHash, U256); 1]> = match self.reward_policy {
-            RewardPolicy::Ethereum => {
-                smallvec![(
-                    self.beneficiary_location_hash,
-                    gas_price.saturating_mul(gas_used)
-                )]
-            }
-        };
+        gas_used: u64,
+    ) {
+        // Match the actual canonical execution in this node:
+        // - Use effective gas price (1559/legacy aware)
+        // - Credit the beneficiary with the full effective gas price.
+        //
+        // NOTE: Although Ethereum mainnet burns the basefee post-London, our witness diffs for this
+        // network show that the canonical re-execution expects beneficiary balance increments of
+        // (basefee + tip) * gas_used. To keep proposer payloads valid, we mirror that behavior here.
+        let basefee = self.evm_env.block_env.basefee as u128;
+        let effective_gas_price = tx.effective_gas_price(basefee);
+        let coinbase_gas_price = effective_gas_price;
 
-        for (recipient, amount) in rewards {
-            if let Some(value) = write_set.get_mut(&recipient) {
-                match value {
-                    LocationValue::Basic(basic) => {
-                        basic.balance = basic.balance.saturating_add(amount)
-                    }
-                    LocationValue::LazySender(subtraction) => {
-                        *subtraction = subtraction.saturating_sub(amount)
-                    }
-                    LocationValue::LazyRecipient(addition) => {
-                        *addition = addition.saturating_add(amount)
-                    }
-                    _ => return Err(ReadError::InvalidValueType.into()),
+        // Log to make it easy to correlate witness diffs with reward math.
+        tracing::debug!(
+            target: "metis::parallel",
+            beneficiary=?self.evm_env.block_env.beneficiary,
+            spec=?self.evm_env.cfg_env.spec,
+            basefee,
+            effective_gas_price,
+            coinbase_gas_price,
+            gas_used,
+            "beneficiary_reward: computed coinbase_gas_price (tip per gas)"
+        );
+
+        let amount = U256::from(coinbase_gas_price).saturating_mul(U256::from(gas_used));
+        if amount.is_zero() {
+            return;
+        }
+
+        let beneficiary: Address = self.evm_env.block_env.beneficiary;
+        match state.get_mut(&beneficiary) {
+            Some(account) => {
+                account.info.balance = account.info.balance.saturating_add(amount);
+                account.status = AccountStatus::Touched;
+            }
+            None => {
+                // IMPORTANT (consensus-critical):
+                // When a block has multiple txs, the beneficiary's balance at tx_k should include
+                // rewards from tx_0..tx_{k-1}. If we start from the *parent* state every time, we'd
+                // overwrite the in-block accumulated balance and diverge on multi-tx blocks.
+                //
+                // Therefore:
+                // - Prefer the latest `< tx_idx` value from MvMemory (in-block state).
+                // - Fall back to the underlying DB (parent state) if this is the first tx or the
+                //   beneficiary hasn't been written yet.
+                let beneficiary_location_hash = hash_deterministic(Location::Basic(beneficiary));
+                let mut base_info: Option<AccountInfo> = None;
+
+                if tx_idx > 0
+                    && let Some(written_txs) = self.mv_memory.data.get(&beneficiary_location_hash)
+                    && let Some((_, Entry::Data(_, value))) =
+                        written_txs.range(..tx_idx).next_back()
+                    && let LocationValue::Basic(info) = value
+                {
+                    base_info = Some(info.clone());
                 }
-            } else {
-                write_set.insert(recipient, LocationValue::LazyRecipient(amount));
+
+                if base_info.is_none() {
+                    base_info = match self.db.basic_ref(beneficiary) {
+                        Ok(Some(info)) => Some(info),
+                        Ok(None) => None,
+                        Err(err) => {
+                            tracing::warn!(
+                                target: "metis::parallel",
+                                beneficiary=?beneficiary,
+                                %err,
+                                "failed to read beneficiary account from db; defaulting balance to 0"
+                            );
+                            None
+                        }
+                    };
+                }
+
+                let mut info = base_info.unwrap_or_default();
+                info.balance = info.balance.saturating_add(amount);
+                state.insert(
+                    beneficiary,
+                    Account {
+                        info,
+                        status: AccountStatus::Touched,
+                        ..Default::default()
+                    },
+                );
             }
         }
-
-        Ok(())
     }
 }
 
 #[inline]
 pub(crate) fn build_evm<DB: Database>(db: DB, evm_env: EvmEnv) -> MainnetEvm<MainnetContext<DB>> {
-    MainnetContext::mainnet()
-        .with_db(db)
-        .with_cfg(evm_env.cfg_env)
+    // IMPORTANT (consensus-critical):
+    // We observed blocks where beneficiary received `effective_gas_price * gas_used` (basefee was
+    // NOT burned), which can only happen if the EVM's *handler/spec selection* is effectively
+    // pre-London.
+    //
+    // Setting `CfgEnv.spec` alone is not sufficient if the underlying handler/spec was chosen at
+    // `Context::new(.., spec_id)` time (used internally by revm mainnet handler). Therefore we
+    // must construct the context with the correct spec id up front.
+    let spec_id = evm_env.cfg_env.spec;
+
+    // Construct the mainnet context with the correct internal spec selection.
+    // Assigning to `MainnetContext<DB>` makes `BLOCK/TX/CFG/JOURNAL` concrete for the compiler.
+    let ctx: MainnetContext<DB> = revm::Context::new(db, spec_id);
+
+    ctx.with_cfg(evm_env.cfg_env)
         .with_block(evm_env.block_env)
         .build_mainnet()
 }
 
-pub struct WithoutRewardBeneficiaryHandler<EVM> {
+pub struct WithoutRewardBeneficiaryHandler<EVM, HR> {
     _phantom: core::marker::PhantomData<EVM>,
+    _halt: core::marker::PhantomData<HR>,
     #[cfg(feature = "compiler")]
     worker: Arc<metis_vm::ExtCompileWorker>,
 }
 
-impl<EVM> Handler for WithoutRewardBeneficiaryHandler<EVM>
+impl<EVM, HR> Handler for WithoutRewardBeneficiaryHandler<EVM, HR>
 where
     EVM: EvmTr<
             Context: ContextTr<Journal: JournalTr<State = EvmState>>,
             Frame: FrameTr<FrameInit = FrameInit, FrameResult = FrameResult>,
         >,
+    // revm-handler requires `HaltReasonTr` which (for current revm-handler) implies:
+    // - Eq
+    // - From<revm::context_interface::result::HaltReason>
+    HR: Clone
+        + core::fmt::Debug
+        + Send
+        + Sync
+        + 'static
+        + core::cmp::Eq
+        + core::convert::From<metis_primitives::HaltReason>,
 {
     type Evm = EVM;
     type Error = EVMError<<<EVM::Context as ContextTr>::Db as Database>::Error, InvalidTransaction>;
-    type HaltReason = HaltReason;
+    type HaltReason = HR;
 
     fn reward_beneficiary(
         &self,
@@ -719,30 +813,33 @@ where
 }
 
 #[cfg(not(feature = "compiler"))]
-impl<EVM> Default for WithoutRewardBeneficiaryHandler<EVM> {
+impl<EVM, HR> Default for WithoutRewardBeneficiaryHandler<EVM, HR> {
     fn default() -> Self {
         Self {
             _phantom: core::marker::PhantomData,
+            _halt: core::marker::PhantomData,
         }
     }
 }
 
 #[cfg(feature = "compiler")]
-impl<EVM> Default for WithoutRewardBeneficiaryHandler<EVM> {
+impl<EVM, HR> Default for WithoutRewardBeneficiaryHandler<EVM, HR> {
     fn default() -> Self {
         Self {
             _phantom: core::marker::PhantomData,
+            _halt: core::marker::PhantomData,
             worker: Arc::new(metis_vm::ExtCompileWorker::disable()),
         }
     }
 }
 
 #[cfg(feature = "compiler")]
-impl<EVM> WithoutRewardBeneficiaryHandler<EVM> {
+impl<EVM, HR> WithoutRewardBeneficiaryHandler<EVM, HR> {
     #[inline]
     pub fn new(worker: Arc<metis_vm::ExtCompileWorker>) -> Self {
         Self {
             _phantom: core::marker::PhantomData,
+            _halt: core::marker::PhantomData,
             worker,
         }
     }

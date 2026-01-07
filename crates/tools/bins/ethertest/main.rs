@@ -447,7 +447,9 @@ fn execute_test(path: &Path) -> Result<(), Box<TestError>> {
                         panic!("Invalid transaction type without expected exception");
                     }
                 }
-                let mut executor = ParallelExecutor::default();
+                // Explicit HR to avoid inference ambiguity (multiple From<HaltReason> impls exist).
+                let mut executor: ParallelExecutor<metis_primitives::HaltReason> =
+                    ParallelExecutor::default();
                 let concurrency_level =
                     NonZeroUsize::new(num_cpus::get()).unwrap_or(NonZeroUsize::new(1).unwrap());
 
@@ -497,7 +499,7 @@ fn execute_test(path: &Path) -> Result<(), Box<TestError>> {
                                 }
                             );
                         }
-                        state.commit(res.state);
+                        state.commit(res.result_and_state.state);
                         // Check the account state diff.
                         if !test_case.state.is_empty() {
                             for (address, expect_account) in &test_case.state {

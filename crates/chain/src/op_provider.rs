@@ -302,7 +302,8 @@ where
             })?
             .into_iter()
             .map(|r| {
-                self.evm_mut().db_mut().commit(r.state);
+                // Commit state from result_and_state
+                self.evm_mut().db_mut().commit(r.result_and_state.state);
                 total_gas_used += &r.receipt.cumulative_gas_used;
                 match &r.receipt.tx_type {
                     TxType::Legacy => OpReceipt::Legacy(Receipt::from(r.receipt)),
@@ -325,10 +326,17 @@ where
     fn post_execution(&mut self) -> Result<(), BlockExecutionError> {
         let balance_increments =
             post_block_balance_increments::<Header>(&self.spec, self.evm().block(), &[], None);
+
+        // CRITICAL: Sort balance_increments by address to ensure deterministic commit order.
+        // HashMap iteration order is non-deterministic, which can cause different state roots
+        // across nodes. Use BTreeMap to maintain sorted order.
+        let sorted_balance_increments: std::collections::BTreeMap<_, _> =
+            balance_increments.into_iter().collect();
+
         // increment balances
         self.evm_mut()
             .db_mut()
-            .increment_balances(balance_increments.clone())
+            .increment_balances(sorted_balance_increments)
             .map_err(|_| BlockValidationError::IncrementBalanceFailed)?;
 
         Ok(())

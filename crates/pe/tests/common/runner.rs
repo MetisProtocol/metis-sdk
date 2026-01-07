@@ -30,15 +30,22 @@ where
     DB: DatabaseRef + Send + Sync,
 {
     let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
-    let mut pe = ParallelExecutor::default();
-    assert_eq!(
-        metis_pe::execute_sequential(
-            &db,
-            EvmEnv::default(),
-            txs.clone(),
-            #[cfg(feature = "compiler")]
-            pe.worker.clone(),
-        ),
-        pe.execute(&db, EvmEnv::default(), txs, concurrency_level),
-    );
+    let mut pe: ParallelExecutor<metis_primitives::HaltReason> = ParallelExecutor::default();
+
+    // Compare receipts only: `TxExecutionResult` contains `ResultAndState`, which is not
+    // guaranteed to implement `PartialEq` across upstream versions.
+    let seq_receipts = metis_pe::execute_sequential::<_, metis_primitives::HaltReason>(
+        &db,
+        EvmEnv::default(),
+        txs.clone(),
+        #[cfg(feature = "compiler")]
+        pe.worker.clone(),
+    )
+    .map(|results| results.into_iter().map(|r| r.receipt).collect::<Vec<_>>());
+
+    let par_receipts = pe
+        .execute(&db, EvmEnv::default(), txs, concurrency_level)
+        .map(|results| results.into_iter().map(|r| r.receipt).collect::<Vec<_>>());
+
+    assert_eq!(seq_receipts, par_receipts);
 }

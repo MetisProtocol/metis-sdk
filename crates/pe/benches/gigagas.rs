@@ -23,11 +23,11 @@ static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 /// Runs a benchmark for executing a set of transactions on a given blockchain state.
 pub fn bench(c: &mut Criterion, name: &str, db: InMemoryDB, txs: Vec<TxEnv>) {
     let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
-    let mut pe = ParallelExecutor::default();
+    let mut pe: ParallelExecutor<metis_primitives::HaltReason> = ParallelExecutor::default();
     let mut group = c.benchmark_group(name);
     group.bench_function("Sequential", |b| {
         b.iter(|| {
-            execute_sequential(
+            execute_sequential::<_, metis_primitives::HaltReason>(
                 black_box(&db),
                 black_box(EvmEnv::default()),
                 black_box(txs.clone()),
@@ -48,10 +48,10 @@ pub fn bench(c: &mut Criterion, name: &str, db: InMemoryDB, txs: Vec<TxEnv>) {
     });
     #[cfg(feature = "compiler")]
     {
-        let mut pe = ParallelExecutor::compiler();
+        let mut pe: ParallelExecutor<metis_primitives::HaltReason> = ParallelExecutor::compiler();
         group.bench_function("Sequential-With-Compiler", |b| {
             b.iter(|| {
-                execute_sequential(
+                execute_sequential::<_, metis_primitives::HaltReason>(
                     black_box(&db),
                     black_box(EvmEnv::default()),
                     black_box(txs.clone()),

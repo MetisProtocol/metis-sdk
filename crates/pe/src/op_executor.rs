@@ -32,7 +32,7 @@ use std::{
 #[derive(Debug)]
 #[cfg_attr(not(feature = "compiler"), derive(Default))]
 pub struct OpParallelExecutor {
-    execution_results: Vec<Mutex<Option<TxExecutionResult>>>,
+    execution_results: Vec<Mutex<Option<TxExecutionResult<op_revm::OpHaltReason>>>>,
     abort_reason: OnceLock<AbortReason>,
     #[cfg(feature = "async-dropper")]
     dropper: AsyncDropper<(MvMemory, Scheduler<NormalProvider>, Vec<TxEnv>)>,
@@ -73,7 +73,7 @@ impl OpParallelExecutor {
         evm_env: EvmEnv,
         txs: Vec<TxEnv>,
         concurrency_level: NonZeroUsize,
-    ) -> ParallelExecutorResult
+    ) -> ParallelExecutorResult<op_revm::OpHaltReason>
     where
         DB: DatabaseRef + Send + Sync,
     {
@@ -160,7 +160,10 @@ impl OpParallelExecutor {
 
         // We fully evaluate (the balance and nonce of) the beneficiary account
         // and raw transfer recipients that may have been atomically updated.
-        for address in mv_memory.consume_lazy_addresses() {
+        // IMPORTANT: Sort addresses to ensure deterministic processing order across nodes
+        let mut lazy_addresses: Vec<_> = mv_memory.consume_lazy_addresses().into_iter().collect();
+        lazy_addresses.sort(); // Sort by Address (which implements Ord) for deterministic order
+        for address in lazy_addresses {
             let location_hash = hash_deterministic(Location::Basic(address));
             if let Some(write_history) = mv_memory.data.get(&location_hash) {
                 let mut balance = U256::ZERO;
@@ -240,7 +243,7 @@ impl OpParallelExecutor {
                     }
                     // SAFETY
                     let tx_result = unsafe { fully_evaluated_results.get_unchecked_mut(*tx_idx) };
-                    let contains_account = tx_result.state.contains_key(&address);
+                    let contains_account = tx_result.state().contains_key(&address);
 
                     if evm_env.cfg_env.spec.is_enabled_in(SpecId::SPURIOUS_DRAGON)
                         && code_hash == KECCAK_EMPTY
@@ -250,13 +253,13 @@ impl OpParallelExecutor {
                         // Do nothing for the empty account.
                     } else if contains_account {
                         // Only update the information except the code and code hash.
-                        let account = tx_result.state.entry(address).or_default();
+                        let account = tx_result.state_mut().entry(address).or_default();
                         account.info.balance = balance;
                         account.info.nonce = nonce;
                     } else {
                         // Insert a new account with the touched status.
                         // Only when account is marked as touched we will save it to database.
-                        tx_result.state.insert(
+                        tx_result.state_mut().insert(
                             address,
                             Account {
                                 info: AccountInfo {
@@ -347,12 +350,15 @@ fn try_validate<T: TaskProvider>(
 
 /// Execute transactions sequentially.
 /// Useful for falling back for (small) blocks with many dependencies.
-pub fn op_execute_sequential<DB: DatabaseRef>(
+pub fn op_execute_sequential<DB>(
     db: DB,
     _evm_env: EvmEnv,
     txs: Vec<TxEnv>,
     #[cfg(feature = "compiler")] worker: Arc<ExtCompileWorker>,
-) -> ParallelExecutorResult {
+) -> ParallelExecutorResult<op_revm::OpHaltReason>
+where
+    DB: DatabaseRef,
+{
     let mut db = CacheDB::new(db);
     let mut evm = build_op_evm(&mut db, Default::default());
     let mut results = Vec::with_capacity(txs.len());
@@ -378,7 +384,7 @@ pub fn op_execute_sequential<DB: DatabaseRef>(
 
         evm.0.db_mut().commit(result_and_state.state.clone());
 
-        let mut execution_result = TxExecutionResult::from_raw_op(tx_type, result_and_state);
+        let mut execution_result = TxExecutionResult::from_raw(tx_type, result_and_state);
 
         cumulative_gas_used =
             cumulative_gas_used.saturating_add(execution_result.receipt.cumulative_gas_used);
