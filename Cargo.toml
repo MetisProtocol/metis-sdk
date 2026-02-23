@@ -203,7 +203,7 @@ alith = { git = "https://github.com/0xLazAI/alith", tag = "v0.9.0", features = [
 ] }
 
 # Other dependencies
-tracing = "0.1.41"
+tracing = "0.1.44"
 bincode = "2.0.1"
 bitflags = "2.9.1"
 bitvec = "1.0.1"
